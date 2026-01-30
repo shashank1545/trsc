@@ -1,0 +1,23 @@
+# Compiled object files
+*.o
+*.obj
+
+# Compiled libraries
+*.a
+*.lib
+
+# Compiled executables
+*.exe
+*.out
+
+# Build directories
+build/
+Debug/
+Release/
+
+# IDE files
+*.nvim
+
+
+# Other
+trsc_chat.md
