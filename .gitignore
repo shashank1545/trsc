@@ -1,10 +1,14 @@
 # Compiled object files
 *.o
 *.obj
+*.o.d
 
 # Compiled libraries
 *.a
 *.lib
+
+# Cmake files
+CMakeFiles/
 
 # Compiled executables
 *.exe
@@ -16,8 +20,10 @@ Debug/
 Release/
 
 # IDE files
-*.nvim
+*.vim
 
+# Cache
+.cache/
 
 # Other
 trsc_chat.md
