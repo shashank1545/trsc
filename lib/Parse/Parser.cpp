@@ -128,24 +128,26 @@ namespace trsc {
 
 
   std::unique_ptr<Expr> Parser::parsePrimary() {
+    SourceLocation StartLoc = currentToken().getLocation();
+    SourceRange StartEqualEndRange = SourceRange(StartLoc, StartLoc);
     switch(currentToken().getKind()) {
       case Lex::TokenKind::LT_FLOAT: {
         Lex::Token NumToken = consume(Lex::TokenKind::LT_FLOAT);
         double Val = std::stod(std::string(NumToken.getText()));
-        return std::make_unique<FloatExpr>(Val);
+        return std::make_unique<FloatExpr>(Val, StartEqualEndRange);
       }
       case Lex::TokenKind::LT_INTEGER: {
         Lex::Token NumToken = consume(Lex::TokenKind::LT_INTEGER);
         long long Val = std::stoll(std::string(NumToken.getText()));
-        return std::make_unique<IntExpr>(Val);
+        return std::make_unique<IntExpr>(Val, StartEqualEndRange);
       }
       case Lex::TokenKind::KW_TRUE: {
         Lex::Token TrueToken = consume(Lex::TokenKind::KW_TRUE);
-        return std::make_unique<BoolExpr>(true);
+        return std::make_unique<BoolExpr>(true, StartEqualEndRange);
       }
       case Lex::TokenKind::KW_FALSE: {
         Lex::Token FalseToken = consume(Lex::TokenKind::KW_FALSE);
-        return std::make_unique<BoolExpr>(false);
+        return std::make_unique<BoolExpr>(false, StartEqualEndRange);
       }
       case Lex::TokenKind::IDENTIFIER: {
         Lex::Token IdentToken = consume(Lex::TokenKind::IDENTIFIER);
@@ -153,7 +155,8 @@ namespace trsc {
           return parseFunCall(IdentToken);
         }
         else {
-          return std::make_unique<VarExpr>(std::string(IdentToken.getText()));
+          return std::make_unique<VarExpr>(std::string(IdentToken.getText()),
+              StartEqualEndRange);
         }
       }
       case Lex::TokenKind::DE_LPAREN: {
@@ -175,6 +178,7 @@ namespace trsc {
   }
 
   std::unique_ptr<Expr> Parser::parseExpr(int MinPrecedence) {
+    SourceLocation StartLoc = currentToken().getLocation();
     auto LHS = parsePrimary();
     if(!LHS) return nullptr;
     while(true) {
@@ -188,7 +192,10 @@ namespace trsc {
       auto RHS = parseExpr(CurrentPrecedence + 1);
       if(!RHS) return nullptr;
 
-      LHS= std::make_unique<BinExpr>(CurrentOp, std::move(LHS), std::move(RHS));
+      SourceLocation EndLoc = currentToken().getLocation();
+      SourceRange Range = SourceRange(StartLoc, EndLoc);
+      LHS= std::make_unique<BinExpr>(CurrentOp, std::move(LHS), std::move(RHS),
+          Range);
     }
     return LHS;
   }
