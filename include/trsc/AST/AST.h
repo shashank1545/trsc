@@ -71,9 +71,6 @@ public:
 
 class TypeName : public Type {
   std::string Name;
-  struct TypeInfo {
-
-  };
   
 public:
   TypeName(ASTNodeKind Kind, const std::string &Name, SourceRange Loc = {})
