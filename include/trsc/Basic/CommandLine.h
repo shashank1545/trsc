@@ -13,6 +13,7 @@ struct CompilerOptions {
   bool Verbose = false;
   bool DumpSymbol = false;
   bool DumpSymbolTable = false;
+  bool DumpTypedAST = false;
 };
 
 bool parseCommandLine(int Argc, char **Argv, CompilerOptions &Options);

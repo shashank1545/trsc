@@ -12,6 +12,7 @@
 #include "trsc/Sema/Sema.h" 
 #include "trsc/Sema/SymbolTable.h"
 #include "trsc/Sema/SymbolTablePrinter.h"
+#include "trsc/AST/TypedASTPrinter.h"
 
 int main(int argc, char **argv) {
   trsc::CompilerOptions options;
@@ -149,6 +150,24 @@ int main(int argc, char **argv) {
     }
     if(options.Verbose) {
       std::cerr << "Exiting after Semantic Analysis (dump-symboltable requested)." << "\n";
+    }
+    return 0;
+  }
+  if(options.DumpTypedAST) {
+    if (!options.OutputFile.empty()) {
+      std::ofstream outfile(options.OutputFile);
+      if (!outfile) {
+        std::cerr << "Error: Could not open output file: " << options.OutputFile << "\n";
+        return 1;
+      }
+      trsc::TypedASTPrinter Printer(outfile);
+      Printer.visit(AST.get());
+    } else {
+      trsc::TypedASTPrinter Printer(std::cout);
+      Printer.visit(AST.get());
+    }
+    if(options.Verbose) {
+      std::cerr << "Exiting after Semantic Analysis (dump-typedast requested)." << "\n";
     }
     return 0;
   }
