@@ -308,7 +308,7 @@ public:
         Params(std::move(Params)) {}
 
   VarExpr* getFuncName() const { return FuncName.get(); }
-  const std::vector<std::unique_ptr<Expr>> &getParams() const { return Params; }
+  const std::vector<std::unique_ptr<Expr>> &getParams() const { return Params;}
 };
 
 class ReturnStmt : public Stmt {
