@@ -18,6 +18,8 @@ bool parseCommandLine(int argc, char **argv, CompilerOptions &options) {
       options.DumpSymbol = true;
     } else if (arg == "-dump-symboltable") {
       options.DumpSymbolTable = true;
+    } else if (arg == "-dump-typedast") {
+      options.DumpTypedAST = true;
     } else if (arg == "-o") {
       if (i + 1 < argc) {
         options.OutputFile = argv[++i];
