@@ -2,16 +2,17 @@
 #define TRSC_OPS_TD
 
 include "trsc/MLIR/TrscDialect.td"
+include "mlir/IR/OpBase.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 
-def ConstantOp : Op<TrscDialect, "constant", [ConstantLike, Pure]> {
+def ConstantOp : Op<TrscDialect, "const", [ConstantLike, Pure]> {
   let summary = "Constant Operation";
   let arguments = (ins AnyAttr:$value);
   let results = (outs AnyType:$res);
   let assemblyFormat = "$value `->` type($res) attr-dict";
 }
 
-def AddOp : Op<TrscDialect, "add"> {
+def AddOp : Op<TrscDialect, "add", [NativeOpTrait<"SameOperandsAndResultType">]> {
   let summary = "Simple numeric addition";
   let description = [{
     Adds two numeric values of the same type.
@@ -29,7 +30,7 @@ def AddOp : Op<TrscDialect, "add"> {
   let assemblyFormat = "$lhs `,` $rhs `:` type($lhs) `,` type($rhs) `->` type($result) attr-dict";
 }
 
-def SubOp : Op<TrscDialect, "sub"> {
+def SubOp : Op<TrscDialect, "sub", [NativeOpTrait<"SameOperandsAndResultType">]> {
   let summary = "Simple numeric subtraction";
   let description = [{
     Subtracts a number from another of the same type.
@@ -47,7 +48,7 @@ def SubOp : Op<TrscDialect, "sub"> {
   let assemblyFormat = "$lhs `,` $rhs `:` type($lhs) `,` type($rhs) `->` type($result) attr-dict";
 }
 
-def MulOp : Op<TrscDialect, "mul"> {
+def MulOp : Op<TrscDialect, "mul", [NativeOpTrait<"SameOperandsAndResultType">]> {
   let summary = "Simple numeric multiplication";
   let description = [{
     Multiplies two numeric values of the same type.
@@ -65,7 +66,7 @@ def MulOp : Op<TrscDialect, "mul"> {
   let assemblyFormat = "$lhs `,` $rhs `:` type($lhs) `,` type($rhs) `->` type($result) attr-dict";
 }
 
-def DivOp : Op<TrscDialect, "div"> {
+def DivOp : Op<TrscDialect, "div", [NativeOpTrait<"SameOperandsAndResultType">]> {
   let summary = "Simple numeric subtraction";
   let description = [{
     Divides a number from another of the same type.
@@ -83,20 +84,23 @@ def DivOp : Op<TrscDialect, "div"> {
   let assemblyFormat = "$lhs `,` $rhs `:` type($lhs) `,` type($rhs) `->` type($result) attr-dict";
 }
 
-def CmpOp : Op<TrscDialect, "cmp"> {
-    let summary = "Basic Comparison between numeric";
-    let description = [{
-        Compares two numbers of the same type.
-      }];
+def CmpOp : Op<TrscDialect, "cmp", [NativeOpTrait<"SameTypeOperands">]> {
+  let summary = "Basic Comparison between numeric";
+  let description = [{
+    Compares two numbers of the same type.
+  }];
 
-    let arguments = (ins 
-    AnyType:$lhs,
-    AnyType:$rhs
-    );
+  let arguments = (ins 
+      AnyType:$lhs,
+      AnyType:$rhs
+      );
 
-    let results = (outs
-    Bin)
-  }
+  let results = (outs
+      I1:$result
+      );
+
+  let assemblyFormat = "$lhs `,` $rhs `:` type($lhs) `,` type($rhs) attr-dict";
+}
 
 #endif //TRSC_OPS_TD
 
