@@ -14,7 +14,7 @@ namespace trsc {
 
 class SemanticAnalyzer {
 public:
-  SemanticAnalyzer(DiagnosticsEngine &Diags); 
+  SemanticAnalyzer(DiagnosticsEngine &Diags, SymbolTable &ST, ASTContext &Ctx); 
   ~SemanticAnalyzer(); 
 
   void analyze(ASTNode *Ast);
@@ -25,8 +25,8 @@ public:
 
 private:
   DiagnosticsEngine &Diags;
-  SymbolTable ST;
-  ASTContext Ctx;
+  SymbolTable &ST;
+  ASTContext &Ctx;
   DeclarationCollector DeclarationCollector;
   NameResolver NameResolver;
   TypeChecker TypeChecker;

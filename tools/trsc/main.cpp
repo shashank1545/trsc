@@ -6,6 +6,7 @@
 #include "trsc/Lex/Lexer.h"
 #include "trsc/Parse/Parser.h"
 #include "trsc/AST/ASTPrinter.h"
+#include "trsc/AST/ASTContext.h"
 #include "trsc/Basic/CommandLine.h"
 #include "trsc/Basic/Diagnostics.h"
 #include "trsc/Basic/SourceManager.h"
@@ -105,7 +106,9 @@ int main(int argc, char **argv) {
     std::cerr << "Starting Semantic Analysis..." << "\n";
   }
 
-  trsc::SemanticAnalyzer Sema(Diag);
+  trsc::SymbolTable ST;
+  trsc::ASTContext Ctx;
+  trsc::SemanticAnalyzer Sema(Diag, ST, Ctx);
   Sema.analyze(AST.get());
 
   if (Diag.getNumErrors() > 0) {
@@ -116,7 +119,6 @@ int main(int argc, char **argv) {
   if (options.Verbose) {
     std::cerr << "Semantic Analysis complete." << "\n";
   }
-  trsc::SymbolTable& ST = Sema.getSymbolTable();
   if(options.DumpSymbol) {
     if (!options.OutputFile.empty()) {
       std::ofstream outfile(options.OutputFile);
