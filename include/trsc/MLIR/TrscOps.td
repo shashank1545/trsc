@@ -3,6 +3,7 @@
 
 include "trsc/MLIR/TrscDialect.td"
 include "mlir/IR/OpBase.td"
+include "mlir/Interfaces/InferTypeOpInterface.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 
 def ConstantOp : Op<TrscDialect, "const", [ConstantLike, Pure]> {
@@ -99,7 +100,18 @@ def CmpOp : Op<TrscDialect, "cmp", [NativeOpTrait<"SameTypeOperands">]> {
       I1:$result
       );
 
-  let assemblyFormat = "$lhs `,` $rhs `:` type($lhs) `,` type($rhs) attr-dict";
+  let assemblyFormat = "$lhs `,` $rhs `:` type($lhs) attr-dict";
+}
+
+def ReturnOp : Op<TrscDialect, "ret" , [Terminator, Pure]> {
+  let summary = "Return for a function.";
+  let description = [{
+    The "ret" operation terminates a block and yields value back to the caller.
+  }];
+
+  let arguments = (ins Variadic<AnyType>:$operands);
+
+  let assemblyFormat = "($operands^ `:` type($operands))? attr-dict";
 }
 
 #endif //TRSC_OPS_TD
