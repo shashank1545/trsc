@@ -119,10 +119,10 @@ namespace trsc {
         TOK(OP_PIPEPIPE,"||");
 
         //DELIMITERS
-        TOK(DE_LPAREN,"{");
-        TOK(DE_RPAREN,"}");
-        TOK(DE_LBRACE,"(");
-        TOK(DE_RBRACE,")");
+        TOK(DE_LPAREN,"(");
+        TOK(DE_RPAREN,")");
+        TOK(DE_LBRACE,"{");
+        TOK(DE_RBRACE,"}");
         TOK(DE_LBRACKET,"[");
         TOK(DE_RBRACKET,"]");
         TOK(DE_COMMA,",");
