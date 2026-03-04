@@ -48,9 +48,17 @@ namespace trsc {
         case ')': CurPtr++; return FormToken(TokenKind::DE_RPAREN, TokenStart);
         case '{': CurPtr++; return FormToken(TokenKind::DE_LBRACE, TokenStart);
         case '}': CurPtr++; return FormToken(TokenKind::DE_RBRACE, TokenStart);
+        case '[': CurPtr++; return FormToken(TokenKind::DE_LBRACKET, TokenStart);
+        case ']': CurPtr++; return FormToken(TokenKind::DE_RBRACKET, TokenStart);
         case ';': CurPtr++; return FormToken(TokenKind::DE_SEMICOLON, TokenStart);
-        case ':': CurPtr++; return FormToken(TokenKind::DE_COLON, TokenStart);
         case ',': CurPtr++; return FormToken(TokenKind::DE_COMMA, TokenStart);
+        case ':': 
+            if (*(CurPtr + 1) == ':') {
+              CurPtr += 2;
+              return FormToken(TokenKind::OP_COLONCOLON, TokenStart);
+            }
+            CurPtr++;
+            return FormToken(TokenKind::DE_COLON, TokenStart);
         case '-': 
             if(*(CurPtr + 1) == '>') {
               CurPtr += 2;
@@ -69,8 +77,13 @@ namespace trsc {
             }
             CurPtr++;
             return FormToken(TokenKind::OP_PLUS, TokenStart);
+        case '%': CurPtr++; return FormToken(TokenKind::OP_PERCENT, TokenStart);
         case '.':
-            if(*(CurPtr + 1)== '.') {
+            if(*(CurPtr + 1)=='.' && *(CurPtr + 2)=='=') {
+              CurPtr+=3;
+              return FormToken(TokenKind::OP_DOTDOTEQUAL, TokenStart);
+            }
+            else if(*(CurPtr + 1)== '.') {
               CurPtr += 2;
               return FormToken(TokenKind::OP_DOTDOT, TokenStart);
             }
@@ -89,12 +102,20 @@ namespace trsc {
                 CurPtr += 2;
                 return FormToken(TokenKind::OP_LESSEQUAL, TokenStart);
             }
+            else if(*(CurPtr + 1) == '<') {
+              CurPtr += 2;
+              return FormToken(TokenKind::OP_LESSLESS, TokenStart);
+            }
             CurPtr++; 
             return FormToken(TokenKind::OP_LESS, TokenStart);
         case '>':
             if (*(CurPtr + 1) == '=') {
                 CurPtr += 2;
                 return FormToken(TokenKind::OP_GREATEREQUAL, TokenStart);
+            }
+            else if(*(CurPtr + 1) == '>') {
+              CurPtr += 2;
+              return FormToken(TokenKind::OP_GREATERGREATER, TokenStart);
             }
             CurPtr++; 
             return FormToken(TokenKind::OP_GREATER, TokenStart);
