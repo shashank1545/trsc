@@ -47,6 +47,7 @@ namespace trsc {
         TOK(OP_DOTDOTEQUAL,"OP_DOTDOTEQUAL");
         TOK(OP_AMP,"OP_AMP");
         TOK(OP_AMPAMP,"OP_AMPAMP");
+        TOK(OP_PIPE, "OP_PIPE");
         TOK(OP_PIPEPIPE,"OP_PIPEPIPE");
 
         //DELIMITERS
@@ -116,6 +117,7 @@ namespace trsc {
         TOK(OP_DOTDOTEQUAL,"..=");
         TOK(OP_AMP,"&");
         TOK(OP_AMPAMP,"&&");
+        TOK(OP_PIPE, "|");
         TOK(OP_PIPEPIPE,"||");
 
         //DELIMITERS

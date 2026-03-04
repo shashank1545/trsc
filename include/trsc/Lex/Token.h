@@ -48,6 +48,7 @@ namespace trsc {
       OP_DOTDOTEQUAL,
       OP_AMP,
       OP_AMPAMP, 
+      OP_PIPE,
       OP_PIPEPIPE, 
 
       //DELIMITERS
@@ -140,6 +141,10 @@ namespace trsc {
             case TokenKind::OP_GREATERGREATER:
             case TokenKind::OP_DOTDOT:
             case TokenKind::OP_DOTDOTEQUAL:
+            case TokenKind::OP_PIPE:
+            case TokenKind::OP_PIPEPIPE:
+            case TokenKind::OP_AMP:
+            case TokenKind::OP_AMPAMP:
               return true;
             default:
               return false;

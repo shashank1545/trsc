@@ -41,6 +41,14 @@ namespace trsc {
       case Lex::TokenKind::OP_EQUALEQUAL:
       case Lex::TokenKind::OP_BANGEQUAL:
         return 7;
+      case Lex::TokenKind::OP_AMP:
+        return 6;
+      case Lex::TokenKind::OP_PIPE:
+        return 5;
+      case Lex::TokenKind::OP_AMPAMP:
+        return 4;
+      case Lex::TokenKind::OP_PIPEPIPE:
+        return 3;
       case Lex::TokenKind::OP_EQUAL:
         return 2;
       case Lex::TokenKind::IDENTIFIER:

@@ -139,7 +139,7 @@ namespace trsc {
                 return FormToken(TokenKind::OP_PIPEPIPE, TokenStart);
             }
             CurPtr++;
-            return FormToken(TokenKind::UNKNOWN, TokenStart); 
+            return FormToken(TokenKind::OP_PIPE, TokenStart); 
         case '/': CurPtr++; 
             if (*(CurPtr) == '/') {
               SkipLineComment();
