@@ -9,6 +9,10 @@
 
 # Cmake files
 CMakeFiles/
+cmake_install.cmake
+Makefile
+compile_commands.json
+CMakeCache.txt
 
 # Compiled executables
 *.exe
@@ -21,6 +25,7 @@ Release/
 
 # IDE files
 *.vim
+.clangd
 
 # Cache
 .cache/
