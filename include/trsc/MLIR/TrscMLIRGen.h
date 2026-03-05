@@ -7,14 +7,18 @@
 
 #include "trsc/AST/AST.h"
 #include "trsc/AST/ASTContext.h"
+#include "trsc/AST/ASTVisitor.h"
 #include "trsc/Sema/SymbolTable.h"
 
-using namespace mlir;
+namespace mlir {
+  class MLIRContext;
+  class ModuleOp;
+}
 
 namespace trsc {
 
   class Program;
-  class MLIRGen {
+  class MLIRGen : public ASTVisitor<MLIRGen>{
     public:
       MLIRGen(mlir::MLIRContext &MLIRCtx, trsc::ASTContext &ASTCtx, 
           trsc::SymbolTable &ST);
@@ -25,6 +29,8 @@ namespace trsc {
       mlir::MLIRContext &MLIRCtx;
       trsc::ASTContext &ASTCtx;
       trsc::SymbolTable &ST;
+
+      void visitFuncDecl(FuncDecl* D);
   };
 
 } // namespace trsc
