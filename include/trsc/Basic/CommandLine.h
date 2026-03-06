@@ -14,6 +14,7 @@ struct CompilerOptions {
   bool DumpSymbol = false;
   bool DumpSymbolTable = false;
   bool DumpTypedAST = false;
+  bool EmitMLIR = false;
 };
 
 bool parseCommandLine(int Argc, char **Argv, CompilerOptions &Options);

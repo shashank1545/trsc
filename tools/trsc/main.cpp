@@ -1,19 +1,26 @@
+#include <ostream>
+#include <system_error>
 #include <vector>
 #include <iostream>
 #include <fstream>
+
+#include "mlir/IR/MLIRContext.h"
 
 #include "trsc/AST/AST.h"
 #include "trsc/Lex/Lexer.h"
 #include "trsc/Parse/Parser.h"
 #include "trsc/AST/ASTPrinter.h"
 #include "trsc/AST/ASTContext.h"
+#include "trsc/AST/TypedASTPrinter.h"
 #include "trsc/Basic/CommandLine.h"
 #include "trsc/Basic/Diagnostics.h"
 #include "trsc/Basic/SourceManager.h"
 #include "trsc/Sema/Sema.h" 
 #include "trsc/Sema/SymbolTable.h"
 #include "trsc/Sema/SymbolTablePrinter.h"
-#include "trsc/AST/TypedASTPrinter.h"
+#include "trsc/MLIR/TrscMLIRGen.h"
+#include "llvm/Support/FileSystem.h"
+#include "llvm/Support/raw_ostream.h"
 
 int main(int argc, char **argv) {
   trsc::CompilerOptions options;
@@ -170,6 +177,31 @@ int main(int argc, char **argv) {
     }
     if(options.Verbose) {
       std::cerr << "Exiting after Semantic Analysis (dump-typedast requested)." << "\n";
+    }
+    return 0;
+  }
+  mlir::MLIRContext MLIRCtx;
+  trsc::MLIRGen MLIRGen(MLIRCtx, Ctx, ST);
+  mlir::OwningOpRef<mlir::ModuleOp> Module = MLIRGen.generate(*AST);
+
+  if(options.EmitMLIR) {
+    if (!Module) {
+      std::cerr << "Error: MLIR generation failed.\n";
+      return 1;
+    }
+    if(!options.OutputFile.empty()) {
+      std::error_code ec;
+      llvm::raw_fd_ostream outfile(options.OutputFile, ec, llvm::sys::fs::OF_None);
+      if(ec) {
+        llvm::errs() << "Error: Could not open output file: " << ec.message() << "\n";
+        return 1;
+      }
+      Module->print(outfile);
+    } else {
+      Module->print(llvm::outs());
+    }
+    if(options.Verbose) {
+      std::cerr << "Exiting after EMlitting MLIR (emit-mlir requested)." << "\n";
     }
     return 0;
   }

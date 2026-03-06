@@ -20,6 +20,8 @@ bool parseCommandLine(int argc, char **argv, CompilerOptions &options) {
       options.DumpSymbolTable = true;
     } else if (arg == "-dump-typedast") {
       options.DumpTypedAST = true;
+    } else if (arg == "-emit-mlir") {
+      options.EmitMLIR = true;
     } else if (arg == "-o") {
       if (i + 1 < argc) {
         options.OutputFile = argv[++i];
