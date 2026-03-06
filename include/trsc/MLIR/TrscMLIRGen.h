@@ -1,13 +1,16 @@
 #ifndef TRSC_MLIR_TRSCMLIRGEN_H
 #define TRSC_MLIR_TRSCMLIRGEN_H
 
+#include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/OwningOpRef.h"
 
+#include "mlir/IR/Types.h"
 #include "trsc/AST/AST.h"
 #include "trsc/AST/ASTContext.h"
 #include "trsc/AST/ASTVisitor.h"
+#include "trsc/AST/QualType.h"
 #include "trsc/Sema/SymbolTable.h"
 
 namespace mlir {
@@ -25,12 +28,20 @@ namespace trsc {
 
       mlir::OwningOpRef<mlir::ModuleOp> generate(trsc::Program &Prog);
 
+      void visitProgram(Program *Node);
+      void visitFuncDecl(FuncDecl *Node);
+      void visitBlockStmt(BlockStmt *Stmt);
+
     private:
       mlir::MLIRContext &MLIRCtx;
       trsc::ASTContext &ASTCtx;
       trsc::SymbolTable &ST;
+      
+      mlir::OpBuilder Builder;
+      mlir::ModuleOp Module;
 
-      void visitFuncDecl(FuncDecl* D);
+      mlir::Type convertType(QualType T);
+
   };
 
 } // namespace trsc
