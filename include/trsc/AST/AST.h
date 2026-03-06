@@ -210,6 +210,10 @@ public:
   const std::vector<std::unique_ptr<Stmt>> &getStatements() const {
     return Statements;
   }
+
+  std::vector<std::unique_ptr<Stmt>> &getStatements() {
+    return Statements;
+  }
 };
 
 class IfStmt : public Stmt {

@@ -23,7 +23,7 @@ namespace trsc {
       std::string getAddressString(const void *Ptr);
 
     public:
-      TypedASTPrinter(std::ostream &OS) : OS(OS) {}
+      TypedASTPrinter(std::ostream &OS);
 
       // Make the base class visit methods visible
       using ASTVisitor<TypedASTPrinter>::visit;

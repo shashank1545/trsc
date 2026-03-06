@@ -4,6 +4,10 @@
 
 namespace trsc {
 
+  TypedASTPrinter::TypedASTPrinter(std::ostream &OS) : OS(OS), IndentLevel(0), IsLastChild(false) {
+    IsLastStack.clear();
+  }
+
   void TypedASTPrinter::printIndent(bool isLast) {
     for (unsigned i = 0; i < IndentLevel; ++i) {
       if (i < IsLastStack.size() && !IsLastStack[i]) {
