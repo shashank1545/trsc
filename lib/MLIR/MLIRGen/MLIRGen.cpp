@@ -60,6 +60,31 @@ llvm::APFloat MLIRGen::ToAPFloat(double D) {
   return llvm::APFloat(D); 
 }
 
+void MLIRGen::genStmt(Stmt *S) {
+  if (!S)
+    return;
+
+  switch (S->getASTNodeKind()) {
+    case ASTNodeKind::ASTK_FUNCDECL:
+      genFuncDecl(static_cast<FuncDecl*>(S));
+      break;
+    case ASTNodeKind::ASTK_LETSTMT:
+      genLetStmt(static_cast<LetStmt*>(S));
+      break;
+    case ASTNodeKind::ASTK_IFSTMT:
+      genIfStmt(static_cast<IfStmt*>(S));
+      break;
+    case ASTNodeKind::ASTK_RETURNSTMT:
+      genReturnStmt(static_cast<ReturnStmt*>(S));
+      break;
+    case ASTNodeKind::ASTK_BLOCKSTMT:
+      genBlockStmt(static_cast<BlockStmt*>(S));
+      break;
+    case ASTNodeKind::ASTK_EXPRSTMT:
+      genExprStmt(static_cast<ExprStmt*>(S));
+      break;
+    default:
+      llvm_unreachable("Unhandled statement type");
   }
 }
 
@@ -75,6 +100,15 @@ void MLIRGen::genBlockStmt(BlockStmt *Node) {
   }
 }
 
+void MLIRGen::genLetStmt(LetStmt *Node) {
+  mlir::Value InitValue;
+  if (Node->getInitializer()) {
+    InitValue = visit(Node->getInitializer());
+  }
+  Symbol* Sym = ST.lookupSymbol(Node->getDeclaredVar()->getName(), 
+      Node->getScope());
+  QualType VarTy = Sym->Ty; 
+
   mlir::memref::AllocaOp VarAlloca;
   {
     mlir::OpBuilder::InsertionGuard Guard(Builder);
@@ -84,6 +118,53 @@ void MLIRGen::genBlockStmt(BlockStmt *Node) {
         ToMemRefType(VarTy));  
   }
   Sym->setAlloca(VarAlloca);
+  mlir::memref::StoreOp::create(Builder, 
+      Builder.getUnknownLoc(), 
+      InitValue,
+      VarAlloca.getResult());
+}
+
+mlir::Value MLIRGen::visitIntExpr(IntExpr *Node) {
+  auto IntOp = mlir::arith::ConstantIntOp::create(Builder, 
+      Builder.getUnknownLoc(), 
+      ToMLIRType(Node->getType()), 
+      Node->getValue());
+  return IntOp.getResult();
+}
+
+mlir::Value MLIRGen::visitFloatExpr(FloatExpr *Node) {
+  auto FloatOp = mlir::arith::ConstantFloatOp::create(Builder,
+      Builder.getUnknownLoc(),
+      llvm::dyn_cast<mlir::FloatType>( ToMLIRType(Node->getType())),
+      ToAPFloat(Node->getValue()));
+  return FloatOp;
+}
+
+mlir::Value MLIRGen::visitBinExpr(BinExpr *Node) {
+  return mlir::Value();
+}
+
+mlir::Value MLIRGen::visitBoolExpr(BoolExpr *Node) {
+  auto BoolOp = mlir::arith::ConstantIntOp::create(Builder, 
+      Builder.getUnknownLoc(),
+      ToMLIRType(Node->getType()),
+      Node->getValue());
+  return BoolOp;
+}
+
+mlir::Value MLIRGen::visitVarExpr(VarExpr *Node) {
+  Symbol *Sym = ST.lookupSymbol(Node->getName(), Node->getScope());
+  mlir::memref::AllocaOp allocaOp = Sym->Alloca;
+  mlir::memref::LoadOp loadOp = mlir::memref::LoadOp::create(Builder,
+      Builder.getUnknownLoc(),
+      allocaOp.getMemref()); 
+  return loadOp;
+}
+
+mlir::Value MLIRGen::visitFunCall(FunCall *Node) {
+  return mlir::Value();
+}
+
 void MLIRGen::genFuncDecl(FuncDecl *Node) {
   Symbol* Sym = ST.lookupSymbol(Node->getFuncName()->getName());
   if (!Sym) return;
@@ -130,6 +211,16 @@ void MLIRGen::genFuncDecl(FuncDecl *Node) {
 
   this->CurrentEntryBlock = nullptr;
 }
+
+void MLIRGen::genReturnStmt(ReturnStmt *Node) {
+
+}
+
+void MLIRGen::genIfStmt(IfStmt *Node) {
+
+}
+
+void MLIRGen::genExprStmt(ExprStmt *Node) {
 
 }
 
