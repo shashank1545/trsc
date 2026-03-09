@@ -180,9 +180,10 @@ int main(int argc, char **argv) {
     }
     return 0;
   }
+
   mlir::MLIRContext MLIRCtx;
   trsc::MLIRGen MLIRGen(MLIRCtx, Ctx, ST);
-  mlir::OwningOpRef<mlir::ModuleOp> Module = MLIRGen.generate(*AST);
+  mlir::OwningOpRef<mlir::ModuleOp> Module = MLIRGen.genModule(*AST);
 
   if(options.EmitMLIR) {
     if (!Module) {
