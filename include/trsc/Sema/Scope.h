@@ -1,6 +1,7 @@
 #ifndef TRSC_SEMA_SCOPE_H
 #define TRSC_SEMA_SCOPE_H
 
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "trsc/AST/QualType.h"
 
 #include <map>
@@ -29,6 +30,7 @@ namespace trsc {
   const char* getScopeKindName(ScopeKind Kind);
   
   struct Symbol {
+    mlir::memref::AllocaOp Alloca;
     QualType Ty;
     SymbolKind Kind;
     bool IsMutable;
@@ -46,6 +48,8 @@ namespace trsc {
     Symbol(QualType Ty,  SymbolKind Kind, bool IsMutable, 
      bool IsInitialized) : Ty(Ty), Kind(Kind), 
      IsMutable(IsMutable), IsInitialized(IsInitialized) {}
+
+    void setAlloca(mlir::memref::AllocaOp Op) { this->Alloca = Op;}
   };
 
   class Scope {

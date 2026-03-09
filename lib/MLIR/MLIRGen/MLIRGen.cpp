@@ -50,6 +50,7 @@ void MLIRGen::visitBlockStmt(BlockStmt *Node) {
 }
 
 void MLIRGen::visitFuncDecl(FuncDecl *Node) {
+  Sym->setAlloca(VarAlloca);
   Symbol* Sym = ST.lookupSymbol(Node->getFuncName()->getName());
   if (!Sym) return;
 
