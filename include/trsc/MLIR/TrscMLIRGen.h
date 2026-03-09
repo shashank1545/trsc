@@ -56,6 +56,7 @@ namespace trsc {
       
       mlir::OpBuilder Builder;
       mlir::ModuleOp Module;
+      mlir::Block *CurrentEntryBlock = nullptr;
 
       mlir::Type ToMLIRType(QualType T);
       mlir::MemRefType ToMemRefType(QualType T);

@@ -20,7 +20,12 @@ using namespace mlir;
 MLIRGen::MLIRGen(mlir::MLIRContext &MLIRCtx, trsc::ASTContext &ASTCtx, 
     trsc::SymbolTable &ST) : MLIRCtx(MLIRCtx), ASTCtx(ASTCtx), ST(ST), 
   Builder(&MLIRCtx) {
-    MLIRCtx.loadDialect<mlir::func::FuncDialect>();
+    mlir::DialectRegistry Registry;
+    Registry.insert<mlir::func::FuncDialect>();
+    Registry.insert<mlir::cf::ControlFlowDialect>();
+    Registry.insert<mlir::memref::MemRefDialect>();
+    MLIRCtx.appendDialectRegistry(Registry);
+    MLIRCtx.loadAllAvailableDialects();
   }
 
 mlir::Type MLIRGen::convertType(QualType T) {
@@ -50,6 +55,14 @@ void MLIRGen::visitBlockStmt(BlockStmt *Node) {
 }
 
 void MLIRGen::visitFuncDecl(FuncDecl *Node) {
+  mlir::memref::AllocaOp VarAlloca;
+  {
+    mlir::OpBuilder::InsertionGuard Guard(Builder);
+    Builder.setInsertionPointToStart(this->CurrentEntryBlock);
+    VarAlloca = mlir::memref::AllocaOp::create(Builder, 
+        Builder.getUnknownLoc(), 
+        ToMemRefType(VarTy));  
+  }
   Sym->setAlloca(VarAlloca);
   Symbol* Sym = ST.lookupSymbol(Node->getFuncName()->getName());
   if (!Sym) return;
