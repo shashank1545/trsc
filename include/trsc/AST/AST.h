@@ -58,6 +58,8 @@ public:
   ASTNodeKind getASTNodeKind() const { return Kind; }
   void setScope(Scope* MyScope)  { CurrentScope = MyScope; }
   Scope* getScope() const { return CurrentScope; }
+  virtual bool isStmt() const { return false; }
+  virtual bool isExpr() const { return false; }
 };
 
 class Type : public ASTNode {
@@ -93,6 +95,8 @@ public:
   virtual bool isNum() const { return false; }
   virtual bool isVar() const { return false; }
   virtual bool isBool() const { return false; }
+
+  bool isExpr() const override { return true; }
 };
 
 class Stmt : public ASTNode {
@@ -109,6 +113,8 @@ class NumExpr : public Expr {
     bool isNum() const override { return true; }
     virtual bool isInt() const { return false; }
     virtual bool isFloat() const { return false; }
+
+    bool isStmt() const override { return true; }
 };
 
 class IntExpr : public NumExpr {
@@ -118,6 +124,7 @@ class IntExpr : public NumExpr {
     Value(Value) {}
     long long getValue() const {return Value;} 
     bool isInt() const override {return true;}
+    bool isExpr() const override { return true; }
 };
 
 class FloatExpr: public NumExpr {
@@ -127,6 +134,7 @@ class FloatExpr: public NumExpr {
     Value(Value) {}
     double getValue() const {return Value;}
     bool isFloat() const override {return true;}
+    bool isExpr() const override { return true; }
 };
 
 class BoolExpr : public Expr {
@@ -137,6 +145,7 @@ public:
       : Expr(ASTNodeKind::ASTK_BOOLEXPR, Loc), Value(Value) {}
   bool getValue() const { return Value; }
   bool isBool() const override { return true; }
+  bool isExpr() const override { return true; }
 };
 
 class VarExpr : public Expr {
@@ -147,6 +156,7 @@ public:
       : Expr(ASTNodeKind::ASTK_VAREXPR, Loc), Name(Name) {}
   const std::string &getName() const { return Name; }
   bool isVar() const override { return true; }
+  bool isExpr() const override { return true; }
 };
 
 class BinExpr : public Expr {
@@ -161,6 +171,7 @@ public:
   Lex::TokenKind getOp() const { return Op; }
   Expr *getLHS() const { return LHS.get(); }
   Expr *getRHS() const { return RHS.get(); }
+  bool isExpr() const override { return true; }
 };
 
 class RangeExpr : public Expr {
@@ -176,6 +187,7 @@ public:
   bool isInclusive() const { return IsInclusive; }
   Expr *getStart() const { return Start.get(); }
   Expr *getEnd() const { return End.get(); }
+  bool isExpr() const override { return true; }
 };
 
 class LetStmt : public Stmt {
@@ -197,6 +209,7 @@ public:
   VarExpr *getDeclaredVar() const { return DeclaredVar.get(); }
   TypeName *getDeclaredType() const { return DeclaredType.get(); }
   Expr *getInitializer() const { return Initializer.get(); }
+  bool isStmt() const override { return true; }
 };
 
 class BlockStmt : public Stmt {
@@ -214,6 +227,7 @@ public:
   std::vector<std::unique_ptr<Stmt>> &getStatements() {
     return Statements;
   }
+  bool isStmt() const override { return true; }
 };
 
 class IfStmt : public Stmt {
@@ -241,6 +255,7 @@ public:
         Expression(std::move(Expression)) {}
 
   Expr *getExpression() const { return Expression.get(); }
+  bool isStmt() const override { return true; }
 };
 
 class ForStmt : public Stmt {
@@ -257,6 +272,7 @@ public:
   VarExpr *getInit() const { return Init.get(); }
   RangeExpr *getRange() const { return Range.get(); }
   Stmt *getBody() const { return Body.get(); }
+  bool isStmt() const override { return true; }
 };
 
 class WhileStmt : public Stmt {
@@ -271,6 +287,7 @@ public:
 
   Expr *getCondition() const { return Condition.get(); }
   Stmt *getBody() const { return Body.get(); }
+  bool isStmt() const override { return true; }
 };
 
 class FuncDecl : public Stmt {
@@ -298,6 +315,7 @@ public:
   VarExpr* getFuncName() const { return FuncName.get(); }
   TypeName* getReturnType() const { return FuncReturnType.get(); }
   Stmt *getBody() const { return Body.get(); }
+  bool isStmt() const override { return true; }
 };
 
 class FunCall: public Expr {
@@ -313,6 +331,7 @@ public:
 
   VarExpr* getFuncName() const { return FuncName.get(); }
   const std::vector<std::unique_ptr<Expr>> &getParams() const { return Params;}
+  bool isExpr() const override { return true; }
 };
 
 class ReturnStmt : public Stmt {
@@ -324,6 +343,7 @@ public:
         ReturnValue(std::move(ReturnValue)) {}
 
   Expr *getReturnValue() const { return ReturnValue.get(); }
+  bool isStmt() const override { return true; }
 };
 
 class Program : public ASTNode {
