@@ -1,8 +1,8 @@
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypeInterfaces.h"
+#include "mlir/IR/Operation.h"
 #include "mlir/IR/Types.h"
 #include "mlir/IR/Value.h"
 #include "mlir/Support/LLVM.h"
@@ -19,6 +19,8 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlow.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/Support/Casting.h"
 #include <vector>
 
@@ -32,6 +34,8 @@ MLIRGen::MLIRGen(mlir::MLIRContext &MLIRCtx, trsc::ASTContext &ASTCtx,
     Registry.insert<mlir::func::FuncDialect>();
     Registry.insert<mlir::cf::ControlFlowDialect>();
     Registry.insert<mlir::memref::MemRefDialect>();
+    Registry.insert<mlir::arith::ArithDialect>();
+    Registry.insert<mlir::scf::SCFDialect>();
     MLIRCtx.appendDialectRegistry(Registry);
     MLIRCtx.loadAllAvailableDialects();
   }
@@ -141,7 +145,157 @@ mlir::Value MLIRGen::visitFloatExpr(FloatExpr *Node) {
 }
 
 mlir::Value MLIRGen::visitBinExpr(BinExpr *Node) {
-  return mlir::Value();
+  // Visit left and right expressions to get their MLIR values
+  mlir::Value LHS = visit(Node->getLHS());
+  mlir::Value RHS = visit(Node->getRHS());
+
+  if (!LHS || !RHS) {
+    llvm::errs() << "Error: Failed to generate operands for binary expression\n";
+    return mlir::Value();
+  }
+
+  auto Loc = Builder.getUnknownLoc();
+  Lex::TokenKind Op = Node->getOp();
+
+  // Get the result type from the typed AST (semantic analysis already determined this)
+  QualType ResultTy = Node->getType();
+
+  // Determine if we're working with integers or floats
+  bool IsFloat = ResultTy.isFloatingType();
+  bool IsBool = ResultTy.isBooleanType();
+  bool IsSigned = ResultTy.isSignedIntegerType();
+
+  switch (Op) {
+    // ========================================================================
+    // Arithmetic Operators
+    // ========================================================================
+    case Lex::TokenKind::OP_PLUS:
+      if (IsFloat) {
+        return mlir::arith::AddFOp::create(Builder, Loc, LHS, RHS);
+      } else {
+        return mlir::arith::AddIOp::create(Builder, Loc, LHS, RHS);
+      }
+
+    case Lex::TokenKind::OP_MINUS:
+      if (IsFloat) {
+        return mlir::arith::SubFOp::create(Builder, Loc, LHS, RHS);
+      } else {
+        return mlir::arith::SubIOp::create(Builder, Loc, LHS, RHS);
+      }
+
+    case Lex::TokenKind::OP_STAR:
+      if (IsFloat) {
+        return mlir::arith::MulFOp::create(Builder, Loc, LHS, RHS);
+      } else {
+        return mlir::arith::MulIOp::create(Builder, Loc, LHS, RHS);
+      }
+
+    case Lex::TokenKind::OP_SLASH:
+      if (IsFloat) {
+        return mlir::arith::DivFOp::create(Builder, Loc, LHS, RHS);
+      } else if (IsSigned){
+        return mlir::arith::DivSIOp::create(Builder, Loc, LHS, RHS);
+      } else {
+        return mlir::arith::DivUIOp::create(Builder, Loc, LHS, RHS);
+      }
+
+    // ========================================================================
+    // Comparison Operators (return i1/bool)
+    // ========================================================================
+    case Lex::TokenKind::OP_EQUALEQUAL:
+      if (IsFloat) {
+        return mlir::arith::CmpFOp::create(Builder,
+            Loc, 
+            mlir::arith::CmpFPredicate::OEQ,  // Ordered equal
+            LHS, RHS);
+      } else {
+        return mlir::arith::CmpIOp::create(Builder,
+            Loc,
+            mlir::arith::CmpIPredicate::eq,
+            LHS, RHS);
+      }
+
+    case Lex::TokenKind::OP_BANGEQUAL:
+      if (IsFloat) {
+        return mlir::arith::CmpFOp::create(Builder,
+            Loc,
+            mlir::arith::CmpFPredicate::ONE,  // Ordered not equal
+            LHS, RHS);
+      } else {
+        return mlir::arith::CmpIOp::create(Builder,
+            Loc,
+            mlir::arith::CmpIPredicate::ne,
+            LHS, RHS);
+      }
+
+    case Lex::TokenKind::OP_LESS:
+      if (IsFloat) {
+        return mlir::arith::CmpFOp::create(Builder,
+            Loc,
+            mlir::arith::CmpFPredicate::OLT,  // Ordered less than
+            LHS, RHS);
+      } else {
+        return mlir::arith::CmpIOp::create(Builder,
+            Loc,
+            mlir::arith::CmpIPredicate::slt,  // Signed less than
+            LHS, RHS);
+      }
+
+    case Lex::TokenKind::OP_LESSEQUAL:
+      if (IsFloat) {
+        return mlir::arith::CmpFOp::create(Builder,
+            Loc,
+            mlir::arith::CmpFPredicate::OLE,  // Ordered less or equal
+            LHS, RHS);
+      } else {
+        return mlir::arith::CmpIOp::create(Builder,
+            Loc,
+            mlir::arith::CmpIPredicate::sle,  // Signed less or equal
+            LHS, RHS);
+      }
+
+    case Lex::TokenKind::OP_GREATER:
+      if (IsFloat) {
+        return mlir::arith::CmpFOp::create(Builder,
+            Loc,
+            mlir::arith::CmpFPredicate::OGT,  // Ordered greater than
+            LHS, RHS);
+      } else {
+        return mlir::arith::CmpIOp::create(Builder,
+            Loc,
+            mlir::arith::CmpIPredicate::sgt,  // Signed greater than
+            LHS, RHS);
+      }
+
+    case Lex::TokenKind::OP_GREATEREQUAL:
+      if (IsFloat) {
+        return mlir::arith::CmpFOp::create(Builder,
+            Loc,
+            mlir::arith::CmpFPredicate::OGE,  // Ordered greater or equal
+            LHS, RHS);
+      } else {
+        return mlir::arith::CmpIOp::create(Builder,
+            Loc,
+            mlir::arith::CmpIPredicate::sge,  // Signed greater or equal
+            LHS, RHS);
+      }
+
+    // ========================================================================
+    // Logical Operators (boolean operations)
+    // ========================================================================
+    case Lex::TokenKind::OP_AMPAMP:  // &&
+                                     // LHS && RHS
+      return mlir::arith::AndIOp::create(Builder, Loc, LHS, RHS);
+
+    case Lex::TokenKind::OP_PIPEPIPE:  // ||
+                                       // LHS || RHS
+      return mlir::arith::OrIOp::create(Builder, Loc, LHS, RHS);
+
+    default:
+      llvm::errs() << "Error: Unhandled binary operator: " 
+        << Lex::getTokenName(Op) << "\n";
+      return mlir::Value();
+  }
 }
 
 mlir::Value MLIRGen::visitBoolExpr(BoolExpr *Node) {
@@ -154,7 +308,9 @@ mlir::Value MLIRGen::visitBoolExpr(BoolExpr *Node) {
 
 mlir::Value MLIRGen::visitVarExpr(VarExpr *Node) {
   Symbol *Sym = ST.lookupSymbol(Node->getName(), Node->getScope());
-  mlir::memref::AllocaOp allocaOp = Sym->Alloca;
+  mlir::Operation* genericOp = Sym->Op.dyn_cast<mlir::Operation*>();
+  auto allocaOp = llvm::dyn_cast<mlir::memref::AllocaOp>(genericOp);
+
   mlir::memref::LoadOp loadOp = mlir::memref::LoadOp::create(Builder,
       Builder.getUnknownLoc(),
       allocaOp.getMemref()); 
@@ -162,10 +318,88 @@ mlir::Value MLIRGen::visitVarExpr(VarExpr *Node) {
 }
 
 mlir::Value MLIRGen::visitFunCall(FunCall *Node) {
-  return mlir::Value();
+  auto Loc = Builder.getUnknownLoc();
+
+  std::string FuncName = Node->getFuncName()->getName();
+
+  Symbol *FuncSym = ST.lookupSymbol(FuncName);
+  if (!FuncSym) {
+    llvm::errs() << "Error: Function '" << FuncName 
+      << "' not found in symbol table\n";
+    return mlir::Value();
+  }
+
+  mlir::Operation* genericOp = FuncSym->Op.dyn_cast<mlir::Operation*>();
+
+  mlir::func::FuncOp funcOp = llvm::dyn_cast<mlir::func::FuncOp>(genericOp);
+
+  llvm::ArrayRef<mlir::Type> ResultTypes = funcOp.getResultTypes();
+
+  QualType FuncTy = FuncSym->Ty;
+  if (!FuncTy.isFunctionType()) {
+    llvm::errs() << "Error: Symbol '" << FuncName << "' is not a function\n";
+    return mlir::Value();
+  }
+
+  llvm::SmallVector<mlir::Value, 4> Args;
+  for (const auto &ArgExpr : Node->getParams()) {
+    mlir::Value ArgValue = visit(ArgExpr.get());
+    if (!ArgValue) {
+      llvm::errs() << "Error: Failed to generate argument for function call\n";
+      return mlir::Value();
+    }
+    Args.push_back(ArgValue);
+  }
+
+  // Create the function call operation
+  auto CallOp = mlir::func::CallOp::create(Builder, Loc, funcOp, Args);
+  
+  // If the function returns a value, return it
+  // Otherwise, return an empty mlir::Value (for void functions)
+  if (ResultTypes.empty()) {
+    return mlir::Value();
+  } else {
+    return CallOp.getResult(0);
+  }
+}
+
+void MLIRGen::genParams(const std::vector<FuncDecl::Param>& Params) { 
+  auto Loc = Builder.getUnknownLoc();
+
+  // Iterate through parameters and their corresponding block arguments
+  for (size_t i = 0; i < Params.size(); ++i) {
+    const auto& Param = Params[i];
+
+    // Lookup the parameter symbol to get its type
+    Symbol* ParamSym = ST.lookupSymbol(Param.ParamName->getName(), 
+        Param.ParamName->getScope());
+
+    if (!ParamSym) {
+      llvm::errs() << "Error: Parameter '" << Param.ParamName->getName() 
+        << "' not found in symbol table\n";
+      continue;
+    }
+
+    // Get the parameter's type from the symbol table (set by TypeChecker)
+    QualType ParamType = ParamSym->Ty;
+
+    // Create alloca for this parameter with the correct type
+    auto ParamAlloca = mlir::memref::AllocaOp::create(Builder, 
+        Loc, ToMemRefType(ParamType));
+
+    // Get the corresponding block argument (function parameter value)
+    mlir::Value BlockArg = CurrentEntryBlock->getArgument(i);
+
+    // Store the block argument into the alloca
+    mlir::memref::StoreOp::create(Builder, Loc, BlockArg, ParamAlloca.getResult());
+
+    // Update symbol table to point to this alloca
+    ParamSym->setAlloca(ParamAlloca); 
+  }
 }
 
 void MLIRGen::genFuncDecl(FuncDecl *Node) {
+  auto Loc = Builder.getUnknownLoc(); 
   Symbol* Sym = ST.lookupSymbol(Node->getFuncName()->getName());
   if (!Sym) return;
 
@@ -185,18 +419,17 @@ void MLIRGen::genFuncDecl(FuncDecl *Node) {
 
   auto FuncType = Builder.getFunctionType(ArgTypes, ResultTypes);
 
-  auto FuncOp = mlir::func::FuncOp::create(
-      Builder,
-      Builder.getUnknownLoc(),
-      Node->getFuncName()->getName(),
-      FuncType
-      );
+  auto funcOp = mlir::func::FuncOp::create(
+      Builder, Loc, Node->getFuncName()->getName(), FuncType);
+  Sym->setFunc(funcOp);
 
-  auto *EntryBlock = FuncOp.addEntryBlock();
+  auto *EntryBlock = funcOp.addEntryBlock();
   this->CurrentEntryBlock = EntryBlock;
 
   mlir::OpBuilder::InsertionGuard Guard(Builder);
   Builder.setInsertionPointToStart(CurrentEntryBlock);
+
+  if(!Node->getParams().empty()) { genParams(Node->getParams()); }
 
   if(Node->getBody()) {
     genStmt(Node->getBody());
@@ -213,7 +446,23 @@ void MLIRGen::genFuncDecl(FuncDecl *Node) {
 }
 
 void MLIRGen::genReturnStmt(ReturnStmt *Node) {
+  auto Loc = Builder.getUnknownLoc();
 
+  // No return value (void return)
+  if (!Node->getReturnValue()) {
+    mlir::func::ReturnOp::create(Builder, Loc);
+    return;
+  }
+
+  // Has return value
+  mlir::Value RetValue = visit(Node->getReturnValue());
+
+  if (!RetValue) {
+    llvm::errs() << "Error: Failed to generate return value expression\n";
+    return;
+  }
+
+  mlir::func::ReturnOp::create(Builder, Loc, RetValue);
 }
 
 void MLIRGen::genIfStmt(IfStmt *Node) {

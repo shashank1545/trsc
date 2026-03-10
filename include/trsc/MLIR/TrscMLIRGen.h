@@ -15,6 +15,7 @@
 #include "trsc/AST/ExprVisitor.h"
 #include "trsc/AST/QualType.h"
 #include "trsc/Sema/SymbolTable.h"
+#include <vector>
 
 namespace mlir {
   class MLIRContext;
@@ -31,6 +32,7 @@ namespace trsc {
 
       mlir::OwningOpRef<mlir::ModuleOp> genModule(trsc::Program &Prog);
 
+      void genParams(const std::vector<FuncDecl::Param>& Params);
       void genFuncDecl(FuncDecl *Node);
       void genBlockStmt(BlockStmt *Stmt);
       void genLetStmt(LetStmt *Node);
