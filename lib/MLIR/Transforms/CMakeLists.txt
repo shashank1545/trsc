@@ -15,6 +15,8 @@ add_mlir_library(TrscToStandard
   MLIRFuncDialect
   MLIRArithDialect
   MLIRControlFlowDialect
+  MLIRMemRefDialect
+  MLIRSCFDialect
   MLIRPass
   MLIRTransforms
 )

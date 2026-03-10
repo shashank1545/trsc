@@ -87,6 +87,12 @@ void MLIRGen::genStmt(Stmt *S) {
     case ASTNodeKind::ASTK_EXPRSTMT:
       genExprStmt(static_cast<ExprStmt*>(S));
       break;
+    case ASTNodeKind::ASTK_FORSTMT:
+      genStmt(static_cast<ForStmt*>(S));
+      break;
+    case ASTNodeKind::ASTK_WHILESTMT:
+      genStmt(static_cast<WhileStmt*>(S));
+      break;
     default:
       llvm_unreachable("Unhandled statement type");
   }
@@ -351,7 +357,6 @@ mlir::Value MLIRGen::visitFunCall(FunCall *Node) {
     Args.push_back(ArgValue);
   }
 
-  // Create the function call operation
   auto CallOp = mlir::func::CallOp::create(Builder, Loc, funcOp, Args);
   
   // If the function returns a value, return it
@@ -366,11 +371,9 @@ mlir::Value MLIRGen::visitFunCall(FunCall *Node) {
 void MLIRGen::genParams(const std::vector<FuncDecl::Param>& Params) { 
   auto Loc = Builder.getUnknownLoc();
 
-  // Iterate through parameters and their corresponding block arguments
   for (size_t i = 0; i < Params.size(); ++i) {
     const auto& Param = Params[i];
 
-    // Lookup the parameter symbol to get its type
     Symbol* ParamSym = ST.lookupSymbol(Param.ParamName->getName(), 
         Param.ParamName->getScope());
 
@@ -380,10 +383,8 @@ void MLIRGen::genParams(const std::vector<FuncDecl::Param>& Params) {
       continue;
     }
 
-    // Get the parameter's type from the symbol table (set by TypeChecker)
     QualType ParamType = ParamSym->Ty;
 
-    // Create alloca for this parameter with the correct type
     auto ParamAlloca = mlir::memref::AllocaOp::create(Builder, 
         Loc, ToMemRefType(ParamType));
 
@@ -466,11 +467,110 @@ void MLIRGen::genReturnStmt(ReturnStmt *Node) {
 }
 
 void MLIRGen::genIfStmt(IfStmt *Node) {
+  auto Loc = Builder.getUnknownLoc();
 
+  // Generate condition (must be i1 type)
+  mlir::Value Condition = visit(Node->getCondition());
+
+  if (!Condition) {
+    llvm::errs() << "Error: Failed to generate condition for if statement\n";
+    return;
+  }
+
+  // Verify condition is i1 type
+  if (!Condition.getType().isInteger(1)) {
+    llvm::errs() << "Error: If condition must be of type i1 (bool), got: "
+      << Condition.getType() << "\n";
+    return;
+  }
+
+  // Create scf.if operation
+  auto IfOp = mlir::scf::IfOp::create(Builder,
+      Loc,
+      Condition,
+      /*withElseRegion=*/Node->getElseBranch() != nullptr);
+
+  // Generate "then" region
+  {
+    mlir::OpBuilder::InsertionGuard Guard(Builder);
+    Builder.setInsertionPointToStart(&IfOp.getThenRegion().front());
+
+    genStmt(Node->getThenBranch());
+
+    // Add scf.yield if no terminator exists
+    mlir::Block *ThenBlock = &IfOp.getThenRegion().front();
+    if (ThenBlock->empty() || 
+        !ThenBlock->back().hasTrait<mlir::OpTrait::IsTerminator>()) {
+      mlir::scf::YieldOp::create(Builder, Loc);
+    }
+  }
+
+  // Generate "else" region (if it exists)
+  if (Node->getElseBranch()) {
+    mlir::OpBuilder::InsertionGuard Guard(Builder);
+    Builder.setInsertionPointToStart(&IfOp.getElseRegion().front());
+
+    genStmt(Node->getElseBranch());
+
+    // Add scf.yield if no terminator exists
+    mlir::Block *ElseBlock = &IfOp.getElseRegion().front();
+    if (ElseBlock->empty() || 
+        !ElseBlock->back().hasTrait<mlir::OpTrait::IsTerminator>()) {
+      mlir::scf::YieldOp::create(Builder, Loc);
+    }
+  }
 }
 
 void MLIRGen::genExprStmt(ExprStmt *Node) {
 
+}
+
+void MLIRGen::genForStmt(ForStmt *Node) {
+  auto loc = Builder.getUnknownLoc();
+
+  // 1. Generate loop bounds and step
+  mlir::Value lb = visit(Node->getRange()->getStart());
+  mlir::Value ub = visit(Node->getRange()->getEnd());
+  mlir::Value step = mlir::arith::ConstantIndexOp::create(Builder, loc, 1);
+
+  // 2. Create the ForOp
+  // Note: If you don't have loop-carried variables, iterArgs is empty
+  auto forOp = mlir::scf::ForOp::create(Builder, loc, lb, ub, step);
+
+  // 3. Setup the Body
+  mlir::OpBuilder::InsertionGuard guard(Builder);
+  Builder.setInsertionPointToStart(forOp.getBody());
+
+  genStmt(Node->getBody());
+
+  // 4. Finalize with a yield
+  mlir::scf::YieldOp::create(Builder, loc);
+}
+
+void MLIRGen::genWhileStmt(WhileStmt *Node) {
+  auto loc = Builder.getUnknownLoc();
+
+  // 1. Create WhileOp. 'operands' are initial loop-carried values (often empty)
+  auto whileOp = mlir::scf::WhileOp::create(Builder, loc, mlir::TypeRange{}, 
+      mlir::ValueRange{});
+
+  // 2. "Before" Region: The Condition
+  mlir::Block *beforeBlock = Builder.createBlock(&whileOp.getBefore());
+  Builder.setInsertionPointToStart(beforeBlock);
+
+  mlir::Value condition = visit(Node->getCondition());
+  // scf.condition takes the boolean and any values to pass to the body
+  mlir::scf::ConditionOp::create(Builder, loc, condition, 
+      beforeBlock->getArguments());
+
+  // 3. "After" Region: The Body
+  mlir::Block *afterBlock = Builder.createBlock(&whileOp.getAfter());
+  Builder.setInsertionPointToStart(afterBlock);
+
+  genStmt(Node->getBody());
+
+  // Yield back to the "before" region to re-check the condition
+  mlir::scf::YieldOp::create(Builder, loc);
 }
 
 mlir::OwningOpRef<mlir::ModuleOp> MLIRGen::genModule(trsc::Program &Prog) {
