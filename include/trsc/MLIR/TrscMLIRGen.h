@@ -39,6 +39,7 @@ namespace trsc {
       void genIfStmt(IfStmt *Node);
       void genWhileStmt(WhileStmt *Node);
       void genForStmt(ForStmt *Node);
+      void genAssignment(BinExpr *Node);
       void genExprStmt(ExprStmt *Node);
       void genReturnStmt(ReturnStmt *Node);
       void genProgram(Program *Node);
@@ -63,6 +64,8 @@ namespace trsc {
       mlir::Type ToMLIRType(QualType T);
       mlir::MemRefType ToMemRefType(QualType T);
       llvm::APFloat ToAPFloat(double D);
+      mlir::Value getLValueMemRef(Expr *E);
+      bool isLValue(Expr *E);
 
   };
 

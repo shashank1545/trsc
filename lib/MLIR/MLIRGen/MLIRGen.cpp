@@ -64,6 +64,23 @@ llvm::APFloat MLIRGen::ToAPFloat(double D) {
   return llvm::APFloat(D); 
 }
 
+bool MLIRGen::isLValue(Expr *E) {
+  return static_cast<VarExpr*>(E) != nullptr;
+}
+
+mlir::Value MLIRGen::getLValueMemRef(Expr *E) {
+  if (auto *VE = static_cast<VarExpr*>(E)) {
+    Symbol *Sym = ST.lookupSymbol(VE->getName(), VE->getScope());
+    
+    mlir::Operation* GenericOp = Sym->Op.dyn_cast<mlir::Operation*>();
+    auto AllocaOp = llvm::dyn_cast<mlir::memref::AllocaOp>(GenericOp);
+    
+    return AllocaOp.getMemref();
+  }
+  
+  return mlir::Value();
+}
+
 void MLIRGen::genStmt(Stmt *S) {
   if (!S)
     return;
@@ -88,10 +105,10 @@ void MLIRGen::genStmt(Stmt *S) {
       genExprStmt(static_cast<ExprStmt*>(S));
       break;
     case ASTNodeKind::ASTK_FORSTMT:
-      genStmt(static_cast<ForStmt*>(S));
+      genForStmt(static_cast<ForStmt*>(S));
       break;
     case ASTNodeKind::ASTK_WHILESTMT:
-      genStmt(static_cast<WhileStmt*>(S));
+      genWhileStmt(static_cast<WhileStmt*>(S));
       break;
     default:
       llvm_unreachable("Unhandled statement type");
@@ -521,16 +538,85 @@ void MLIRGen::genIfStmt(IfStmt *Node) {
   }
 }
 
-void MLIRGen::genExprStmt(ExprStmt *Node) {
+void MLIRGen::genAssignment(BinExpr *Node) {
+  auto Loc = Builder.getUnknownLoc();
 
+  // 1. Verify LHS is an lvalue
+  if (!isLValue(Node->getLHS())) {
+    llvm::errs() << "Error: Cannot assign to non-lvalue\n";
+    return;
+  }
+
+  // 2. Get the memref for the variable
+  mlir::Value LHSMemRef = getLValueMemRef(Node->getLHS());
+
+  mlir::Value ValueToStore;
+  Lex::TokenKind Op = Node->getOp();
+
+  if (Op == Lex::TokenKind::OP_EQUAL) {
+    // Simple: a = b
+    ValueToStore = visit(Node->getRHS());
+
+  } else {
+    // Compound: a += b or a -= b
+
+    mlir::Value CurrentValue = mlir::memref::LoadOp::create(Builder,
+        Loc, LHSMemRef);
+
+    // Evaluate RHS
+    mlir::Value RHSValue = visit(Node->getRHS());
+
+    // Perform operation
+    QualType ResultTy = Node->getType();
+    bool IsFloat = ResultTy.isFloatingType();
+
+    if (Op == Lex::TokenKind::OP_PLUSEQUAL) {
+      ValueToStore = IsFloat 
+        ? mlir::arith::AddFOp::create(Builder, Loc, CurrentValue, RHSValue).getResult()
+        : mlir::arith::AddIOp::create(Builder, Loc, CurrentValue, RHSValue).getResult();
+
+    } else if (Op == Lex::TokenKind::OP_MINUSEQUAL) {
+      ValueToStore = IsFloat
+        ? mlir::arith::SubFOp::create(Builder, Loc, CurrentValue, RHSValue).getResult()
+        : mlir::arith::SubIOp::create(Builder, Loc, CurrentValue, RHSValue).getResult();
+    }
+  }
+
+  // 3. Store the result
+  mlir::memref::StoreOp::create(Builder, Loc, ValueToStore, LHSMemRef);
+}
+
+void MLIRGen::genExprStmt(ExprStmt *Node) {
+  Expr *E = Node->getExpression();
+
+  if (!E) return;
+
+  // Special handling for assignment operators
+  if (auto *BE = static_cast<BinExpr*>(E)) {
+    Lex::TokenKind Op = BE->getOp();
+
+    if (Op == Lex::TokenKind::OP_EQUAL ||
+        Op == Lex::TokenKind::OP_PLUSEQUAL ||
+        Op == Lex::TokenKind::OP_MINUSEQUAL) {
+      genAssignment(BE);
+      return;
+    }
+  }
+
+  // For other expressions (function calls, etc.), just evaluate
+  visit(E);
 }
 
 void MLIRGen::genForStmt(ForStmt *Node) {
   auto loc = Builder.getUnknownLoc();
 
   // 1. Generate loop bounds and step
-  mlir::Value lb = visit(Node->getRange()->getStart());
-  mlir::Value ub = visit(Node->getRange()->getEnd());
+  mlir::Value lbValue = visit(Node->getRange()->getStart());
+  mlir::Value ubValue = visit(Node->getRange()->getEnd());
+  mlir::Value lb = mlir::arith::IndexCastOp::create(Builder,
+      loc, Builder.getIndexType(), lbValue);
+  mlir::Value ub = mlir::arith::IndexCastOp::create(Builder,
+      loc, Builder.getIndexType(), ubValue);
   mlir::Value step = mlir::arith::ConstantIndexOp::create(Builder, loc, 1);
 
   // 2. Create the ForOp
@@ -543,8 +629,11 @@ void MLIRGen::genForStmt(ForStmt *Node) {
 
   genStmt(Node->getBody());
 
-  // 4. Finalize with a yield
-  mlir::scf::YieldOp::create(Builder, loc);
+  mlir::Block *bodyBlock = forOp.getBody();
+    if (bodyBlock->empty() || 
+        !bodyBlock->back().hasTrait<mlir::OpTrait::IsTerminator>()) {
+      mlir::scf::YieldOp::create(Builder, loc);
+    }
 }
 
 void MLIRGen::genWhileStmt(WhileStmt *Node) {
@@ -553,24 +642,36 @@ void MLIRGen::genWhileStmt(WhileStmt *Node) {
   // 1. Create WhileOp. 'operands' are initial loop-carried values (often empty)
   auto whileOp = mlir::scf::WhileOp::create(Builder, loc, mlir::TypeRange{}, 
       mlir::ValueRange{});
+  {
+    mlir::OpBuilder::InsertionGuard guard(Builder);
+    mlir::Region &beforeRegion = whileOp.getBefore();
+    mlir::Block *beforeBlock = Builder.createBlock(&beforeRegion);
+    Builder.setInsertionPointToStart(beforeBlock);
 
-  // 2. "Before" Region: The Condition
-  mlir::Block *beforeBlock = Builder.createBlock(&whileOp.getBefore());
-  Builder.setInsertionPointToStart(beforeBlock);
+    mlir::Value condition = visit(Node->getCondition());
+    // scf.condition takes the boolean and any values to pass to the body
+    if (!condition) {
+      llvm::errs() << "Error: Failed to generate while loop condition\n";
+      return;
+    }
+    mlir::scf::ConditionOp::create(Builder, loc, condition, 
+        beforeBlock->getArguments());
+  }
 
-  mlir::Value condition = visit(Node->getCondition());
-  // scf.condition takes the boolean and any values to pass to the body
-  mlir::scf::ConditionOp::create(Builder, loc, condition, 
-      beforeBlock->getArguments());
+  {
+    mlir::OpBuilder::InsertionGuard guard(Builder);
+    mlir::Region &afterRegion = whileOp.getAfter();
+    mlir::Block *afterBlock = Builder.createBlock(&afterRegion);
+    Builder.setInsertionPointToStart(afterBlock);
 
-  // 3. "After" Region: The Body
-  mlir::Block *afterBlock = Builder.createBlock(&whileOp.getAfter());
-  Builder.setInsertionPointToStart(afterBlock);
+    genStmt(Node->getBody());
 
-  genStmt(Node->getBody());
-
-  // Yield back to the "before" region to re-check the condition
-  mlir::scf::YieldOp::create(Builder, loc);
+    // 4. Add scf.yield if no terminator exists
+    if (afterBlock->empty() || 
+        !afterBlock->back().hasTrait<mlir::OpTrait::IsTerminator>()) {
+      mlir::scf::YieldOp::create(Builder, loc);
+    }
+  }
 }
 
 mlir::OwningOpRef<mlir::ModuleOp> MLIRGen::genModule(trsc::Program &Prog) {
