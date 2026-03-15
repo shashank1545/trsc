@@ -1,11 +1,13 @@
 #include <gtest/gtest.h>
 #include "trsc/Sema/SymbolTable.h"
+#include "trsc/Sema/Scope.h"
 
-using namespace trsc::Sema;
+using namespace trsc;
 
 TEST(SymbolTableTest, BasicScoping) {
     SymbolTable Table;
-    Table.enterScope();
+    ScopeKind Kind;
+    Table.enterScope(Kind);
     
     // Assume Table.insert(Name, Symbol) exists
     // Table.insert("x", Symbol(Type::i32));

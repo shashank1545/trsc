@@ -10,31 +10,31 @@ protected:
     trsc::SourceManager SM;
     trsc::DiagnosticsEngine Diag;
 
-    LexerTest() : Diag(SM) {}
+    LexerTest() :  SM(Diag), Diag()  {}
 };
 
 TEST_F(LexerTest, BasicTokens) {
     const std::string input = "let x = 10;";
-    SM.setMainFileBuffer(input);
+    SM.loadFile(input);
     Lexer lexer(SM, Diag);
 
     Token tok = lexer.Lex();
-    EXPECT_EQ(tok.getKind(), TokenKind::kw_let);
+    EXPECT_EQ(tok.getKind(), TokenKind::KW_LET);
 
     tok = lexer.Lex();
-    EXPECT_EQ(tok.getKind(), TokenKind::identifier);
-    EXPECT_EQ(tok.getIdentifier(), "x");
+    EXPECT_EQ(tok.getKind(), TokenKind::IDENTIFIER);
+    EXPECT_EQ(tok.getText(), "x");
 
     tok = lexer.Lex();
-    EXPECT_EQ(tok.getKind(), TokenKind::equal);
+    EXPECT_EQ(tok.getKind(), TokenKind::OP_EQUAL);
 
     tok = lexer.Lex();
-    EXPECT_EQ(tok.getKind(), TokenKind::integer_literal);
-    EXPECT_EQ(tok.getLiteralData(), "10");
+    EXPECT_EQ(tok.getKind(), TokenKind::LT_INTEGER);
+    EXPECT_EQ(tok.getText(), "10");
 
     tok = lexer.Lex();
-    EXPECT_EQ(tok.getKind(), TokenKind::semi);
+    EXPECT_EQ(tok.getKind(), TokenKind::DE_SEMICOLON);
 
     tok = lexer.Lex();
-    EXPECT_EQ(tok.getKind(), TokenKind::eof);
+    EXPECT_EQ(tok.getKind(), TokenKind::ENDOFFILE);
 }
