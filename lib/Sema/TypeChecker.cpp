@@ -114,9 +114,9 @@ namespace trsc {
       case Lex::TokenKind::OP_PLUSEQUAL:
         if (LHSQualType.isNumericType() && RHSQualType.isNumericType()) {
           if (LHSQualType.isFloatingType() || RHSQualType.isFloatingType()) {
-            ResultType = Ctx.getF64Type(); 
+            ResultType = LHSQualType; 
           } else {
-            ResultType = Ctx.getI32Type(); 
+            ResultType = LHSQualType; 
           }
         } else {
           Diags.Report(DiagKind::Error,
