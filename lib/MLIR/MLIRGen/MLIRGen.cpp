@@ -72,8 +72,8 @@ mlir::Value MLIRGen::getLValueMemRef(Expr *E) {
   if (auto *VE = static_cast<VarExpr*>(E)) {
     Symbol *Sym = ST.lookupSymbol(VE->getName(), VE->getScope());
     
-    mlir::Operation* GenericOp = Sym->Op.dyn_cast<mlir::Operation*>();
-    auto AllocaOp = llvm::dyn_cast<mlir::memref::AllocaOp>(GenericOp);
+    mlir::Operation* RawOp = static_cast<mlir::Operation*>(Sym->Op);
+    auto AllocaOp = llvm::dyn_cast<mlir::memref::AllocaOp>(RawOp);
     
     return AllocaOp.getMemref();
   }
@@ -144,7 +144,7 @@ void MLIRGen::genLetStmt(LetStmt *Node) {
         Builder.getUnknownLoc(), 
         ToMemRefType(VarTy));  
   }
-  Sym->setAlloca(VarAlloca);
+  Sym->setOp(static_cast<void*>(VarAlloca.getOperation()));
   mlir::memref::StoreOp::create(Builder, 
       Builder.getUnknownLoc(), 
       InitValue,
@@ -331,8 +331,8 @@ mlir::Value MLIRGen::visitBoolExpr(BoolExpr *Node) {
 
 mlir::Value MLIRGen::visitVarExpr(VarExpr *Node) {
   Symbol *Sym = ST.lookupSymbol(Node->getName(), Node->getScope());
-  mlir::Operation* genericOp = Sym->Op.dyn_cast<mlir::Operation*>();
-  auto allocaOp = llvm::dyn_cast<mlir::memref::AllocaOp>(genericOp);
+  mlir::Operation* RawPtr = static_cast<mlir::Operation*>(Sym->Op);
+  auto allocaOp = llvm::dyn_cast<mlir::memref::AllocaOp>(RawPtr);
 
   mlir::memref::LoadOp loadOp = mlir::memref::LoadOp::create(Builder,
       Builder.getUnknownLoc(),
@@ -352,9 +352,8 @@ mlir::Value MLIRGen::visitFunCall(FunCall *Node) {
     return mlir::Value();
   }
 
-  mlir::Operation* genericOp = FuncSym->Op.dyn_cast<mlir::Operation*>();
-
-  mlir::func::FuncOp funcOp = llvm::dyn_cast<mlir::func::FuncOp>(genericOp);
+  mlir::Operation* RawPtr = static_cast<mlir::Operation*>(FuncSym->Op);
+  mlir::func::FuncOp funcOp = llvm::dyn_cast<mlir::func::FuncOp>(RawPtr);
 
   llvm::ArrayRef<mlir::Type> ResultTypes = funcOp.getResultTypes();
 
@@ -412,7 +411,7 @@ void MLIRGen::genParams(const std::vector<FuncDecl::Param>& Params) {
     mlir::memref::StoreOp::create(Builder, Loc, BlockArg, ParamAlloca.getResult());
 
     // Update symbol table to point to this alloca
-    ParamSym->setAlloca(ParamAlloca); 
+    ParamSym->setOp(static_cast<void*>(ParamAlloca.getOperation())); 
   }
 }
 
@@ -439,7 +438,7 @@ void MLIRGen::genFuncDecl(FuncDecl *Node) {
 
   auto funcOp = mlir::func::FuncOp::create(
       Builder, Loc, Node->getFuncName()->getName(), FuncType);
-  Sym->setFunc(funcOp);
+  Sym->setOp(static_cast<void*>(funcOp.getOperation()));
 
   auto *EntryBlock = funcOp.addEntryBlock();
   this->CurrentEntryBlock = EntryBlock;
