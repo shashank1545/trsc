@@ -1,11 +1,7 @@
 #ifndef TRSC_SEMA_SCOPE_H
 #define TRSC_SEMA_SCOPE_H
 
-#include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/IR/Operation.h"
 #include "trsc/AST/QualType.h"
-#include "llvm/ADT/PointerUnion.h"
 
 #include <map>
 #include <string>
@@ -32,10 +28,9 @@ namespace trsc {
   const char* getSymbolKindName(SymbolKind Kind);
   const char* getScopeKindName(ScopeKind Kind);
   
-  using OpStorage = llvm::PointerUnion<mlir::Operation*>;
 
   struct Symbol {
-    OpStorage Op;
+    void* Op = nullptr;
     QualType Ty;
     SymbolKind Kind;
     bool IsMutable;
@@ -54,10 +49,10 @@ namespace trsc {
      bool IsInitialized) : Ty(Ty), Kind(Kind), 
      IsMutable(IsMutable), IsInitialized(IsInitialized) {}
 
-    void setAlloca(mlir::memref::AllocaOp Alloca) { 
-      this->Op = Alloca.getOperation();
-    }
-    void setFunc(mlir::func::FuncOp Func) { this->Op = Func.getOperation(); }
+    void setOp(void* OpPtr) {this->Op = OpPtr; }
+
+    template <typename T>
+    T getOpAs() const {return reinterpret_cast<T>(Op); }
   };
 
   class Scope {
