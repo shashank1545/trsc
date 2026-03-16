@@ -11,6 +11,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 project(trsc C CXX)
 
+enable_testing()
+
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
 find_package(MLIR REQUIRED CONFIG)
@@ -25,7 +27,6 @@ add_subdirectory(lib)
 add_subdirectory(lib/MLIR)
 add_subdirectory(tools)
 add_subdirectory(test)
-enable_testing()
 
 # add_executable(trsc tools/trsc/main.cpp)
 # target_link_libraries(trsc
