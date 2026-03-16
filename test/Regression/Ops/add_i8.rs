@@ -1,27 +1,33 @@
-// RUN: %trsc -dump-tokens %s | %FileCheck %s --check-prefix=TOKENS
+// RUN: %trsc -dump-token %s | %FileCheck %s --check-prefix=TOKENS
 // RUN: %trsc -dump-ast %s | %FileCheck %s --check-prefix=AST
-// RUN: %trsc -dump-symboltable %s | %FileCheck %s --check-prefix=SYMBOL
+// RUN: %trsc -dump-symboltable %s | %FileCheck %s --check-prefix=SYMBOLTABLE
+// RUN: %trsc -dump-typedast %s | %FileCheck %s --check-prefix=TYPEDAST
 // RUN: %trsc -emit-mlir %s | %FileCheck %s --check-prefix=MLIR
 
 fn add_i8(a: i8, b: i8) -> i8 {
     return a + b;
 }
 
-// TOKENS: kw_fn
-// TOKENS-NEXT: identifier: add_i8
-// TOKENS: kw_return
-// TOKENS: identifier: a
-// TOKENS: plus
-// TOKENS: identifier: b
+// TOKENS: Token: KW_FN
+// TOKENS: Token: IDENTIFIER Text: 'add_i8'
+// TOKENS: Token: KW_RETURN
+// TOKENS: Token: IDENTIFIER Text: 'a'
+// TOKENS: Token: OP_PLUS
+// TOKENS: Token: IDENTIFIER Text: 'b'
 
-// AST: FunctionDecl: add_i8
-// AST: BinaryOperator: +
-// AST-NEXT: DeclRefExpr: a
-// AST-NEXT: DeclRefExpr: b
+// AST: FuncDecl 'add_i8'
+// AST: BinExpr: 'OP_PLUS'
+// AST-NEXT: VarExpr: 'a'
+// AST-NEXT: VarExpr: 'b'
 
-// SYMBOL: Symbol: a (i8)
-// SYMBOL: Symbol: b (i8)
+// SYMBOLTABLE: ┌─ Global Scope (Depth: 0)
+// SYMBOLTABLE: │  add_i8               : (i8,i8,) -> i8 [Function]
 
-// MLIR: func @add_i8(%arg0: i8, %arg1: i8) -> i8
-// MLIR: %0 = trsc.add %arg0, %arg1 : i8
-// MLIR: return %0 : i8
+// TYPEDAST: FuncDecl {{.*}} 'add_i8'
+// TYPEDAST: BinExpr {{.*}} 'i8' 'OP_PLUS'
+// TYPEDAST: VarExpr {{.*}} 'i8' 'a'
+// TYPEDAST: VarExpr {{.*}} 'i8' 'b'
+
+// MLIR: func.func @{{.*}}add_i8(%arg0: i8, %arg1: i8) -> i8
+// MLIR: {{.*}} = arith.addi {{.*}}, {{.*}} : i8
+// MLIR: return {{.*}} : i8
