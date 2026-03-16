@@ -44,14 +44,20 @@ mlir::Type MLIRGen::ToMLIRType(QualType T) {
   if (T.isNull() || T.isUnitType()) {
     return Builder.getNoneType();
   }
-  if (T.isIntegerType()) {
-    return Builder.getI32Type();
-  }
-  if (T.isFloatingType()) {
-    return Builder.getF64Type();
-  }
   if (T.isBooleanType()) {
     return Builder.getI1Type();
+  }
+  if (T.isIntegerType()) {
+    size_t Width = T.getSizeInBytes() * 8;
+    return Builder.getIntegerType(Width);
+  }
+  if (T.isFloatingType()) {
+    size_t Width = T.getSizeInBytes() * 8;
+    switch (Width) {
+      case 32: return Builder.getF32Type();
+      case 64: return Builder.getF64Type();
+      default: return Builder.getF64Type();
+    }
   }
   return Builder.getNoneType();
 }
@@ -187,6 +193,11 @@ mlir::Value MLIRGen::visitBinExpr(BinExpr *Node) {
   bool IsFloat = ResultTy.isFloatingType();
   bool IsBool = ResultTy.isBooleanType();
   bool IsSigned = ResultTy.isSignedIntegerType();
+  
+  // For comparisons, we need to know if the operands are signed or floating
+  mlir::Type LHSTy = LHS.getType();
+  bool OpIsFloat = LHSTy.isFloat();
+  bool OpIsSigned = Node->getLHS()->getType().isSignedIntegerType();
 
   switch (Op) {
     // ========================================================================
@@ -226,7 +237,7 @@ mlir::Value MLIRGen::visitBinExpr(BinExpr *Node) {
     // Comparison Operators (return i1/bool)
     // ========================================================================
     case Lex::TokenKind::OP_EQUALEQUAL:
-      if (IsFloat) {
+      if (OpIsFloat) {
         return mlir::arith::CmpFOp::create(Builder,
             Loc, 
             mlir::arith::CmpFPredicate::OEQ,  // Ordered equal
@@ -239,7 +250,7 @@ mlir::Value MLIRGen::visitBinExpr(BinExpr *Node) {
       }
 
     case Lex::TokenKind::OP_BANGEQUAL:
-      if (IsFloat) {
+      if (OpIsFloat) {
         return mlir::arith::CmpFOp::create(Builder,
             Loc,
             mlir::arith::CmpFPredicate::ONE,  // Ordered not equal
@@ -252,7 +263,7 @@ mlir::Value MLIRGen::visitBinExpr(BinExpr *Node) {
       }
 
     case Lex::TokenKind::OP_LESS:
-      if (IsFloat) {
+      if (OpIsFloat) {
         return mlir::arith::CmpFOp::create(Builder,
             Loc,
             mlir::arith::CmpFPredicate::OLT,  // Ordered less than
@@ -260,12 +271,12 @@ mlir::Value MLIRGen::visitBinExpr(BinExpr *Node) {
       } else {
         return mlir::arith::CmpIOp::create(Builder,
             Loc,
-            mlir::arith::CmpIPredicate::slt,  // Signed less than
+            OpIsSigned ? mlir::arith::CmpIPredicate::slt : mlir::arith::CmpIPredicate::ult,
             LHS, RHS);
       }
 
     case Lex::TokenKind::OP_LESSEQUAL:
-      if (IsFloat) {
+      if (OpIsFloat) {
         return mlir::arith::CmpFOp::create(Builder,
             Loc,
             mlir::arith::CmpFPredicate::OLE,  // Ordered less or equal
@@ -273,12 +284,12 @@ mlir::Value MLIRGen::visitBinExpr(BinExpr *Node) {
       } else {
         return mlir::arith::CmpIOp::create(Builder,
             Loc,
-            mlir::arith::CmpIPredicate::sle,  // Signed less or equal
+            OpIsSigned ? mlir::arith::CmpIPredicate::sle : mlir::arith::CmpIPredicate::ule,
             LHS, RHS);
       }
 
     case Lex::TokenKind::OP_GREATER:
-      if (IsFloat) {
+      if (OpIsFloat) {
         return mlir::arith::CmpFOp::create(Builder,
             Loc,
             mlir::arith::CmpFPredicate::OGT,  // Ordered greater than
@@ -286,12 +297,12 @@ mlir::Value MLIRGen::visitBinExpr(BinExpr *Node) {
       } else {
         return mlir::arith::CmpIOp::create(Builder,
             Loc,
-            mlir::arith::CmpIPredicate::sgt,  // Signed greater than
+            OpIsSigned ? mlir::arith::CmpIPredicate::sgt : mlir::arith::CmpIPredicate::ugt,
             LHS, RHS);
       }
 
     case Lex::TokenKind::OP_GREATEREQUAL:
-      if (IsFloat) {
+      if (OpIsFloat) {
         return mlir::arith::CmpFOp::create(Builder,
             Loc,
             mlir::arith::CmpFPredicate::OGE,  // Ordered greater or equal
@@ -299,7 +310,7 @@ mlir::Value MLIRGen::visitBinExpr(BinExpr *Node) {
       } else {
         return mlir::arith::CmpIOp::create(Builder,
             Loc,
-            mlir::arith::CmpIPredicate::sge,  // Signed greater or equal
+            OpIsSigned ? mlir::arith::CmpIPredicate::sge : mlir::arith::CmpIPredicate::uge,
             LHS, RHS);
       }
 
