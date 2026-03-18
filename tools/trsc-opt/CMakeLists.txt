@@ -11,12 +11,12 @@ set(LIBS
     TrscToStandard
     TrscMLIRGen
     # MLIR Core
-    MLIRAnalysis
     MLIRIR
-    MLIRParser
     MLIRPass
-    MLIRSupport
     MLIRTransforms
+    MLIRAnalysis
+    MLIRParser
+    MLIRSupport
     MLIROptLib
 )
 

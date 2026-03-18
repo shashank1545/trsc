@@ -1,23 +1,18 @@
-#include "mlir/IR/Dialect.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/ControlFlow/IR/ControlFlow.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/Parser/Parser.h"
-#include "mlir/Pass/Pass.h"
+#include "mlir/Transforms/Passes.h"
+#include "mlir/Conversion/Passes.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Support/FileUtilities.h"
 #include "mlir/Tools/mlir-opt/MlirOptMain.h"
-#include "llvm/Support/CommandLine.h"
-#include "llvm/Support/InitLLVM.h"
-#include "llvm/Support/SourceMgr.h"
-#include "llvm/Support/ToolOutputFile.h"
 
-// TRSC includes
 #include "trsc/MLIR/TrscDialect.h"
-#include "trsc/MLIR/TrscPasses.h"
 
-// Standard MLIR dialects that we need
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
-#include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 
 int main(int argc, char **argv) {
   // Register MLIR command line options
@@ -34,6 +29,13 @@ int main(int argc, char **argv) {
   registry.insert<mlir::func::FuncDialect>();
   registry.insert<mlir::arith::ArithDialect>();
   registry.insert<mlir::cf::ControlFlowDialect>();
+  registry.insert<mlir::memref::MemRefDialect>();
+  registry.insert<mlir::scf::SCFDialect>();
+
+  mlir::registerCanonicalizerPass();
+  mlir::registerCSEPass();
+  mlir::registerMem2RegPass();
+  mlir::registerSCFToControlFlowPass();
 
   return mlir::asMainReturnCode(
       mlir::MlirOptMain(argc, argv, "TRSC optimizer driver\n", registry));
