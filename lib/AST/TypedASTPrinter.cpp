@@ -4,7 +4,7 @@
 
 namespace trsc {
 
-  TypedASTPrinter::TypedASTPrinter(std::ostream &OS) : OS(OS), IndentLevel(0), IsLastChild(false) {
+  TypedASTPrinter::TypedASTPrinter(std::ostream &OS) : OS(OS), IndentLevel(0) {
     IsLastStack.clear();
   }
 

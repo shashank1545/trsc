@@ -150,11 +150,11 @@ namespace trsc {
         return std::make_unique<IntExpr>(Val, StartEqualEndRange);
       }
       case Lex::TokenKind::KW_TRUE: {
-        Lex::Token TrueToken = consume(Lex::TokenKind::KW_TRUE);
+        consume(Lex::TokenKind::KW_TRUE);
         return std::make_unique<BoolExpr>(true, StartEqualEndRange);
       }
       case Lex::TokenKind::KW_FALSE: {
-        Lex::Token FalseToken = consume(Lex::TokenKind::KW_FALSE);
+        consume(Lex::TokenKind::KW_FALSE);
         return std::make_unique<BoolExpr>(false, StartEqualEndRange);
       }
       case Lex::TokenKind::IDENTIFIER: {
@@ -452,7 +452,7 @@ namespace trsc {
       if(currentToken().getKind() != Lex::TokenKind::IDENTIFIER) {
         reportExpectedError(Lex::TokenKind::IDENTIFIER);
       }
-      Lex::Token FuncNameToken = consume(Lex::TokenKind::IDENTIFIER);
+      consume(Lex::TokenKind::IDENTIFIER);
     }
     std::unique_ptr<VarExpr> FuncName = std::make_unique<VarExpr>(std::string(
           FuncNameToken->getText()));

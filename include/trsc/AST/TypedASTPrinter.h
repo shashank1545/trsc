@@ -13,7 +13,6 @@ namespace trsc {
     private:
       std::ostream &OS;
       unsigned IndentLevel;
-      bool IsLastChild;
       std::vector<bool> IsLastStack;
 
       void printIndent(bool isLast);
