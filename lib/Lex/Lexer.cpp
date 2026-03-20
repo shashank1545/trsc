@@ -182,6 +182,7 @@ namespace trsc {
       if (Text == "fn") Kind = TokenKind::KW_FN;
       else if (Text == "let") Kind = TokenKind::KW_LET;
       else if (Text == "mut") Kind = TokenKind::KW_MUT;
+      else if (Text == "const") Kind = TokenKind::KW_CONST;
       else if (Text == "if") Kind = TokenKind::KW_IF;
       else if (Text == "else") Kind = TokenKind::KW_ELSE;
       else if (Text == "return") Kind = TokenKind::KW_RETURN;

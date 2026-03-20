@@ -15,6 +15,7 @@ namespace trsc {
       KW_FN,
       KW_LET,
       KW_MUT,
+      KW_CONST,
       KW_IF,
       KW_ELSE,
       KW_RETURN,
@@ -104,6 +105,7 @@ namespace trsc {
             case TokenKind::KW_FN:
             case TokenKind::KW_LET:
             case TokenKind::KW_MUT:
+            case TokenKind::KW_CONST:
             case TokenKind::KW_IF:
             case TokenKind::KW_ELSE:
             case TokenKind::KW_RETURN:
