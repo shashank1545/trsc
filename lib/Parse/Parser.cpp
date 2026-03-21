@@ -134,28 +134,36 @@ namespace trsc {
     return std::make_unique<Program>(LocRange, std::move(Statements));
   }
 
-
   std::unique_ptr<Expr> Parser::parsePrimary() {
     SourceLocation StartLoc = currentToken().getLocation();
-    SourceRange StartEqualEndRange = SourceRange(StartLoc, StartLoc);
+    SourceLocation EndLoc;
+    SourceRange Range;
     switch(currentToken().getKind()) {
       case Lex::TokenKind::LT_FLOAT: {
         Lex::Token NumToken = consume(Lex::TokenKind::LT_FLOAT);
         double Val = std::stod(std::string(NumToken.getText()));
-        return std::make_unique<FloatExpr>(Val, StartEqualEndRange);
+        EndLoc = currentToken().getLocation();
+        Range = SourceRange(StartLoc, EndLoc);
+        return std::make_unique<FloatExpr>(Val, Range);
       }
       case Lex::TokenKind::LT_INTEGER: {
         Lex::Token NumToken = consume(Lex::TokenKind::LT_INTEGER);
         long long Val = std::stoll(std::string(NumToken.getText()));
-        return std::make_unique<IntExpr>(Val, StartEqualEndRange);
+        EndLoc = currentToken().getLocation();
+        Range = SourceRange(StartLoc, EndLoc);
+        return std::make_unique<IntExpr>(Val, Range);
       }
       case Lex::TokenKind::KW_TRUE: {
         consume(Lex::TokenKind::KW_TRUE);
-        return std::make_unique<BoolExpr>(true, StartEqualEndRange);
+        EndLoc = currentToken().getLocation();
+        Range = SourceRange(StartLoc, EndLoc);
+        return std::make_unique<BoolExpr>(true, Range);
       }
       case Lex::TokenKind::KW_FALSE: {
         consume(Lex::TokenKind::KW_FALSE);
-        return std::make_unique<BoolExpr>(false, StartEqualEndRange);
+        EndLoc = currentToken().getLocation();
+        Range = SourceRange(StartLoc, EndLoc);
+        return std::make_unique<BoolExpr>(false, Range);
       }
       case Lex::TokenKind::IDENTIFIER: {
         Lex::Token IdentToken = consume(Lex::TokenKind::IDENTIFIER);
@@ -163,8 +171,10 @@ namespace trsc {
           return parseFunCall(IdentToken);
         }
         else {
+          EndLoc = currentToken().getLocation();
+          Range = SourceRange(StartLoc, EndLoc);
           return std::make_unique<VarExpr>(std::string(IdentToken.getText()),
-              StartEqualEndRange);
+              Range);
         }
       }
       case Lex::TokenKind::DE_LPAREN: {
@@ -177,6 +187,20 @@ namespace trsc {
         }
         consume(Lex::TokenKind::DE_RPAREN);
         return E;
+      }
+      case Lex::TokenKind::OP_AMP: {
+        consume(Lex::TokenKind::OP_AMP);
+        bool IsMut;
+        if(currentToken().getKind() == Lex::TokenKind::KW_MUT){
+          consume(Lex::TokenKind::KW_MUT);
+          IsMut = true;
+        } else {
+          IsMut = false;
+        }
+        std::unique_ptr<Expr> RefrendExpr = parsePrimary();
+        EndLoc = currentToken().getLocation();
+        Range = SourceRange(StartLoc, EndLoc);
+        return std::make_unique<RefrExpr>(std::move(RefrendExpr), IsMut, Range);
       }
       default:
         Diag.Report(DiagKind::Error, "Expected an expression", 
@@ -251,6 +275,8 @@ namespace trsc {
 
   std::unique_ptr<LetStmt> Parser::parseLetStmt() {
     SourceLocation Start = currentToken().getLocation();
+    SourceLocation End;
+    SourceRange Range;
     consume(Lex::TokenKind::KW_LET);
     bool IsMut = false;
     if(currentToken().getKind() == Lex::TokenKind::KW_MUT){
@@ -268,21 +294,25 @@ namespace trsc {
       consume(Lex::TokenKind::DE_COLON);
       VarType = parseType();
     }
-    if(!expectToken(Lex::TokenKind::OP_EQUAL)) return nullptr;
-
-    auto Initializer = parseExpr(0);
-    if (!Initializer) {
-      return nullptr;
+    std::unique_ptr<Expr> Initializer;
+    if(currentToken().getKind() == Lex::TokenKind::DE_SEMICOLON) {
+      consume(Lex::TokenKind::DE_SEMICOLON);
+      End = currentToken().getLocation();
+      Range = SourceRange(Start, End);
+    } else {
+      if(!expectToken(Lex::TokenKind::OP_EQUAL)) return nullptr;
+      Initializer = parseExpr(0);
+      if (!Initializer) {
+        return nullptr;
+      }
+      if (currentToken().getKind() != Lex::TokenKind::DE_SEMICOLON) {
+        reportExpectedError(Lex::TokenKind::DE_SEMICOLON);
+        return nullptr;
+      }
+      consume(Lex::TokenKind::DE_SEMICOLON);
+      SourceLocation End = currentToken().getLocation();
+      SourceRange Range = SourceRange(Start, End);
     }
-
-    if (currentToken().getKind() != Lex::TokenKind::DE_SEMICOLON) {
-      reportExpectedError(Lex::TokenKind::DE_SEMICOLON);
-      return nullptr;
-    }
-    consume(Lex::TokenKind::DE_SEMICOLON);
-    SourceLocation End = currentToken().getLocation();
-    SourceRange Range = SourceRange(Start, End);
-
     return std::make_unique<trsc::LetStmt>(IsMut, std::move(DeclaredVar), 
         std::move(VarType), std::move(Initializer), Range);
   }
@@ -290,17 +320,74 @@ namespace trsc {
 
   std::unique_ptr<TypeName> Parser::parseType() {
     SourceLocation Start = currentToken().getLocation();
+    SourceLocation End;
+    SourceRange Range;
+    if(currentToken().getKind() == Lex::TokenKind::OP_STAR) {
+      std::string TypeNameString;
+      consume(Lex::TokenKind::OP_STAR);
+      if(std::string(currentToken().getText()) == "mut") {
+        consume(Lex::TokenKind::KW_MUT);
+        TypeNameString = "*mut ";
+      } else if(std::string(currentToken().getText()) == "const") {
+        consume(Lex::TokenKind::KW_CONST);
+        TypeNameString = "*const ";
+      } else { 
+        Diag.Report(DiagKind::Error,"Raw pointer types can only be mut or const.");
+      }
+      auto InnerType = parseType();
+      if (!InnerType) return nullptr;
+      End = currentToken().getLocation();
+      Range = SourceRange(Start, End);
+      return std::make_unique<TypeName>(ASTNodeKind::ASTK_TYPENAME,
+          TypeNameString + InnerType->getName(), Range);
+    }
+    else if (currentToken().getKind() == Lex::TokenKind::OP_AMP) {
+      std::string TypeNameString;
+      consume(Lex::TokenKind::OP_AMP);
+      if(std::string(currentToken().getText()) == "mut") {
+        consume(Lex::TokenKind::KW_MUT);
+        TypeNameString = "&mut ";
+      } else {
+        TypeNameString = "&";
+      }
+      auto InnerType = parseType();
+      if (!InnerType) return nullptr;
+      End = currentToken().getLocation();
+      Range = SourceRange(Start, End);
+      return std::make_unique<TypeName>(ASTNodeKind::ASTK_TYPENAME,
+          TypeNameString + InnerType->getName(), Range);
+    }
+    else if(currentToken().getKind() == Lex::TokenKind::DE_LBRACKET) {
+      std::string TypeNameString;
+      consume(Lex::TokenKind::DE_LBRACKET);
+      auto InnerType = parseType();
+      if (!InnerType) return nullptr;
+
+      if(!expectToken(Lex::TokenKind::DE_SEMICOLON)) return nullptr;
+
+      if(currentToken().getKind() != Lex::TokenKind::LT_INTEGER) {
+        Diag.Report(DiagKind::Error, "Expected array size",
+            currentToken().getLocation());
+        return nullptr;
+      }
+      std::string SizeStr = std::string(currentToken().getText());
+      consume(Lex::TokenKind::LT_INTEGER);
+
+      if(!expectToken(Lex::TokenKind::DE_RBRACKET)) return nullptr;
+
+      TypeNameString = "[" + InnerType->getName() + "; " + SizeStr + "]";
+    }
+    else {
     if (currentToken().getKind() != Lex::TokenKind::IDENTIFIER) {
       reportExpectedError(Lex::TokenKind::IDENTIFIER);
       return nullptr;
     }
     Lex::Token TypeNameToken = consume(Lex::TokenKind::IDENTIFIER);
-    SourceRange Loc = SourceRange(TypeNameToken.getLocation(), 
-        TypeNameToken.getLocation());
-    SourceLocation End = currentToken().getLocation();
-    SourceRange Range = SourceRange(Start, End);
+    End = currentToken().getLocation();
+    Range = SourceRange(Start, End);
     return std::make_unique<TypeName>(ASTNodeKind::ASTK_TYPENAME, 
         std::string(TypeNameToken.getText()), Range);
+    }
   }
 
   std::unique_ptr<ExprStmt> Parser::parseExprStmt() {

@@ -36,6 +36,7 @@ namespace trsc {
       void visitIntExpr(IntExpr *Node);
       void visitFloatExpr(FloatExpr *Node);
       void visitVarExpr(VarExpr *Node);
+      void visitRefrExpr(RefrExpr *Node);
       void visitBoolExpr(BoolExpr *Node);
       void visitBinExpr(BinExpr *Node);
       void visitRangeExpr(RangeExpr *Node);

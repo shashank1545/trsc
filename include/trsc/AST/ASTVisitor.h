@@ -25,6 +25,9 @@ public:
       case ASTNodeKind::ASTK_VAREXPR:
         getDerived().visitVarExpr(static_cast<VarExpr*>(Node));
         break;
+      case ASTNodeKind::ASTK_REFREXPR:
+        getDerived().visitRefrExpr(static_cast<RefrExpr*>(Node));
+        break;
       case ASTNodeKind::ASTK_INTEXPR:
         getDerived().visitIntExpr(static_cast<IntExpr*>(Node));
         break;
@@ -150,6 +153,10 @@ public:
     for (const auto &Param : E->getParams()) {
       getDerived().visit(Param.get());
     }
+  }
+
+  void visitRefrExpr(RefrExpr *E) {
+    getDerived().visit(E->getRefrend());
   }
 
   void visitVarExpr(VarExpr *E) {}

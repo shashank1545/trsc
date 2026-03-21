@@ -13,6 +13,7 @@ namespace trsc {
       case trsc::ASTNodeKind::ASTK_INTEXPR: return "IntExpr";
       case trsc::ASTNodeKind::ASTK_FLOATEXPR: return "FloatExpr";
       case trsc::ASTNodeKind::ASTK_VAREXPR: return "VarExpr";
+      case trsc::ASTNodeKind::ASTK_REFREXPR: return "RefrExpr";
       case trsc::ASTNodeKind::ASTK_BINEXPR: return "BinExpr";
       case trsc::ASTNodeKind::ASTK_RANGEEXPR: return "RangeExpr";
       case trsc::ASTNodeKind::ASTK_STMT: return "Stmt";

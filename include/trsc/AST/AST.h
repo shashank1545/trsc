@@ -24,6 +24,7 @@ enum class ASTNodeKind {
   ASTK_INTEXPR,
   ASTK_FLOATEXPR,
   ASTK_VAREXPR,
+  ASTK_REFREXPR,
   ASTK_BINEXPR,
   ASTK_RANGEEXPR,
   ASTK_STMT,
@@ -156,6 +157,18 @@ public:
       : Expr(ASTNodeKind::ASTK_VAREXPR, Loc), Name(Name) {}
   const std::string &getName() const { return Name; }
   bool isVar() const override { return true; }
+  bool isExpr() const override { return true; }
+};
+
+class RefrExpr : public Expr {
+  std::unique_ptr<Expr> RefrendExpr;
+  bool IsMut;
+  public:
+  RefrExpr(std::unique_ptr<Expr> RefrendExpr, bool IsMut, SourceRange Loc= {}) : 
+    Expr(ASTNodeKind::ASTK_REFREXPR, Loc), RefrendExpr(std::move(RefrendExpr)), 
+    IsMut(IsMut) {}
+  Expr *getRefrend() const { return RefrendExpr.get(); }
+  bool isMut() const { return IsMut; }
   bool isExpr() const override { return true; }
 };
 

@@ -184,6 +184,14 @@ namespace trsc {
     IndentLevel--;
   }
 
+  void ASTPrinter::visitRefrExpr(RefrExpr *Node) {
+  indent();
+  OS << "RefrExpr " << (Node->isMut() ? "mut" : "non-mut") << '\n';
+  IndentLevel++;
+  visit(Node->getRefrend());
+  IndentLevel--;
+  }
+
   void ASTPrinter::visitRangeExpr(RangeExpr *Node) {
     indent();
     OS << "RangeExpr " << (Node->isInclusive() ? true : false)<< "\n";
