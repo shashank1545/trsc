@@ -1,8 +1,8 @@
-# trsc: A Tiny Rust Subset Compiler
+# trsc: A Tiny Rust Compiler
 
-`trsc` is a compiler for a subset of the Rust language, built using C++17, LLVM, and MLIR. It is designed to demonstrate modern compiler architecture, including a custom AST, semantic analysis (borrow checking, type checking), and MLIR-based code generation.
+`trsc` is a compiler for the Rust language, built using C++17, LLVM, and MLIR. It is designed to demonstrate modern compiler architecture, including a custom AST, semantic analysis (borrow checking, type checking), and MLIR-based code generation.
 
-## 🚀 Features
+##  Features
 
 - **Lexer & Parser:** Hand-written recursive descent parser for a Rust-like syntax.
 - **Semantic Analysis:**
