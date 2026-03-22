@@ -102,6 +102,17 @@ QualType ASTContext::getFunctionType(QualType ReturnType,
   return QualType(FuncTy[Key].get());
 }
 
+QualType ASTContext::getArrayType(QualType ElementType, bool IsMutable, 
+    size_t Size) {
+  ArrayTypeKey Key = {ElementType, IsMutable, Size};
+  auto It = ArrayTy.find(Key);
+  if(It != ArrayTy.end()) {
+    return QualType(It->second.get());
+  }
+  ArrayTy[Key] = std::make_unique<ArrayType>(ElementType, IsMutable, Size);
+  return QualType(ArrayTy[Key].get());
+}
+
 bool ASTContext::areTypesCompatible(QualType T1, QualType T2) const {
     if (T1.isNull() || T2.isNull()) {
         return false;

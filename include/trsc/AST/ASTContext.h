@@ -42,6 +42,8 @@ class ASTContext {
       PointerTypeKeyHasher> PtrTy;
     std::unordered_map<ReferenceTypeKey, std::unique_ptr<ReferenceType>, 
       ReferenceTypeKeyHasher> RefTy;
+    std::unordered_map<ArrayTypeKey, std::unique_ptr<ArrayType>,
+      ArrayTypeKeyHasher> ArrayTy;
     std::unordered_map<FunctionTypeKey, std::unique_ptr<FunctionType>, 
       FunctionTypeKeyHasher> FuncTy;
 
@@ -77,8 +79,12 @@ class ASTContext {
 
     QualType getPointerType(QualType PointeeType, bool IsMutable); 
     QualType getReferenceType(QualType ReferentType, bool IsMutable);
+    QualType getArrayType(QualType ElementType, bool IsMutable, size_t Size);
     QualType getFunctionType(QualType ReturnType, 
         const std::vector<QualType>& ParamsType); 
+
+    // Returns a nullptr where no type fits
+    QualType getNullType() const { return QualType(); }
 
     QualType getTypeByName(const std::string& Name) const;
 

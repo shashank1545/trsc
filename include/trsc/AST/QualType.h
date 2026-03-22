@@ -79,6 +79,7 @@ namespace trsc {
 
       QualType getReturnType() const;
       const std::vector<QualType>& getParamsType() const; 
+      const std::vector<int>& getShapeVec() const;
 
       std::string getAsString() const;
       size_t getSizeInBytes() const;
@@ -122,6 +123,11 @@ namespace trsc {
       virtual bool isUnit() const {return false;}
       virtual bool isFunction() const {return false;}
       virtual bool isArray() const {return false;}
+
+      virtual const std::vector<int>& getShape() const { 
+        static const std::vector<int> EmptyShape;
+        return EmptyShape;
+      }
       
       virtual QualType getReturn() const { return QualType(); }
       virtual const std::vector<QualType>& getParams() const {
@@ -339,6 +345,30 @@ namespace trsc {
       ParamTypes; }
   };
 
+  // Array Type
+  class ArrayType : public BuiltinType {
+    QualType ElementType;
+    std::vector<int> Shape;
+    bool IsRefrence;
+    bool IsMutable;
+    public:
+    ArrayType(QualType ET, bool IsRefrence, bool IsMutable): 
+      BuiltinType(ET.getKind(), ET.getSizeInBytes(), ET.getAlignment()), 
+      ElementType(ET), IsRefrence(IsRefrence), IsMutable(IsMutable) {}
+    std::string getName() const override {
+      std::string Name = (IsRefrence ? (IsMutable ? "&mut":"&") : 
+          (IsMutable ? "mut" : "")); 
+      std::string Start(Shape.size(), '[');
+      Name= Name + Start + ElementType.getAsString();
+      for(int I = 0; I < Shape.size(); ++I) {
+        Name = Name + ';' + std::to_string(Shape[I])  + ']';
+      }
+      return Name;
+    }
+    bool isArray() const override { return true; }
+    const std::vector<int>& getShape() const override { return Shape; }
+  };
+
   struct QualTypeHasher {
     std::size_t operator()(const QualType& Qt) const {
       return std::hash<const BuiltinType*>{}(Qt.getTypePtr());
@@ -402,6 +432,26 @@ namespace trsc {
     std::size_t operator()(const ReferenceTypeKey& Key) const {
       std::size_t H = QualTypeHasher{}(Key.ReferentType);
       H ^= std::hash<bool>{}(Key.IsMutable) + 0x9e3779b9 + (H << 6) + (H >> 2);
+      return H;
+    }
+  };
+
+  struct ArrayTypeKey {
+    QualType ElementType;
+    bool IsMutable;
+    size_t Size;
+
+    bool operator==(const ArrayTypeKey& other) const {
+      return ElementType == other.ElementType && 
+        IsMutable == other.IsMutable && Size == other.Size;
+    }
+  };
+
+  struct ArrayTypeKeyHasher {
+    std::size_t operator()(const ArrayTypeKey& Key) const {
+      std::size_t H = QualTypeHasher{}(Key.ElementType);
+      H ^= std::hash<bool>{}(Key.IsMutable) + 0x9e3779b9 + (H << 6) + (H >> 2);
+      H ^= std::hash<size_t>{}(Key.Size) + 0x9e3779b9 + (H << 6) + (H >> 2);
       return H;
     }
   };
