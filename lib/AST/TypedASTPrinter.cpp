@@ -1,4 +1,5 @@
 #include "trsc/AST/TypedASTPrinter.h"
+#include "trsc/AST/AST.h"
 #include "trsc/Lex/Token.h"
 #include <iomanip>
 
@@ -470,6 +471,27 @@ namespace trsc {
     OS << "\n";
   }
 
+  void TypedASTPrinter::visitRefrExpr(RefrExpr *Node) {
+    printNodeHeader(Node, "RefrExpr");
+    OS << getTypeString(Node);
+    OS << " " << (Node->isMut() ? "mut" : "immut");
+    OS << "\n";
+
+    if (Node->getReferent()) {
+      IndentLevel++;
+      if (IndentLevel > 0) {
+        IsLastStack.resize(IndentLevel - 1);
+        IsLastStack.push_back(true);  
+      }
+      printIndent(true);
+      visit(Node->getReferent());
+      if (IndentLevel > 0 && !IsLastStack.empty()) {
+        IsLastStack.pop_back();
+      }
+      IndentLevel--;
+    }
+  }
+
   void TypedASTPrinter::visitBoolExpr(BoolExpr *Node) {
     printNodeHeader(Node, "BoolExpr");
     OS << getTypeString(Node);
@@ -553,6 +575,22 @@ namespace trsc {
 
   void TypedASTPrinter::visitTypeName(TypeName *Node) {
     printNodeHeader(Node, "TypeName");
+    OS << " '" << Node->getName() << "'";
+    OS << "\n";
+  }
+
+  void TypedASTPrinter::visitPointerTypeName(PointerTypeName *Node) {
+    printNodeHeader(Node, "PointerTypeName");
+    OS << " '" << Node->getName() << "'";  
+    OS << "\n";
+  }
+  void TypedASTPrinter::visitReferenceTypeName(ReferenceTypeName *Node) {
+    printNodeHeader(Node, "ReferenceTypeName");
+    OS << " '" << Node->getName() << "'";
+    OS << "\n";
+  }
+  void TypedASTPrinter::visitArrayTypeName(ArrayTypeName *Node) {
+    printNodeHeader(Node, "ArrayTypeName");
     OS << " '" << Node->getName() << "'";
     OS << "\n";
   }

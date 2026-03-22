@@ -197,10 +197,10 @@ namespace trsc {
         } else {
           IsMut = false;
         }
-        std::unique_ptr<Expr> RefrendExpr = parsePrimary();
+        std::unique_ptr<Expr> ReferentExpr = parsePrimary();
         EndLoc = currentToken().getLocation();
         Range = SourceRange(StartLoc, EndLoc);
-        return std::make_unique<RefrExpr>(std::move(RefrendExpr), IsMut, Range);
+        return std::make_unique<RefrExpr>(std::move(ReferentExpr), IsMut, Range);
       }
       default:
         Diag.Report(DiagKind::Error, "Expected an expression", 
@@ -289,7 +289,7 @@ namespace trsc {
     }
     auto DeclRawPtr = parsePrimary().release();
     std::unique_ptr<VarExpr> DeclaredVar(static_cast<VarExpr*>(DeclRawPtr));
-    std::unique_ptr<TypeName> VarType; 
+    std::unique_ptr<Type> VarType; 
     if(currentToken().getKind() == Lex::TokenKind::DE_COLON) {
       consume(Lex::TokenKind::DE_COLON);
       VarType = parseType();
@@ -318,50 +318,47 @@ namespace trsc {
   }
 
 
-  std::unique_ptr<TypeName> Parser::parseType() {
+  std::unique_ptr<Type> Parser::parseType() {
     SourceLocation Start = currentToken().getLocation();
     SourceLocation End;
     SourceRange Range;
     if(currentToken().getKind() == Lex::TokenKind::OP_STAR) {
-      std::string TypeNameString;
       consume(Lex::TokenKind::OP_STAR);
-      if(std::string(currentToken().getText()) == "mut") {
+      bool IsMut;
+      if(currentToken().getKind() == Lex::TokenKind::KW_MUT) {
         consume(Lex::TokenKind::KW_MUT);
-        TypeNameString = "*mut ";
-      } else if(std::string(currentToken().getText()) == "const") {
+        IsMut = true;
+      } else if(currentToken().getKind() == Lex::TokenKind::KW_CONST) {
         consume(Lex::TokenKind::KW_CONST);
-        TypeNameString = "*const ";
+        IsMut = false;
       } else { 
         Diag.Report(DiagKind::Error,"Raw pointer types can only be mut or const.");
       }
-      auto InnerType = parseType();
-      if (!InnerType) return nullptr;
+      auto Pointee = parseType();
+      if (!Pointee) return nullptr;
       End = currentToken().getLocation();
       Range = SourceRange(Start, End);
-      return std::make_unique<TypeName>(ASTNodeKind::ASTK_TYPENAME,
-          TypeNameString + InnerType->getName(), Range);
+      return std::make_unique<PointerTypeName>(std::move(Pointee), IsMut, Range);
     }
     else if (currentToken().getKind() == Lex::TokenKind::OP_AMP) {
-      std::string TypeNameString;
       consume(Lex::TokenKind::OP_AMP);
+      bool IsMut;
       if(std::string(currentToken().getText()) == "mut") {
         consume(Lex::TokenKind::KW_MUT);
-        TypeNameString = "&mut ";
+        IsMut = true;
       } else {
-        TypeNameString = "&";
+        IsMut = false;
       }
-      auto InnerType = parseType();
-      if (!InnerType) return nullptr;
+      auto Referent = parseType();
+      if (!Referent) return nullptr;
       End = currentToken().getLocation();
       Range = SourceRange(Start, End);
-      return std::make_unique<TypeName>(ASTNodeKind::ASTK_TYPENAME,
-          TypeNameString + InnerType->getName(), Range);
-    }
-    else if(currentToken().getKind() == Lex::TokenKind::DE_LBRACKET) {
-      std::string TypeNameString;
+      return std::make_unique<ReferenceTypeName>(std::move(Referent), IsMut, Range);
+    } else if(currentToken().getKind() == Lex::TokenKind::DE_LBRACKET) {
       consume(Lex::TokenKind::DE_LBRACKET);
-      auto InnerType = parseType();
-      if (!InnerType) return nullptr;
+      bool IsMut = false;
+      auto Elemente = parseType();
+      if (!Elemente) return nullptr;
 
       if(!expectToken(Lex::TokenKind::DE_SEMICOLON)) return nullptr;
 
@@ -370,23 +367,21 @@ namespace trsc {
             currentToken().getLocation());
         return nullptr;
       }
-      std::string SizeStr = std::string(currentToken().getText());
+      size_t Size = std::stoull(std::string(currentToken().getText()));
       consume(Lex::TokenKind::LT_INTEGER);
-
       if(!expectToken(Lex::TokenKind::DE_RBRACKET)) return nullptr;
-
-      TypeNameString = "[" + InnerType->getName() + "; " + SizeStr + "]";
-    }
-    else {
-    if (currentToken().getKind() != Lex::TokenKind::IDENTIFIER) {
-      reportExpectedError(Lex::TokenKind::IDENTIFIER);
-      return nullptr;
-    }
-    Lex::Token TypeNameToken = consume(Lex::TokenKind::IDENTIFIER);
-    End = currentToken().getLocation();
-    Range = SourceRange(Start, End);
-    return std::make_unique<TypeName>(ASTNodeKind::ASTK_TYPENAME, 
-        std::string(TypeNameToken.getText()), Range);
+      return std::make_unique<ArrayTypeName>(std::move(Elemente), IsMut, 
+          Size, Range);
+    } else {
+      if (currentToken().getKind() != Lex::TokenKind::IDENTIFIER) {
+        reportExpectedError(Lex::TokenKind::IDENTIFIER);
+        return nullptr;
+      }
+      Lex::Token TypeNameToken = consume(Lex::TokenKind::IDENTIFIER);
+      End = currentToken().getLocation();
+      Range = SourceRange(Start, End);
+      return std::make_unique<TypeName>(ASTNodeKind::ASTK_TYPENAME, 
+          std::string(TypeNameToken.getText()), Range);
     }
   }
 
@@ -519,7 +514,7 @@ namespace trsc {
     }
 
     consume(Lex::TokenKind::DE_RPAREN);
-    std::unique_ptr<TypeName> FuncReturnType;
+    std::unique_ptr<Type> FuncReturnType;
     if(currentToken().getKind() == Lex::TokenKind::DE_RETURNTYPE) {
       consume(Lex::TokenKind::DE_RETURNTYPE);
       FuncReturnType = parseType();

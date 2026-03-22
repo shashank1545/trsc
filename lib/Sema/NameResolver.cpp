@@ -91,7 +91,6 @@ void NameResolver::visitFuncDecl(FuncDecl *D) {
   }
 }
 
-
 void NameResolver::visitVarExpr(VarExpr *E) {
   E->setScope(ST.getCurrentScope());
   if (!ST.lookupSymbol(E->getName())) {
@@ -110,6 +109,11 @@ void NameResolver::visitFloatExpr(FloatExpr *E) {
 void NameResolver::visitRangeExpr(RangeExpr *E) {
   E->setScope(ST.getCurrentScope());
   ASTVisitor<NameResolver>::visitRangeExpr(E);    
+}
+
+void NameResolver::visitRefrExpr(RefrExpr *E) {
+  E->setScope(ST.getCurrentScope());
+  ASTVisitor<NameResolver>::visitRefrExpr(E);
 }
 
 void NameResolver::visitFunCall(FunCall *E) {

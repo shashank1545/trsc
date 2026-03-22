@@ -26,6 +26,7 @@ namespace trsc {
       void visitVarExpr(VarExpr *E);
       void visitIntExpr(IntExpr *E);
       void visitFloatExpr(FloatExpr *E);
+      void visitRefrExpr(RefrExpr *E);
       void visitRangeExpr(RangeExpr *E);
       void visitFunCall(FunCall *E);
       void visitReturnStmt(ReturnStmt *S);

@@ -43,6 +43,7 @@ namespace trsc {
       void visitIntExpr(IntExpr *Node);
       void visitFloatExpr(FloatExpr *Node);
       void visitVarExpr(VarExpr *Node);
+      void visitRefrExpr(RefrExpr *Node);
       void visitBoolExpr(BoolExpr *Node);
       void visitBinExpr(BinExpr *Node);
       void visitRangeExpr(RangeExpr *Node);
@@ -50,6 +51,9 @@ namespace trsc {
 
       // Visitors for concrete type nodes
       void visitTypeName(TypeName *Node);
+      void visitPointerTypeName(PointerTypeName *Node);
+      void visitReferenceTypeName(ReferenceTypeName *Node);
+      void visitArrayTypeName(ArrayTypeName *Node);
   };
 
 } //namespace  trsc 

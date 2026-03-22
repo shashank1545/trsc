@@ -19,6 +19,7 @@ public:
   void visitFloatExpr(FloatExpr *Node);
   void visitVarExpr(VarExpr *Node);
   void visitBoolExpr(BoolExpr *Node);
+  void visitRefrExpr(RefrExpr *Node);
   void visitBinExpr(BinExpr *Node);
   void visitLetStmt(LetStmt *Node);
   void visitIfStmt(IfStmt *Node);
@@ -27,6 +28,8 @@ public:
   void visitReturnStmt(ReturnStmt *Node);
   void visitFuncDecl(FuncDecl *Node);
   void visitFunCall(FunCall *Node);
+
+  QualType resolveType(Type *Node);
 
 private:
   DiagnosticsEngine &Diags;

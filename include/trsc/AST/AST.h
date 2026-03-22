@@ -18,6 +18,10 @@ enum class ASTNodeKind {
   ASTK_PROGRAM,
   ASTK_TYPE,
   ASTK_TYPENAME,
+  ASTK_REFERTYPENAME,
+  ASTK_POINTERTYPENAME,
+  ASTK_ARRAYTYPENAME,
+  // ASTK_VECTORTYPENAME,
   ASTK_EXPR,
   ASTK_BOOLEXPR,
   ASTK_NUMEXPR,
@@ -79,6 +83,59 @@ public:
   TypeName(ASTNodeKind Kind, const std::string &Name, SourceRange Loc = {})
       : Type(ASTNodeKind::ASTK_TYPENAME, Loc), Name(Name) {}
   std::string getName() const override { return Name; }
+};
+
+class PointerTypeName : public Type {
+  std::unique_ptr<Type> Pointee;
+  bool IsMut;
+
+  public:
+  PointerTypeName(std::unique_ptr<Type> Pointee, bool IsMut,
+      SourceRange Loc = {})
+    : Type(ASTNodeKind::ASTK_POINTERTYPENAME, Loc),
+    Pointee(std::move(Pointee)), IsMut(IsMut) {}
+
+  Type *getPointee() const { return Pointee.get(); }
+  bool isMut() const { return IsMut; }
+  std::string getName() const override {
+    return (IsMut ? "*mut " : "*const ") + Pointee->getName();
+  }
+};
+
+class ReferenceTypeName : public Type {
+  std::unique_ptr<Type> Referent;
+  bool IsMut;
+
+  public:
+  ReferenceTypeName(std::unique_ptr<Type> Referent, bool IsMut,
+      SourceRange Loc = {})
+    : Type(ASTNodeKind::ASTK_REFERTYPENAME, Loc),
+    Referent(std::move(Referent)), IsMut(IsMut) {}
+
+  Type *getReferent() const { return Referent.get(); }
+  bool isMut() const { return IsMut; }
+  std::string getName() const override {
+    return (IsMut ? "&mut " : "&") + Referent->getName();
+  }
+};
+
+class ArrayTypeName : public Type {
+  std::unique_ptr<Type> Elemente;
+  bool IsMut;
+  size_t Size;
+
+  public:
+  ArrayTypeName(std::unique_ptr<Type> Elemente, bool IsMut, size_t Size,
+      SourceRange Loc = {})
+    : Type(ASTNodeKind::ASTK_ARRAYTYPENAME, Loc),
+    Elemente(std::move(Elemente)), IsMut(IsMut), Size(Size) {}
+
+  Type *getElemente() const { return Elemente.get(); }
+  size_t getSize() const { return Size; }
+  bool isMut() const { return IsMut; }
+  std::string getName() const override {
+    return "[" + Elemente->getName() + "; " + std::to_string(Size) + "]";
+  }
 };
 
 class Expr : public ASTNode {
@@ -161,13 +218,13 @@ public:
 };
 
 class RefrExpr : public Expr {
-  std::unique_ptr<Expr> RefrendExpr;
+  std::unique_ptr<Expr> ReferentExpr;
   bool IsMut;
   public:
-  RefrExpr(std::unique_ptr<Expr> RefrendExpr, bool IsMut, SourceRange Loc= {}) : 
-    Expr(ASTNodeKind::ASTK_REFREXPR, Loc), RefrendExpr(std::move(RefrendExpr)), 
+  RefrExpr(std::unique_ptr<Expr> ReferentExpr, bool IsMut, SourceRange Loc= {}) : 
+    Expr(ASTNodeKind::ASTK_REFREXPR, Loc), ReferentExpr(std::move(ReferentExpr)), 
     IsMut(IsMut) {}
-  Expr *getRefrend() const { return RefrendExpr.get(); }
+  Expr *getReferent() const { return ReferentExpr.get(); }
   bool isMut() const { return IsMut; }
   bool isExpr() const override { return true; }
 };
@@ -206,12 +263,12 @@ public:
 class LetStmt : public Stmt {
   bool IsMut;
   std::unique_ptr<VarExpr> DeclaredVar;
-  std::unique_ptr<TypeName> DeclaredType;
+  std::unique_ptr<Type> DeclaredType;
   std::unique_ptr<Expr> Initializer;
 
 public:
   LetStmt(bool IsMut, std::unique_ptr<VarExpr> DeclaredVar,
-          std::unique_ptr<TypeName> DeclaredType,
+          std::unique_ptr<Type> DeclaredType,
           std::unique_ptr<Expr> Initializer, SourceRange Loc = {})
       : Stmt(ASTNodeKind::ASTK_LETSTMT, Loc), IsMut(IsMut),
         DeclaredVar(std::move(DeclaredVar)),
@@ -220,7 +277,7 @@ public:
 
   const bool isMut() const { return IsMut; }
   VarExpr *getDeclaredVar() const { return DeclaredVar.get(); }
-  TypeName *getDeclaredType() const { return DeclaredType.get(); }
+  Type *getDeclaredType() const { return DeclaredType.get(); }
   Expr *getInitializer() const { return Initializer.get(); }
   bool isStmt() const override { return true; }
 };
@@ -307,18 +364,18 @@ class FuncDecl : public Stmt {
 public:
   struct Param {
     std::unique_ptr<VarExpr> ParamName;
-    std::unique_ptr<TypeName> ParamType;
+    std::unique_ptr<Type> ParamType;
   };
 
 private:
   std::unique_ptr<VarExpr> FuncName;
-  std::unique_ptr<TypeName> FuncReturnType;
+  std::unique_ptr<Type> FuncReturnType;
   std::vector<Param> Params;
   std::unique_ptr<Stmt> Body;
 
 public:
   FuncDecl(SourceRange Loc, std::unique_ptr<VarExpr> Name,
-           std::unique_ptr<TypeName> FuncReturnType, std::vector<Param> Params,
+           std::unique_ptr<Type> FuncReturnType, std::vector<Param> Params,
            std::unique_ptr<Stmt> Body)
       : Stmt(ASTNodeKind::ASTK_FUNCDECL, Loc), FuncName(std::move(Name)),
         FuncReturnType(std::move(FuncReturnType)), Params(std::move(Params)),
@@ -326,7 +383,7 @@ public:
 
   const std::vector<Param> &getParams() const { return Params; }
   VarExpr* getFuncName() const { return FuncName.get(); }
-  TypeName* getReturnType() const { return FuncReturnType.get(); }
+  Type* getReturnType() const { return FuncReturnType.get(); }
   Stmt *getBody() const { return Body.get(); }
   bool isStmt() const override { return true; }
 };

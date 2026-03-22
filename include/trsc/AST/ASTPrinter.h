@@ -44,6 +44,9 @@ namespace trsc {
 
       // Visitors for concrete type nodes
       void visitTypeName(TypeName *Node);
+      void visitPointerTypeName(PointerTypeName *Node);
+      void visitReferenceTypeName(ReferenceTypeName *Node);
+      void visitArrayTypeName(ArrayTypeName *Node);
   };
 
 } //namespace  trsc 

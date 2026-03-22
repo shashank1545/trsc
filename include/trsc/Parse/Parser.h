@@ -32,7 +32,7 @@ namespace trsc {
       bool expectToken(Lex::TokenKind Kind);
       void reportExpectedError(Lex::TokenKind ExpectedKind);
 
-      std::unique_ptr<trsc::TypeName> parseType();
+      std::unique_ptr<trsc::Type> parseType();
       std::unique_ptr<trsc::Stmt> parseStmt();
       std::unique_ptr<trsc::LetStmt> parseLetStmt();
       std::unique_ptr<trsc::Expr> parseExpr(int);

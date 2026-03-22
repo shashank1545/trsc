@@ -14,12 +14,46 @@ namespace trsc {
   TypeChecker::TypeChecker(DiagnosticsEngine &Diags, SymbolTable &ST, 
       ASTContext &Ctx): Diags(Diags), ST(ST), Ctx(Ctx) {}
 
+  QualType TypeChecker::resolveType(Type *T) {
+    switch(T->getASTNodeKind()) {
+      case ASTNodeKind::ASTK_TYPENAME: {
+          auto *TN = static_cast<TypeName*>(T);
+          return Ctx.getTypeByName(TN->getName());
+        }
+      case ASTNodeKind::ASTK_POINTERTYPENAME: {
+        auto *PT = static_cast<PointerTypeName*>(T);
+        QualType Pointee = resolveType(PT->getPointee());
+        return Ctx.getPointerType(Pointee, PT->isMut());
+      }
+      case ASTNodeKind::ASTK_REFERTYPENAME: {
+        auto *RT = static_cast<ReferenceTypeName*>(T);
+        QualType Referent = resolveType(RT->getReferent());
+        return Ctx.getReferenceType(Referent, RT->isMut());
+      }
+      case ASTNodeKind::ASTK_ARRAYTYPENAME: {
+        auto *AT = static_cast<ArrayTypeName*>(T);
+        QualType Element = resolveType(AT->getElemente());
+        return Ctx.getArrayType(Element, AT->isMut(), AT->getSize());
+      }
+      default: {
+        Diags.Report(DiagKind::Error, "Unsupported node used as type.");
+        return Ctx.getNullType();
+      }
+    }
+  }
+
   void TypeChecker::visitIntExpr(IntExpr *Node) {
     Node->setType(Ctx.getI32Type());
   }
 
   void TypeChecker::visitFloatExpr(FloatExpr *Node) {
     Node->setType(Ctx.getF64Type());
+  }
+
+  void TypeChecker::visitRefrExpr(RefrExpr *Node) {
+    visit(Node->getReferent());
+    QualType ReferentType = Node->getReferent()->getType();
+    Node->setType(Ctx.getReferenceType(ReferentType, Node->isMut()));
   }
 
   void TypeChecker::visitVarExpr(VarExpr *Node) {
@@ -54,8 +88,7 @@ namespace trsc {
     QualType FinalType; 
 
     if (Node->getDeclaredType()) {
-      QualType DeclaredQualType = Ctx.getTypeByName(
-          Node->getDeclaredType()->getName());
+      QualType DeclaredQualType = resolveType(Node->getDeclaredType());
       if (DeclaredQualType.isNull()) {
         Diags.Report(DiagKind::Error,
             "Unknown type name '" + Node->getDeclaredType()->getName() + "'",
@@ -295,7 +328,7 @@ namespace trsc {
     if(!Node->getParams().empty()) {
       for (const auto &Param : Node->getParams()) {
         if (Param.ParamType) {
-          QualType ParamQualType = Ctx.getTypeByName(Param.ParamType->getName());
+          QualType ParamQualType = resolveType(Param.ParamType.get());
           if (ParamQualType.isNull()) {
             Diags.Report(DiagKind::Error,
                 "Unknown type name for parameter '" + Param.ParamName->getName() 
@@ -323,8 +356,7 @@ namespace trsc {
     }
     QualType FuncReturnQualType;
     if (Node->getReturnType()) {
-      FuncReturnQualType = Ctx.getTypeByName(
-          Node->getReturnType()->getName());
+      FuncReturnQualType = resolveType(Node->getReturnType());
       if (FuncReturnQualType.isNull()) {
         Diags.Report(DiagKind::Error, "Unknown return type name for function '" 
             + Node->getFuncName()->getName() + "'", 

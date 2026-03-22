@@ -156,6 +156,21 @@ namespace trsc {
     OS << "TypeName: '" << Node->getName() << "'\n";
   }
 
+  void ASTPrinter::visitPointerTypeName(PointerTypeName *Node) {
+    indent();
+    OS << "PointerTypeName: '" << Node->getName() << "'\n";
+  }
+
+  void ASTPrinter::visitReferenceTypeName(ReferenceTypeName *Node) {
+    indent();
+    OS << "ReferenceTypeName: '" << Node->getName() << "'\n";
+  }
+
+  void ASTPrinter::visitArrayTypeName(ArrayTypeName *Node) {
+    indent();
+    OS << "ArrayTypeName: '" << Node->getName() << "'\n";
+  }
+
   void ASTPrinter::visitFuncDecl(FuncDecl *Node) {
     indent();
     OS << "FuncDecl '" << Node->getFuncName()->getName() << "'\n";
@@ -188,7 +203,7 @@ namespace trsc {
   indent();
   OS << "RefrExpr " << (Node->isMut() ? "mut" : "non-mut") << '\n';
   IndentLevel++;
-  visit(Node->getRefrend());
+  visit(Node->getReferent());
   IndentLevel--;
   }
 

@@ -19,6 +19,15 @@ public:
       case ASTNodeKind::ASTK_TYPENAME:
         getDerived().visitTypeName(static_cast<TypeName*>(Node));
         break;
+      case ASTNodeKind::ASTK_POINTERTYPENAME:
+        getDerived().visitPointerTypeName(static_cast<PointerTypeName*>(Node));
+        break;
+      case ASTNodeKind::ASTK_REFERTYPENAME:
+        getDerived().visitReferenceTypeName(static_cast<ReferenceTypeName*>(Node));
+        break;
+      case ASTNodeKind::ASTK_ARRAYTYPENAME:
+        getDerived().visitArrayTypeName(static_cast<ArrayTypeName*>(Node));
+        break;
       case ASTNodeKind::ASTK_BOOLEXPR:
         getDerived().visitBoolExpr(static_cast<BoolExpr*>(Node));
         break;
@@ -156,7 +165,19 @@ public:
   }
 
   void visitRefrExpr(RefrExpr *E) {
-    getDerived().visit(E->getRefrend());
+    getDerived().visit(E->getReferent());
+  }
+
+  void visitPointerTypeName(PointerTypeName *T) {
+    getDerived().visit(T->getPointee());
+  } 
+
+  void visitReferenceTypeName(ReferenceTypeName *T) {
+    getDerived().visit(T->getReferent());
+  }
+
+  void visitArrayTypeName(ArrayTypeName *T) {
+    getDerived().visit(T->getElemente());
   }
 
   void visitVarExpr(VarExpr *E) {}

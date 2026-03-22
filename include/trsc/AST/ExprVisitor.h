@@ -68,7 +68,7 @@ public:
   }
 
   RetTy visitRefrExpr(RefrExpr *E) {
-    getDerived().visit(E->getRefrend());
+    getDerived().visit(E->getReferent());
     return RetTy();
   }
   

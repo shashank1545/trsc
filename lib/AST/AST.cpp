@@ -7,6 +7,9 @@ namespace trsc {
       case trsc::ASTNodeKind::ASTK_PROGRAM: return "Program"; 
       case trsc::ASTNodeKind::ASTK_TYPE: return "Type";
       case trsc::ASTNodeKind::ASTK_TYPENAME: return "Typename";
+      case trsc::ASTNodeKind::ASTK_POINTERTYPENAME: return "PointerTypename";
+      case trsc::ASTNodeKind::ASTK_REFERTYPENAME: return "ReferTypename";
+      case trsc::ASTNodeKind::ASTK_ARRAYTYPENAME: return "ArrayTypename";
       case trsc::ASTNodeKind::ASTK_EXPR: return "Expr";
       case trsc::ASTNodeKind::ASTK_BOOLEXPR: return "BoolExpr";
       case trsc::ASTNodeKind::ASTK_NUMEXPR: return "NumExpr";
