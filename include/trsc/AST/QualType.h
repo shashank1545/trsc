@@ -124,11 +124,6 @@ namespace trsc {
       virtual bool isFunction() const {return false;}
       virtual bool isArray() const {return false;}
 
-      virtual const std::vector<int>& getShape() const { 
-        static const std::vector<int> EmptyShape;
-        return EmptyShape;
-      }
-      
       virtual QualType getReturn() const { return QualType(); }
       virtual const std::vector<QualType>& getParams() const {
         static const std::vector<QualType> EmptyParams;
@@ -307,6 +302,8 @@ namespace trsc {
         PointeeType.getAsString();
       return Name;}
     bool isPointer() const override {return true;}
+    bool isMutable() const { return IsMutable; }
+    QualType getPointee() const { return PointeeType; }
   };
 
   // Reference Type
@@ -321,6 +318,8 @@ namespace trsc {
       std::string Name = (IsMutable ? "&mut":"&")+ ReferentType.getAsString();
       return Name;}
     bool isReference() const override {return true;}
+    bool isMutable() const { return IsMutable; }
+    QualType getReferent() const { return ReferentType; }
   };
 
   // Function Type or Function Signature
@@ -348,25 +347,17 @@ namespace trsc {
   // Array Type
   class ArrayType : public BuiltinType {
     QualType ElementType;
-    std::vector<int> Shape;
-    bool IsRefrence;
-    bool IsMutable;
+    size_t  Size;
     public:
-    ArrayType(QualType ET, bool IsRefrence, bool IsMutable): 
+    ArrayType(QualType ET, size_t Size): 
       BuiltinType(ET.getKind(), ET.getSizeInBytes(), ET.getAlignment()), 
-      ElementType(ET), IsRefrence(IsRefrence), IsMutable(IsMutable) {}
+      ElementType(ET), Size(Size) {}
     std::string getName() const override {
-      std::string Name = (IsRefrence ? (IsMutable ? "&mut":"&") : 
-          (IsMutable ? "mut" : "")); 
-      std::string Start(Shape.size(), '[');
-      Name= Name + Start + ElementType.getAsString();
-      for(int I = 0; I < Shape.size(); ++I) {
-        Name = Name + ';' + std::to_string(Shape[I])  + ']';
-      }
-      return Name;
+      return "[" + ElementType.getAsString() + "; " + std::to_string(Size) +"]";
     }
     bool isArray() const override { return true; }
-    const std::vector<int>& getShape() const override { return Shape; }
+    QualType getElementType() const { return ElementType; }
+    size_t getSize() const { return Size; }
   };
 
   struct QualTypeHasher {
@@ -438,19 +429,16 @@ namespace trsc {
 
   struct ArrayTypeKey {
     QualType ElementType;
-    bool IsMutable;
     size_t Size;
 
     bool operator==(const ArrayTypeKey& other) const {
-      return ElementType == other.ElementType && 
-        IsMutable == other.IsMutable && Size == other.Size;
+      return ElementType == other.ElementType && Size == other.Size;
     }
   };
 
   struct ArrayTypeKeyHasher {
     std::size_t operator()(const ArrayTypeKey& Key) const {
       std::size_t H = QualTypeHasher{}(Key.ElementType);
-      H ^= std::hash<bool>{}(Key.IsMutable) + 0x9e3779b9 + (H << 6) + (H >> 2);
       H ^= std::hash<size_t>{}(Key.Size) + 0x9e3779b9 + (H << 6) + (H >> 2);
       return H;
     }

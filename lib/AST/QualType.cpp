@@ -39,6 +39,10 @@ namespace trsc {
     return TypePtr ? TypePtr->isUnit() : false;
   }
 
+  bool QualType::isArrayType() const {
+    return TypePtr ? TypePtr->isArray() : false;
+  }
+
   bool QualType::isFunctionType() const {
     return TypePtr ? TypePtr->isFunction() : false;
   }

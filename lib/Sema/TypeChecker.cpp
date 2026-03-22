@@ -33,7 +33,7 @@ namespace trsc {
       case ASTNodeKind::ASTK_ARRAYTYPENAME: {
         auto *AT = static_cast<ArrayTypeName*>(T);
         QualType Element = resolveType(AT->getElemente());
-        return Ctx.getArrayType(Element, AT->isMut(), AT->getSize());
+        return Ctx.getArrayType(Element, AT->getSize());
       }
       default: {
         Diags.Report(DiagKind::Error, "Unsupported node used as type.");
@@ -74,6 +74,7 @@ namespace trsc {
 
     auto Symbol = ST.lookupSymbol(Node->getDeclaredVar()->getName(),
         Node->getScope());
+    if(Node->isMut()) Symbol->IsMutable = true;
     if (!Symbol) {
       Diags.Report(DiagKind::Error, "Variable not found in SymbolTable",
           Node->getSourceRange().getStart());

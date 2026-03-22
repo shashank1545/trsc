@@ -79,7 +79,7 @@ class ASTContext {
 
     QualType getPointerType(QualType PointeeType, bool IsMutable); 
     QualType getReferenceType(QualType ReferentType, bool IsMutable);
-    QualType getArrayType(QualType ElementType, bool IsMutable, size_t Size);
+    QualType getArrayType(QualType ElementType, size_t Size);
     QualType getFunctionType(QualType ReturnType, 
         const std::vector<QualType>& ParamsType); 
 
