@@ -59,6 +59,10 @@ mlir::Type MLIRGen::ToMLIRType(QualType T) {
       default: return Builder.getF64Type();
     }
   }
+  if (T.isReferenceType()) {
+    mlir::Type Referent = ToMLIRType(T.getBaseType());
+    return mlir::MemRefType::get({}, Referent);
+  }
   return Builder.getNoneType();
 }
 
@@ -71,7 +75,7 @@ llvm::APFloat MLIRGen::ToAPFloat(double D) {
 }
 
 bool MLIRGen::isLValue(Expr *E) {
-  return static_cast<VarExpr*>(E) != nullptr;
+  return E->isVar();
 }
 
 mlir::Value MLIRGen::getLValueMemRef(Expr *E) {
@@ -168,9 +172,24 @@ mlir::Value MLIRGen::visitIntExpr(IntExpr *Node) {
 mlir::Value MLIRGen::visitFloatExpr(FloatExpr *Node) {
   auto FloatOp = mlir::arith::ConstantFloatOp::create(Builder,
       Builder.getUnknownLoc(),
-      llvm::dyn_cast<mlir::FloatType>( ToMLIRType(Node->getType())),
+      llvm::dyn_cast<mlir::FloatType>(ToMLIRType(Node->getType())),
       ToAPFloat(Node->getValue()));
-  return FloatOp;
+  return FloatOp.getResult();
+}
+
+mlir::Value MLIRGen::visitRefrExpr(RefrExpr *Node) {
+  auto Loc = Builder.getUnknownLoc();
+  Expr *Referent = Node->getReferent();
+
+  if (isLValue(Referent)) {
+    return getLValueMemRef(Referent);
+  }
+
+  mlir::Value Val = visit(Referent);  
+  auto TempAlloca = mlir::memref::AllocaOp::create(Builder, Loc,
+      ToMemRefType(Referent->getType()));
+  mlir::memref::StoreOp::create(Builder, Loc, Val, TempAlloca.getResult());
+  return TempAlloca.getResult();
 }
 
 mlir::Value MLIRGen::visitBinExpr(BinExpr *Node) {
@@ -191,7 +210,7 @@ mlir::Value MLIRGen::visitBinExpr(BinExpr *Node) {
 
   // Determine if we're working with integers or floats
   bool IsFloat = ResultTy.isFloatingType();
-  bool IsBool = ResultTy.isBooleanType();
+  // bool IsBool = ResultTy.isBooleanType();
   bool IsSigned = ResultTy.isSignedIntegerType();
   
   // For comparisons, we need to know if the operands are signed or floating
@@ -348,7 +367,7 @@ mlir::Value MLIRGen::visitVarExpr(VarExpr *Node) {
   mlir::memref::LoadOp loadOp = mlir::memref::LoadOp::create(Builder,
       Builder.getUnknownLoc(),
       allocaOp.getMemref()); 
-  return loadOp;
+  return loadOp.getResult();
 }
 
 mlir::Value MLIRGen::visitFunCall(FunCall *Node) {

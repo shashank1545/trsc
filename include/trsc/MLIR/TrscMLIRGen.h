@@ -49,6 +49,7 @@ namespace trsc {
       mlir::Value visitIntExpr(IntExpr *Node);
       mlir::Value visitFloatExpr(FloatExpr *Node);
       mlir::Value visitVarExpr(VarExpr *Node);
+      mlir::Value visitRefrExpr(RefrExpr *Node);
       mlir::Value visitBoolExpr(BoolExpr *Node);
       mlir::Value visitBinExpr(BinExpr *Node);
 

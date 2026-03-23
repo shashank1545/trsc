@@ -67,6 +67,10 @@ namespace trsc {
     return TypePtr->getReturn();
   }
 
+  QualType QualType::getBaseType() const {
+    return TypePtr->getBase();
+  }
+
   const std::vector<QualType>& QualType::getParamsType() const {
     return TypePtr->getParams();
   }

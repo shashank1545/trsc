@@ -79,12 +79,13 @@ namespace trsc {
 
       QualType getReturnType() const;
       const std::vector<QualType>& getParamsType() const; 
-      const std::vector<int>& getShapeVec() const;
 
       std::string getAsString() const;
       size_t getSizeInBytes() const;
       size_t getAlignment() const;
       TypeKind getKind() const;
+
+      QualType getBaseType() const;
 
       bool operator==(const QualType& Other) const {
         return TypePtr == Other.TypePtr;
@@ -129,6 +130,8 @@ namespace trsc {
         static const std::vector<QualType> EmptyParams;
         return EmptyParams;
       }
+
+      virtual QualType getBase() const { return QualType(); }
   };
 
   class U8BuiltinType : public BuiltinType {
@@ -304,6 +307,7 @@ namespace trsc {
     bool isPointer() const override {return true;}
     bool isMutable() const { return IsMutable; }
     QualType getPointee() const { return PointeeType; }
+    QualType getBase() const override { return PointeeType; }
   };
 
   // Reference Type
@@ -320,6 +324,7 @@ namespace trsc {
     bool isReference() const override {return true;}
     bool isMutable() const { return IsMutable; }
     QualType getReferent() const { return ReferentType; }
+    QualType getBase() const override { return ReferentType; }
   };
 
   // Function Type or Function Signature
@@ -358,6 +363,7 @@ namespace trsc {
     bool isArray() const override { return true; }
     QualType getElementType() const { return ElementType; }
     size_t getSize() const { return Size; }
+    QualType getBase() const override { return ElementType; }
   };
 
   struct QualTypeHasher {
