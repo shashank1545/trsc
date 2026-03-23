@@ -352,7 +352,7 @@ namespace trsc {
   // Array Type
   class ArrayType : public BuiltinType {
     QualType ElementType;
-    size_t  Size;
+    size_t Size;
     public:
     ArrayType(QualType ET, size_t Size): 
       BuiltinType(ET.getKind(), ET.getSizeInBytes(), ET.getAlignment()), 
@@ -362,7 +362,7 @@ namespace trsc {
     }
     bool isArray() const override { return true; }
     QualType getElementType() const { return ElementType; }
-    size_t getSize() const { return Size; }
+    size_t getArraySize() const { return Size; }
     QualType getBase() const override { return ElementType; }
   };
 
