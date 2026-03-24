@@ -1,7 +1,7 @@
-
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypeInterfaces.h"
+#include "mlir/IR/Location.h"
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/Types.h"
 #include "mlir/IR/Value.h"
@@ -21,7 +21,9 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Casting.h"
+#include <cstdint>
 #include <vector>
 
 using namespace trsc; 
@@ -40,7 +42,7 @@ MLIRGen::MLIRGen(mlir::MLIRContext &MLIRCtx, trsc::ASTContext &ASTCtx,
     MLIRCtx.loadAllAvailableDialects();
   }
 
-mlir::Type MLIRGen::ToMLIRType(QualType T) {
+mlir::Type MLIRGen::toMLIRType(QualType T) {
   if (T.isNull() || T.isUnitType()) {
     return Builder.getNoneType();
   }
@@ -60,17 +62,32 @@ mlir::Type MLIRGen::ToMLIRType(QualType T) {
     }
   }
   if (T.isReferenceType()) {
-    mlir::Type Referent = ToMLIRType(T.getBaseType());
+    mlir::Type Referent = toMLIRType(T.getBaseType());
     return mlir::MemRefType::get({}, Referent);
+  }
+  if (T.isArrayType()) {
+    llvm::SmallVector<int64_t> Shape;
+    QualType Current = T;
+    while (Current.isArrayType()) {
+      const ArrayType *AT = static_cast<const ArrayType*>(Current.getTypePtr());
+      Shape.push_back(static_cast<int64_t>(AT->getArraySize()));
+      Current = AT->getElementType();
+    }
+    mlir::Type Element = toMLIRType(Current); 
+    return mlir::VectorType::get(Shape, Element);
   }
   return Builder.getNoneType();
 }
 
-mlir::MemRefType MLIRGen::ToMemRefType(QualType T) {
-    return mlir::MemRefType::get({}, ToMLIRType(T));
+mlir::MemRefType MLIRGen::toMemRefType(QualType T) {
+  if (T.isArrayType()) {
+    auto VecTy = llvm::cast<mlir::VectorType>(toMLIRType(T));
+    return mlir::MemRefType::get(VecTy.getShape(), VecTy.getElementType());
   }
+  return mlir::MemRefType::get({}, toMLIRType(T));
+}
 
-llvm::APFloat MLIRGen::ToAPFloat(double D) {
+llvm::APFloat MLIRGen::toAPFloat(double D) {
   return llvm::APFloat(D); 
 }
 
@@ -138,6 +155,7 @@ void MLIRGen::genBlockStmt(BlockStmt *Node) {
 }
 
 void MLIRGen::genLetStmt(LetStmt *Node) {
+  mlir::Location Loc = Builder.getUnknownLoc();
   mlir::Value InitValue;
   if (Node->getInitializer()) {
     InitValue = visit(Node->getInitializer());
@@ -151,20 +169,19 @@ void MLIRGen::genLetStmt(LetStmt *Node) {
     mlir::OpBuilder::InsertionGuard Guard(Builder);
     Builder.setInsertionPointToStart(this->CurrentEntryBlock);
     VarAlloca = mlir::memref::AllocaOp::create(Builder, 
-        Builder.getUnknownLoc(), 
-        ToMemRefType(VarTy));  
+        Loc, toMemRefType(VarTy));  
   }
   Sym->setOp(static_cast<void*>(VarAlloca.getOperation()));
-  mlir::memref::StoreOp::create(Builder, 
-      Builder.getUnknownLoc(), 
-      InitValue,
-      VarAlloca.getResult());
+  if(InitValue) {
+    mlir::memref::StoreOp::create(Builder,
+        Loc, InitValue, VarAlloca.getResult());
+  }
 }
 
 mlir::Value MLIRGen::visitIntExpr(IntExpr *Node) {
   auto IntOp = mlir::arith::ConstantIntOp::create(Builder, 
       Builder.getUnknownLoc(), 
-      ToMLIRType(Node->getType()), 
+      toMLIRType(Node->getType()), 
       Node->getValue());
   return IntOp.getResult();
 }
@@ -172,8 +189,8 @@ mlir::Value MLIRGen::visitIntExpr(IntExpr *Node) {
 mlir::Value MLIRGen::visitFloatExpr(FloatExpr *Node) {
   auto FloatOp = mlir::arith::ConstantFloatOp::create(Builder,
       Builder.getUnknownLoc(),
-      llvm::dyn_cast<mlir::FloatType>(ToMLIRType(Node->getType())),
-      ToAPFloat(Node->getValue()));
+      llvm::dyn_cast<mlir::FloatType>(toMLIRType(Node->getType())),
+      toAPFloat(Node->getValue()));
   return FloatOp.getResult();
 }
 
@@ -187,7 +204,7 @@ mlir::Value MLIRGen::visitRefrExpr(RefrExpr *Node) {
 
   mlir::Value Val = visit(Referent);  
   auto TempAlloca = mlir::memref::AllocaOp::create(Builder, Loc,
-      ToMemRefType(Referent->getType()));
+      toMemRefType(Referent->getType()));
   mlir::memref::StoreOp::create(Builder, Loc, Val, TempAlloca.getResult());
   return TempAlloca.getResult();
 }
@@ -354,7 +371,7 @@ mlir::Value MLIRGen::visitBinExpr(BinExpr *Node) {
 mlir::Value MLIRGen::visitBoolExpr(BoolExpr *Node) {
   auto BoolOp = mlir::arith::ConstantIntOp::create(Builder, 
       Builder.getUnknownLoc(),
-      ToMLIRType(Node->getType()),
+      toMLIRType(Node->getType()),
       Node->getValue());
   return BoolOp;
 }
@@ -432,7 +449,7 @@ void MLIRGen::genParams(const std::vector<FuncDecl::Param>& Params) {
     QualType ParamType = ParamSym->Ty;
 
     auto ParamAlloca = mlir::memref::AllocaOp::create(Builder, 
-        Loc, ToMemRefType(ParamType));
+        Loc, toMemRefType(ParamType));
 
     // Get the corresponding block argument (function parameter value)
     mlir::Value BlockArg = CurrentEntryBlock->getArgument(i);
@@ -455,13 +472,13 @@ void MLIRGen::genFuncDecl(FuncDecl *Node) {
 
   std::vector<mlir::Type> ArgTypes;
   for (const auto& ParamTy : FuncTy.getParamsType()) {
-    ArgTypes.push_back(ToMLIRType(ParamTy));
+    ArgTypes.push_back(toMLIRType(ParamTy));
   }
   
   QualType RetT = FuncTy.getReturnType();
   std::vector<mlir::Type> ResultTypes;
   if (!RetT.isUnitType()) {
-    ResultTypes.push_back(ToMLIRType(RetT));
+    ResultTypes.push_back(toMLIRType(RetT));
   }
 
   auto FuncType = Builder.getFunctionType(ArgTypes, ResultTypes);

@@ -62,9 +62,9 @@ namespace trsc {
       mlir::ModuleOp Module;
       mlir::Block *CurrentEntryBlock = nullptr;
 
-      mlir::Type ToMLIRType(QualType T);
-      mlir::MemRefType ToMemRefType(QualType T);
-      llvm::APFloat ToAPFloat(double D);
+      mlir::Type toMLIRType(QualType T);
+      mlir::MemRefType toMemRefType(QualType T);
+      llvm::APFloat toAPFloat(double D);
       mlir::Value getLValueMemRef(Expr *E);
       bool isLValue(Expr *E);
 
