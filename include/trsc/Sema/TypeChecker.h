@@ -19,6 +19,7 @@ public:
   void visitFloatExpr(FloatExpr *Node);
   void visitVarExpr(VarExpr *Node);
   void visitBoolExpr(BoolExpr *Node);
+  void visitASExpr(ASExpr *Node);
   void visitRefrExpr(RefrExpr *Node);
   void visitBinExpr(BinExpr *Node);
   void visitLetStmt(LetStmt *Node);

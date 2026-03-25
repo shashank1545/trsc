@@ -1,5 +1,4 @@
 #include "trsc/AST/TypedASTPrinter.h"
-#include "trsc/AST/AST.h"
 #include "trsc/Lex/Token.h"
 #include <iomanip>
 
@@ -471,6 +470,41 @@ namespace trsc {
     OS << "\n";
   }
 
+  void TypedASTPrinter::visitASExpr(ASExpr *Node) {
+    printNodeHeader(Node, "ASExpr");
+    OS << getTypeString(Node);
+    OS << "\n";
+
+    IndentLevel++;
+
+    if (Node->getFromExpr()) {
+      bool hasMore = Node->getToType() != nullptr;
+      if (IndentLevel > 0) {
+        IsLastStack.resize(IndentLevel - 1);
+        IsLastStack.push_back(!hasMore);
+      }
+      printIndent(!hasMore);
+      visit(Node->getFromExpr());
+      if (IndentLevel > 0 && !IsLastStack.empty()) {
+        IsLastStack.pop_back();
+      }
+    }
+
+    if (Node->getToType()) {
+      if (IndentLevel > 0) {
+        IsLastStack.resize(IndentLevel - 1);
+        IsLastStack.push_back(true);
+      }
+      printIndent(true);
+      visit(Node->getToType());
+      if (IndentLevel > 0 && !IsLastStack.empty()) {
+        IsLastStack.pop_back();
+      }
+    }
+
+    IndentLevel--;
+  }
+
   void TypedASTPrinter::visitRefrExpr(RefrExpr *Node) {
     printNodeHeader(Node, "RefrExpr");
     OS << getTypeString(Node);
@@ -535,6 +569,7 @@ namespace trsc {
 
     IndentLevel--;
   }
+
 
   void TypedASTPrinter::visitRangeExpr(RangeExpr *Node) {
     printNodeHeader(Node, "RangeExpr");

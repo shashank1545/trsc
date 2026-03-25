@@ -1,14 +1,7 @@
-#include "trsc/AST/AST.h"
-#include "trsc/Lex/Token.h"
 #include "trsc/Parse/Parser.h"
-#include "trsc/Basic/Diagnostics.h"
 #include "trsc/Basic/SourceLocation.h"
 
-#include <memory>
-#include <vector>
 #include <string>
-#include <optional>
-#include <initializer_list>
 
 namespace trsc {
 
@@ -211,8 +204,18 @@ namespace trsc {
 
   std::unique_ptr<Expr> Parser::parseExpr(int MinPrecedence) {
     SourceLocation StartLoc = currentToken().getLocation();
+    SourceLocation EndLoc;
+    SourceRange Range;
     auto LHS = parsePrimary();
     if(!LHS) return nullptr;
+    std::unique_ptr<Type> ToType;
+    if(currentToken().getKind() == Lex::TokenKind::KW_AS) {
+      consume(Lex::TokenKind::KW_AS);
+      ToType = parseType();
+      EndLoc = currentToken().getLocation();
+      Range = SourceRange(StartLoc, EndLoc);
+      LHS = std::make_unique<ASExpr>(std::move(LHS), std::move(ToType), Range);
+    }
     while(true) {
       Lex::TokenKind CurrentOp = currentToken().getKind();
       int CurrentPrecedence = getOperatorPrecedence(CurrentOp);
@@ -224,8 +227,8 @@ namespace trsc {
       auto RHS = parseExpr(CurrentPrecedence + 1);
       if(!RHS) return nullptr;
 
-      SourceLocation EndLoc = currentToken().getLocation();
-      SourceRange Range = SourceRange(StartLoc, EndLoc);
+      EndLoc = currentToken().getLocation();
+      Range = SourceRange(StartLoc, EndLoc);
       LHS= std::make_unique<BinExpr>(CurrentOp, std::move(LHS), std::move(RHS),
           Range);
     }
@@ -310,8 +313,8 @@ namespace trsc {
         return nullptr;
       }
       consume(Lex::TokenKind::DE_SEMICOLON);
-      SourceLocation End = currentToken().getLocation();
-      SourceRange Range = SourceRange(Start, End);
+      End = currentToken().getLocation();
+      Range = SourceRange(Start, End);
     }
     return std::make_unique<trsc::LetStmt>(IsMut, std::move(DeclaredVar), 
         std::move(VarType), std::move(Initializer), Range);
@@ -370,6 +373,8 @@ namespace trsc {
       size_t Size = std::stoull(std::string(currentToken().getText()));
       consume(Lex::TokenKind::LT_INTEGER);
       if(!expectToken(Lex::TokenKind::DE_RBRACKET)) return nullptr;
+      End = currentToken().getLocation();
+      Range = SourceRange(Start, End);
       return std::make_unique<ArrayTypeName>(std::move(Elemente), IsMut, 
           Size, Range);
     } else {

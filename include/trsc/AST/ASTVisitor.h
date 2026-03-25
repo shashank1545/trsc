@@ -28,6 +28,9 @@ public:
       case ASTNodeKind::ASTK_ARRAYTYPENAME:
         getDerived().visitArrayTypeName(static_cast<ArrayTypeName*>(Node));
         break;
+      case ASTNodeKind::ASTK_ASEXPR:
+        getDerived().visitASExpr(static_cast<ASExpr*>(Node));
+        break;
       case ASTNodeKind::ASTK_BOOLEXPR:
         getDerived().visitBoolExpr(static_cast<BoolExpr*>(Node));
         break;
@@ -150,6 +153,11 @@ public:
   void visitBinExpr(BinExpr *E) {
     getDerived().visit(E->getLHS());
     getDerived().visit(E->getRHS());
+  }
+
+  void visitASExpr(ASExpr *E) {
+    getDerived().visit(E->getFromExpr());
+    getDerived().visit(E->getToType());
   }
 
   void visitRangeExpr(RangeExpr *E) {

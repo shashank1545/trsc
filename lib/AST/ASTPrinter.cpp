@@ -1,5 +1,4 @@
 // TODO :: Fix this after completing Sema.
-#include "trsc/AST/AST.h"
 #include "trsc/Lex/Token.h"
 #include "trsc/AST/ASTPrinter.h"
 
@@ -148,6 +147,15 @@ namespace trsc {
     IndentLevel++;
     visit(Node->getLHS());
     visit(Node->getRHS());
+    IndentLevel--;
+  }
+
+  void ASTPrinter::visitASExpr(ASExpr *Node) {
+    indent();
+    OS << "ASExpr: " << '\n';
+    IndentLevel++;
+    visit(Node->getFromExpr());
+    visit(Node->getToType());
     IndentLevel--;
   }
 

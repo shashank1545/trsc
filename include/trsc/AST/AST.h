@@ -23,6 +23,7 @@ enum class ASTNodeKind {
   ASTK_ARRAYTYPENAME,
   // ASTK_VECTORTYPENAME,
   ASTK_EXPR,
+  ASTK_ASEXPR,
   ASTK_BOOLEXPR,
   ASTK_NUMEXPR,
   ASTK_INTEXPR,
@@ -160,6 +161,7 @@ public:
 class Stmt : public ASTNode {
 protected:
   Stmt(ASTNodeKind Kind, SourceRange Loc = {}) : ASTNode(Kind, Loc) {}
+    bool isStmt() const override { return true; }
 };
 
 class NumExpr : public Expr {
@@ -171,8 +173,6 @@ class NumExpr : public Expr {
     bool isNum() const override { return true; }
     virtual bool isInt() const { return false; }
     virtual bool isFloat() const { return false; }
-
-    bool isStmt() const override { return true; }
 };
 
 class IntExpr : public NumExpr {
@@ -182,7 +182,6 @@ class IntExpr : public NumExpr {
     Value(Value) {}
     long long getValue() const {return Value;} 
     bool isInt() const override {return true;}
-    bool isExpr() const override { return true; }
 };
 
 class FloatExpr: public NumExpr {
@@ -192,7 +191,6 @@ class FloatExpr: public NumExpr {
     Value(Value) {}
     double getValue() const {return Value;}
     bool isFloat() const override {return true;}
-    bool isExpr() const override { return true; }
 };
 
 class BoolExpr : public Expr {
@@ -203,7 +201,6 @@ public:
       : Expr(ASTNodeKind::ASTK_BOOLEXPR, Loc), Value(Value) {}
   bool getValue() const { return Value; }
   bool isBool() const override { return true; }
-  bool isExpr() const override { return true; }
 };
 
 class VarExpr : public Expr {
@@ -214,7 +211,6 @@ public:
       : Expr(ASTNodeKind::ASTK_VAREXPR, Loc), Name(Name) {}
   const std::string &getName() const { return Name; }
   bool isVar() const override { return true; }
-  bool isExpr() const override { return true; }
 };
 
 class RefrExpr : public Expr {
@@ -226,7 +222,6 @@ class RefrExpr : public Expr {
     IsMut(IsMut) {}
   Expr *getReferent() const { return ReferentExpr.get(); }
   bool isMut() const { return IsMut; }
-  bool isExpr() const override { return true; }
 };
 
 class BinExpr : public Expr {
@@ -241,7 +236,20 @@ public:
   Lex::TokenKind getOp() const { return Op; }
   Expr *getLHS() const { return LHS.get(); }
   Expr *getRHS() const { return RHS.get(); }
-  bool isExpr() const override { return true; }
+};
+
+class ASExpr : public Expr {
+  private:
+    std::unique_ptr<Expr> FromExpr; 
+    std::unique_ptr<Type> ToType;
+  public:
+    ASExpr(std::unique_ptr<Expr> FromExpr, std::unique_ptr<Type> ToType, 
+        SourceRange Loc = {}): Expr(ASTNodeKind::ASTK_ASEXPR, Loc), 
+      FromExpr(std::move(FromExpr)), ToType(std::move(ToType)) {}
+    
+    Expr *getFromExpr() const { return FromExpr.get(); }
+    Type *getToType() const { return ToType.get(); }
+  
 };
 
 class RangeExpr : public Expr {

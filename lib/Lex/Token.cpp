@@ -15,6 +15,7 @@ namespace trsc {
         TOK(KW_LET,"KW_LET");
         TOK(KW_MUT,"KW_MUT");
         TOK(KW_CONST,"KW_CONST");
+        TOK(KW_AS, "KW_AS");
         TOK(KW_IF,"KW_IF");
         TOK(KW_ELSE,"KW_ELSE");
         TOK(KW_RETURN,"KW_RETURN");
@@ -86,6 +87,7 @@ namespace trsc {
         TOK(KW_LET,"let");
         TOK(KW_MUT,"mut");
         TOK(KW_CONST,"const");
+        TOK(KW_AS,"as");
         TOK(KW_IF,"if");
         TOK(KW_ELSE,"else");
         TOK(KW_RETURN,"return");

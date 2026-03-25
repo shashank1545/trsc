@@ -1,11 +1,7 @@
 #include "trsc/Sema/TypeChecker.h"
-#include "trsc/AST/AST.h"
-#include "trsc/AST/ASTContext.h"
 #include "trsc/AST/QualType.h"
-#include "trsc/Basic/Diagnostics.h"
 #include "trsc/Lex/Token.h"
 #include "trsc/Sema/Scope.h"
-#include "trsc/Sema/SymbolTable.h"
 #include <memory>
 #include <vector>
 
@@ -39,6 +35,21 @@ namespace trsc {
         Diags.Report(DiagKind::Error, "Unsupported node used as type.");
         return Ctx.getNullType();
       }
+    }
+  }
+
+  void TypeChecker::visitASExpr(ASExpr *Node) {
+    visit(Node->getFromExpr());
+    QualType FromType = Node->getFromExpr()->getType();
+    QualType ToType = resolveType(Node->getToType());
+    bool Convertable = Ctx.canImplicitlyConvert(FromType, ToType);   
+    if(Convertable) {
+      Node->setType(ToType);
+    }
+    else {
+      std::string ErrMsg = "Cannot convert " + FromType.getAsString() + " to " 
+        + ToType.getAsString() + " \n";
+      Diags.Report(DiagKind::Error, ErrMsg); 
     }
   }
 
