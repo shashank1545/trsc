@@ -359,7 +359,6 @@ namespace trsc {
       return std::make_unique<ReferenceTypeName>(std::move(Referent), IsMut, Range);
     } else if(currentToken().getKind() == Lex::TokenKind::DE_LBRACKET) {
       consume(Lex::TokenKind::DE_LBRACKET);
-      bool IsMut = false;
       auto Elemente = parseType();
       if (!Elemente) return nullptr;
 
@@ -375,8 +374,7 @@ namespace trsc {
       if(!expectToken(Lex::TokenKind::DE_RBRACKET)) return nullptr;
       End = currentToken().getLocation();
       Range = SourceRange(Start, End);
-      return std::make_unique<ArrayTypeName>(std::move(Elemente), IsMut, 
-          Size, Range);
+      return std::make_unique<ArrayTypeName>(std::move(Elemente), Size, Range);
     } else {
       if (currentToken().getKind() != Lex::TokenKind::IDENTIFIER) {
         reportExpectedError(Lex::TokenKind::IDENTIFIER);

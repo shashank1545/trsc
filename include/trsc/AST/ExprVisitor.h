@@ -34,6 +34,8 @@ public:
         return getDerived().visitBoolExpr(static_cast<BoolExpr*>(E));
       case ASTNodeKind::ASTK_VAREXPR:
         return getDerived().visitVarExpr(static_cast<VarExpr*>(E));
+      case ASTNodeKind::ASTK_ASEXPR:
+        return getDerived().visitASExpr(static_cast<ASExpr*>(E));
       case ASTNodeKind::ASTK_INTEXPR:
         return getDerived().visitIntExpr(static_cast<IntExpr*>(E));
       case ASTNodeKind::ASTK_FLOATEXPR:
@@ -69,6 +71,12 @@ public:
 
   RetTy visitRefrExpr(RefrExpr *E) {
     getDerived().visit(E->getReferent());
+    return RetTy();
+  }
+
+  RetTy visitASExpr(ASExpr *E) {
+    getDerived().visit(E->getFromExpr());
+    getDerived().visit(E->getToType());
     return RetTy();
   }
   

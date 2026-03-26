@@ -75,6 +75,7 @@ protected:
 
 public:
   virtual std::string getName() const = 0;
+  virtual bool isMut() const { return false; }
 };
 
 class TypeName : public Type {
@@ -97,7 +98,7 @@ class PointerTypeName : public Type {
     Pointee(std::move(Pointee)), IsMut(IsMut) {}
 
   Type *getPointee() const { return Pointee.get(); }
-  bool isMut() const { return IsMut; }
+  bool isMut() const override { return IsMut; }
   std::string getName() const override {
     return (IsMut ? "*mut " : "*const ") + Pointee->getName();
   }
@@ -114,7 +115,7 @@ class ReferenceTypeName : public Type {
     Referent(std::move(Referent)), IsMut(IsMut) {}
 
   Type *getReferent() const { return Referent.get(); }
-  bool isMut() const { return IsMut; }
+  bool isMut() const override { return IsMut; }
   std::string getName() const override {
     return (IsMut ? "&mut " : "&") + Referent->getName();
   }
@@ -122,18 +123,16 @@ class ReferenceTypeName : public Type {
 
 class ArrayTypeName : public Type {
   std::unique_ptr<Type> Elemente;
-  bool IsMut;
   size_t Size;
 
   public:
-  ArrayTypeName(std::unique_ptr<Type> Elemente, bool IsMut, size_t Size,
+  ArrayTypeName(std::unique_ptr<Type> Elemente, size_t Size,
       SourceRange Loc = {})
     : Type(ASTNodeKind::ASTK_ARRAYTYPENAME, Loc),
-    Elemente(std::move(Elemente)), IsMut(IsMut), Size(Size) {}
+    Elemente(std::move(Elemente)), Size(Size) {}
 
   Type *getElemente() const { return Elemente.get(); }
   size_t getSize() const { return Size; }
-  bool isMut() const { return IsMut; }
   std::string getName() const override {
     return "[" + Elemente->getName() + "; " + std::to_string(Size) + "]";
   }

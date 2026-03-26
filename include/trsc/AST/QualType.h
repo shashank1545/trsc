@@ -213,7 +213,7 @@ namespace trsc {
       std::string getName() const override { return "i32"; }
       bool isInteger() const override { return true; }
       bool isSigned() const override { return true; }
-      static constexpr std::int32_t min() { return INT16_MIN; }
+      static constexpr std::int32_t min() { return INT32_MIN; }
       static constexpr std::int32_t max() { return INT32_MAX; }
   };
 
@@ -223,7 +223,7 @@ namespace trsc {
       std::string getName() const override { return "i64"; }
       bool isInteger() const override { return true; }
       bool isSigned() const override { return true; }
-      static constexpr std::int64_t min() { return 0; }
+      static constexpr std::int64_t min() { return INT64_MIN; }
       static constexpr std::int64_t max() { return INT64_MAX; }
   };
 
