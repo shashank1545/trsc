@@ -49,6 +49,7 @@ namespace trsc {
       mlir::Value visitIntExpr(IntExpr *Node);
       mlir::Value visitFloatExpr(FloatExpr *Node);
       mlir::Value visitVarExpr(VarExpr *Node);
+      mlir::Value visitASExpr(ASExpr *Node);
       mlir::Value visitRefrExpr(RefrExpr *Node);
       mlir::Value visitBoolExpr(BoolExpr *Node);
       mlir::Value visitBinExpr(BinExpr *Node);
@@ -66,6 +67,7 @@ namespace trsc {
       mlir::MemRefType toMemRefType(QualType T);
       llvm::APFloat toAPFloat(double D);
       mlir::Value getLValueMemRef(Expr *E);
+      mlir::Value convertValueToType(mlir::Value V, mlir::Type T);
       bool isLValue(Expr *E);
 
   };

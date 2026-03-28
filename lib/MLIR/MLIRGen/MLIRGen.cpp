@@ -42,6 +42,121 @@ MLIRGen::MLIRGen(mlir::MLIRContext &MLIRCtx, trsc::ASTContext &ASTCtx,
     MLIRCtx.loadAllAvailableDialects();
   }
 
+namespace {
+
+  enum class NumKind { SignedInt = 0, UnsignedInt = 1, Float = 2 };
+
+  NumKind getNumKind(mlir::Type T) {
+    if (T.isF16() || T.isF32() || T.isF64() || T.isBF16())
+      return NumKind::Float;
+    if (auto IT = llvm::dyn_cast<mlir::IntegerType>(T)) {
+      if (IT.isSigned() || IT.isSignless()) 
+        return NumKind::SignedInt;
+      return NumKind::UnsignedInt;
+    }
+    llvm_unreachable("Unknown numeric type");
+  }
+
+  // SS: Signed -> Signed
+  mlir::Value conv_SS(mlir::Value From, mlir::Type F, mlir::Type T,
+      mlir::OpBuilder &Builder) {
+    auto Loc = Builder.getUnknownLoc();
+    unsigned FW = F.getIntOrFloatBitWidth();
+    unsigned TW = T.getIntOrFloatBitWidth();
+    if (FW == TW) return From;
+    if (FW < TW)  return mlir::arith::ExtSIOp::create(Builder, Loc, T, From);
+    return mlir::arith::TruncIOp::create(Builder, Loc, T, From);
+  }
+
+  // UU: Unsigned -> Unsigned
+  mlir::Value conv_UU(mlir::Value From, mlir::Type F, mlir::Type T,
+      mlir::OpBuilder &Builder) {
+    auto Loc = Builder.getUnknownLoc();
+    unsigned FW = F.getIntOrFloatBitWidth();
+    unsigned TW = T.getIntOrFloatBitWidth();
+    if (FW == TW) return From;
+    if (FW < TW)  return mlir::arith::ExtUIOp::create(Builder, Loc, T, From);
+    return mlir::arith::TruncIOp::create(Builder, Loc, T, From);
+  }
+
+  // FF: Float -> Float
+  mlir::Value conv_FF(mlir::Value From, mlir::Type F, mlir::Type T,
+      mlir::OpBuilder &Builder) {
+    auto Loc = Builder.getUnknownLoc();
+    unsigned FW = F.getIntOrFloatBitWidth();
+    unsigned TW = T.getIntOrFloatBitWidth();
+    if (FW == TW) return From;
+    if (FW < TW)  return mlir::arith::ExtFOp::create(Builder, Loc, T, From);
+    return mlir::arith::TruncFOp::create(Builder, Loc, T, From);
+  }
+
+  // SU: Signed -> Unsigned
+  mlir::Value conv_SU(mlir::Value From, mlir::Type F, mlir::Type T,
+      mlir::OpBuilder &Builder) {
+    auto Loc = Builder.getUnknownLoc();
+    unsigned FW = F.getIntOrFloatBitWidth();
+    unsigned TW = T.getIntOrFloatBitWidth();
+    mlir::Value Widened = From;
+    if (FW < TW) Widened = mlir::arith::ExtSIOp::create(Builder, Loc, T, From);
+    else if (FW > TW) {
+      Widened = mlir::arith::TruncIOp::create(Builder, Loc, T, From);
+    }
+    return Widened; 
+  }
+
+  // US: Unsigned -> Signed
+  mlir::Value conv_US(mlir::Value From, mlir::Type F, mlir::Type T,
+      mlir::OpBuilder &Builder) {
+    auto Loc = Builder.getUnknownLoc();
+    unsigned FW = F.getIntOrFloatBitWidth();
+    unsigned TW = T.getIntOrFloatBitWidth();
+    mlir::Value Widened = From;
+    if (FW < TW) Widened = mlir::arith::ExtUIOp::create(Builder, Loc, T, From);
+    else if (FW > TW) {
+      Widened = mlir::arith::TruncIOp::create(Builder, Loc, T, From);
+    }
+    return Widened;
+  }
+
+  // SF: Signed Int -> Float
+  mlir::Value conv_SF(mlir::Value From, mlir::Type F, mlir::Type T,
+      mlir::OpBuilder &Builder) {
+    auto Loc = Builder.getUnknownLoc();
+    return mlir::arith::SIToFPOp::create(Builder, Loc, T, From);
+  }
+
+  // UF: Unsigned Int -> Float
+  mlir::Value conv_UF(mlir::Value From, mlir::Type F, mlir::Type T,
+      mlir::OpBuilder &Builder) {
+    auto Loc = Builder.getUnknownLoc();
+    return mlir::arith::UIToFPOp::create(Builder, Loc, T, From);
+  }
+
+  // FS: Float -> Signed Int
+  mlir::Value conv_FS(mlir::Value From, mlir::Type F, mlir::Type T,
+      mlir::OpBuilder &Builder) {
+    auto Loc = Builder.getUnknownLoc();
+    return mlir::arith::FPToSIOp::create(Builder, Loc, T, From);
+  }
+
+  // FU: Float -> Unsigned Int
+  mlir::Value conv_FU(mlir::Value From, mlir::Type F, mlir::Type T,
+      mlir::OpBuilder &Builder) {
+    auto Loc = Builder.getUnknownLoc();
+    return mlir::arith::FPToUIOp::create(Builder, Loc, T, From);
+  }
+
+  using ConvHandler = mlir::Value(*)(mlir::Value, mlir::Type, mlir::Type, 
+      mlir::OpBuilder&);
+
+  const ConvHandler ConversionTable[3][3] = {
+    //  To: Signed    To: Unsigned   To: Float
+    {   conv_SS,      conv_SU,       conv_SF  },  // From: Signed
+    {   conv_US,      conv_UU,       conv_UF  },  // From: Unsigned
+    {   conv_FS,      conv_FU,       conv_FF  },  // From: Float
+  };
+}
+
 mlir::Type MLIRGen::toMLIRType(QualType T) {
   if (T.isNull() || T.isUnitType()) {
     return Builder.getNoneType();
@@ -60,6 +175,10 @@ mlir::Type MLIRGen::toMLIRType(QualType T) {
       case 64: return Builder.getF64Type();
       default: return Builder.getF64Type();
     }
+  }
+  if (T.isPointerType()) {
+    mlir::Type Pointee = toMLIRType(T.getBaseType());
+    return mlir::MemRefType::get({}, Pointee);
   }
   if (T.isReferenceType()) {
     mlir::Type Referent = toMLIRType(T.getBaseType());
@@ -106,6 +225,19 @@ mlir::Value MLIRGen::getLValueMemRef(Expr *E) {
   }
   
   return mlir::Value();
+}
+
+mlir::Value MLIRGen::convertValueToType(mlir::Value From, mlir::Type ToType) {
+  mlir::Type FromType = From.getType();
+
+  if (FromType == ToType) return From; 
+
+  NumKind FromKind = getNumKind(FromType);
+  NumKind ToKind   = getNumKind(ToType);
+
+  return ConversionTable[static_cast<int>(FromKind)]
+    [static_cast<int>(ToKind)]
+    (From, FromType, ToType, Builder);
 }
 
 void MLIRGen::genStmt(Stmt *S) {
@@ -157,9 +289,6 @@ void MLIRGen::genBlockStmt(BlockStmt *Node) {
 void MLIRGen::genLetStmt(LetStmt *Node) {
   mlir::Location Loc = Builder.getUnknownLoc();
   mlir::Value InitValue;
-  if (Node->getInitializer()) {
-    InitValue = visit(Node->getInitializer());
-  }
   Symbol* Sym = ST.lookupSymbol(Node->getDeclaredVar()->getName(), 
       Node->getScope());
   QualType VarTy = Sym->Ty; 
@@ -172,6 +301,8 @@ void MLIRGen::genLetStmt(LetStmt *Node) {
         Loc, toMemRefType(VarTy));  
   }
   Sym->setOp(static_cast<void*>(VarAlloca.getOperation()));
+
+  if (Node->getInitializer()) visit(Node->getInitializer());
   if(InitValue) {
     mlir::memref::StoreOp::create(Builder,
         Loc, InitValue, VarAlloca.getResult());
@@ -207,6 +338,12 @@ mlir::Value MLIRGen::visitRefrExpr(RefrExpr *Node) {
       toMemRefType(Referent->getType()));
   mlir::memref::StoreOp::create(Builder, Loc, Val, TempAlloca.getResult());
   return TempAlloca.getResult();
+}
+
+mlir::Value MLIRGen::visitASExpr(ASExpr *Node) {
+  mlir::Value FromExpr = visit(Node->getFromExpr());
+  QualType ToType = Node->getType(); 
+  return convertValueToType(FromExpr, toMLIRType(ToType)); 
 }
 
 mlir::Value MLIRGen::visitBinExpr(BinExpr *Node) {

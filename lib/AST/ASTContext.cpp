@@ -143,5 +143,34 @@ bool ASTContext::canImplicitlyConvert(QualType From, QualType To) const {
     return false;
 }
 
+bool ASTContext::canExplicitlyConvert(QualType From, QualType To) const {
+    if (areTypesCompatible(From, To)) {
+        return true;
+    }
+
+    if (From.isIntegerType() && To.isIntegerType()) {
+        return true;
+    }
+
+    if (From.isFloatingType() && To.isFloatingType()) {
+        return true;
+    }
+
+    if (From.isIntegerType() && To.isFloatingType()) {
+        return true;
+    }
+
+    if (From.isFloatingType() && To.isIntegerType()) {
+      return true;
+    }
+
+    if (From.isBooleanType() && To.isBooleanType()) {
+        return true;
+    }
+
+    return false;
+}
+
+
 } // namespace trsc
 

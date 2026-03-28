@@ -91,6 +91,7 @@ class ASTContext {
     bool areTypesCompatible(QualType T1, QualType T2) const;
 
     bool canImplicitlyConvert(QualType From, QualType To) const;
+    bool canExplicitlyConvert(QualType From, QualType To) const;
 };
 
 } // namespace trsc

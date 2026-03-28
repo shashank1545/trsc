@@ -42,7 +42,7 @@ namespace trsc {
     visit(Node->getFromExpr());
     QualType FromType = Node->getFromExpr()->getType();
     QualType ToType = resolveType(Node->getToType());
-    bool Convertable = Ctx.canImplicitlyConvert(FromType, ToType);   
+    bool Convertable = Ctx.canExplicitlyConvert(FromType, ToType);   
     if(Convertable) {
       Node->setType(ToType);
     }
@@ -54,11 +54,17 @@ namespace trsc {
   }
 
   void TypeChecker::visitIntExpr(IntExpr *Node) {
-    Node->setType(Ctx.getI32Type());
+    if(!ExpectedType.isNull() && ExpectedType.isIntegerType() &&
+        (!ExpectedType.isReferenceType() && !ExpectedType.isPointerType())) {
+      Node->setType(ExpectedType);
+    } else Node->setType(Ctx.getI32Type());
   }
 
   void TypeChecker::visitFloatExpr(FloatExpr *Node) {
-    Node->setType(Ctx.getF64Type());
+    if(!ExpectedType.isNull() && ExpectedType.isFloatingType() &&  
+        (!ExpectedType.isReferenceType() && !ExpectedType.isPointerType())) {
+      Node->setType(ExpectedType);
+    } else Node->setType(Ctx.getF64Type());
   }
 
   void TypeChecker::visitRefrExpr(RefrExpr *Node) {
@@ -68,9 +74,9 @@ namespace trsc {
   }
 
   void TypeChecker::visitVarExpr(VarExpr *Node) {
-    auto Symbol = ST.lookupSymbol(Node->getName(), Node->getScope());
-    if (Symbol) {
-      Node->setType(Symbol->Ty);
+    auto Sym = ST.lookupSymbol(Node->getName(), Node->getScope());
+    if (Sym) {
+      Node->setType(Sym->Ty);
     }
   }
 
@@ -79,27 +85,20 @@ namespace trsc {
   }
 
   void TypeChecker::visitLetStmt(LetStmt *Node) {
-    if (Node->getInitializer()) {
-      visit(Node->getInitializer());
-    }
-
-    auto Symbol = ST.lookupSymbol(Node->getDeclaredVar()->getName(),
+    auto Sym = ST.lookupSymbol(Node->getDeclaredVar()->getName(),
         Node->getScope());
-    if(Node->isMut()) Symbol->IsMutable = true;
-    if (!Symbol) {
+    if(Node->isMut()) Sym->IsMutable = true;
+    if (!Sym) {
       Diags.Report(DiagKind::Error, "Variable not found in SymbolTable",
           Node->getSourceRange().getStart());
       return;
     }
 
     QualType InitializerQualType; 
-    if (Node->getInitializer()) {
-      InitializerQualType = Node->getInitializer()->getType();
-    }
-
     QualType FinalType; 
 
     if (Node->getDeclaredType()) {
+      Sym->IsMutable = Node->getDeclaredType()->isMut() || Node->isMut(); 
       QualType DeclaredQualType = resolveType(Node->getDeclaredType());
       if (DeclaredQualType.isNull()) {
         Diags.Report(DiagKind::Error,
@@ -109,9 +108,17 @@ namespace trsc {
       }
 
       FinalType = DeclaredQualType;
+      QualType OldExpectedTpe = ExpectedType;
+      ExpectedType = DeclaredQualType;
+
+      if (Node->getInitializer()) {
+        visit(Node->getInitializer());
+        InitializerQualType = Node->getInitializer()->getType();
+      }
+      ExpectedType = OldExpectedTpe;
 
       if (!InitializerQualType.isNull()) {
-        if (!Ctx.areTypesCompatible(DeclaredQualType, InitializerQualType)) {
+        if (!Ctx.canImplicitlyConvert(DeclaredQualType, InitializerQualType)) {
           Diags.Report(DiagKind::Error,
               "Type mismatch: cannot initialize variable of type '" + DeclaredQualType.getAsString() +
               "' with value of type '" + InitializerQualType.getAsString() + "'",
@@ -120,6 +127,10 @@ namespace trsc {
         }
       }
     } else {
+      if(Node->getInitializer()) {
+        visit(Node->getInitializer());
+        InitializerQualType = Node->getInitializer()->getType();
+      }
       if (!InitializerQualType.isNull()) {
         FinalType = InitializerQualType;
       } else {
@@ -130,7 +141,7 @@ namespace trsc {
     }
 
     if (!FinalType.isNull()) {
-      Symbol->Ty = FinalType;
+      Sym->Ty = FinalType;
     }
   }
 
@@ -298,9 +309,9 @@ namespace trsc {
       return;
     }
 
-    auto Symbol = ST.lookupSymbol(IteratorVar->getName(), IteratorVar->getScope());
-    if (Symbol) {
-      Symbol->Ty = IteratorType;
+    auto Sym = ST.lookupSymbol(IteratorVar->getName(), IteratorVar->getScope());
+    if (Sym) {
+      Sym->Ty = IteratorType;
     } else {
       Diags.Report(DiagKind::Error,
           "Iterator variable '" + IteratorVar->getName() + "' not found in symbol table",
@@ -347,11 +358,11 @@ namespace trsc {
                 + "'", Param.ParamType->getSourceRange().getStart());
           } 
           else {
-            auto Symbol = ST.lookupSymbol(Param.ParamName->getName(), 
+            auto Sym = ST.lookupSymbol(Param.ParamName->getName(), 
                 Param.ParamName->getScope());
-            if (Symbol) {
-              Symbol->Ty = ParamQualType;
-              ParamTypes.emplace_back(Symbol->Ty);
+            if (Sym) {
+              Sym->Ty = ParamQualType;
+              ParamTypes.emplace_back(Sym->Ty);
             } else {
               Diags.Report(DiagKind::Error,
                   "Parameter '" + Param.ParamName->getName() + 
@@ -380,8 +391,8 @@ namespace trsc {
     }
 
     QualType FunctionType = Ctx.getFunctionType(FuncReturnQualType,ParamTypes); 
-    auto Symbol = ST.lookupSymbol(Node->getFuncName()->getName());
-    if (Symbol) Symbol->Ty = FunctionType;
+    auto Sym = ST.lookupSymbol(Node->getFuncName()->getName());
+    if (Sym) Sym->Ty = FunctionType;
     if (Node->getBody()) {
       visit(Node->getBody());
     }

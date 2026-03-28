@@ -4,6 +4,7 @@
 #include "trsc/AST/AST.h"
 #include "trsc/AST/ASTContext.h"
 #include "trsc/AST/ASTVisitor.h"
+#include "trsc/AST/QualType.h"
 #include "trsc/Basic/Diagnostics.h"
 #include "trsc/Sema/SymbolTable.h"
 
@@ -37,6 +38,7 @@ private:
   SymbolTable &ST;
   ASTContext &Ctx;
   QualType CurrentFunctionReturnType;
+  QualType ExpectedType;
 };
 
 } // namespace trsc
