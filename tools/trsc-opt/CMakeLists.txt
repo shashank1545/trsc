@@ -7,9 +7,9 @@ set(LIBS
     ${dialect_libs}
     ${conversion_libs}
     # Your TRSC libraries
-    TrscDialect
-    TrscToStandard
-    TrscMLIRGen
+    # TrscDialect
+    # TrscToStandard
+    # TrscMLIRGen
     # MLIR Core
     MLIRIR
     MLIRPass
