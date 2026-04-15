@@ -149,7 +149,7 @@ protected:
       : ASTNode(Kind, Loc), ExprType() {}
 
 public:
-  QualType getType() const { return ExprType; }
+  QualType& getType() { return ExprType; }
   void setType(QualType T) { ExprType = T; }
 
   virtual bool isNum() const { return false; }

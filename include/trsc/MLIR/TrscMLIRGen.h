@@ -65,7 +65,7 @@ namespace trsc {
 
       mlir::Type toMLIRType(QualType T);
       mlir::MemRefType toMemRefType(QualType T);
-      llvm::APFloat toAPFloat(double D);
+      const llvm::APFloat toAPFloat(double D, QualType &Type);
       mlir::Value getLValueMemRef(Expr *E);
       mlir::Value convertValueToType(mlir::Value V, mlir::Type T);
       bool isLValue(Expr *E);

@@ -20,6 +20,7 @@
 #include "mlir/Dialect/ControlFlow/IR/ControlFlow.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
+#include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Casting.h"
@@ -206,8 +207,9 @@ mlir::MemRefType MLIRGen::toMemRefType(QualType T) {
   return mlir::MemRefType::get({}, toMLIRType(T));
 }
 
-llvm::APFloat MLIRGen::toAPFloat(double D) {
-  return llvm::APFloat(D); 
+const llvm::APFloat MLIRGen::toAPFloat(double D, QualType& Type) {
+  if(Type.getSizeInBytes() == 4) return llvm::APFloat(static_cast<float>(D));
+  else return llvm::APFloat(D);
 }
 
 bool MLIRGen::isLValue(Expr *E) {
@@ -318,10 +320,11 @@ mlir::Value MLIRGen::visitIntExpr(IntExpr *Node) {
 }
 
 mlir::Value MLIRGen::visitFloatExpr(FloatExpr *Node) {
+  const llvm::APFloat FloatValue = toAPFloat(Node->getValue(), Node->getType());
   auto FloatOp = mlir::arith::ConstantFloatOp::create(Builder,
       Builder.getUnknownLoc(),
       llvm::dyn_cast<mlir::FloatType>(toMLIRType(Node->getType())),
-      toAPFloat(Node->getValue()));
+      FloatValue);
   return FloatOp.getResult();
 }
 

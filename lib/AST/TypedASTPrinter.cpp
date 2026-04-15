@@ -42,8 +42,8 @@ namespace trsc {
     return oss.str();
   }
 
-  std::string TypedASTPrinter::getTypeString(const Expr *E) {
-    QualType Type = E->getType();
+  std::string TypedASTPrinter::getTypeString(Expr *E) {
+    QualType& Type = E->getType();
     if (Type.isNull()) {
       return "";
     }

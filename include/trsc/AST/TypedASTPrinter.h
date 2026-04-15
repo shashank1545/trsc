@@ -18,7 +18,7 @@ namespace trsc {
       void printIndent(bool isLast);
       void printNodeHeader(const ASTNode *Node, const std::string &NodeName);
       std::string getLocationString(const ASTNode *Node);
-      std::string getTypeString(const Expr *E);
+      std::string getTypeString(Expr *E);
       std::string getAddressString(const void *Ptr);
 
     public:
