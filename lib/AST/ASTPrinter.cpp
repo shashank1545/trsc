@@ -150,6 +150,29 @@ namespace trsc {
     IndentLevel--;
   }
 
+  void ASTPrinter::visitArrayExpr(ArrayExpr *Node) {
+    indent();
+    OS << "ArrayExpr: " << "\n";
+    IndentLevel++;
+    for(const auto& Child: Node->getChildElemExprVec()) {
+      visit(Child.get());
+    }
+    OS << "NumElement: " << Node->getCount()->getValue() << "\n";
+    IndentLevel--;
+  }
+
+  void ASTPrinter::visitArrayAccessExpr(ArrayAccessExpr *Node) {
+    indent();
+    OS << "ArrayAccessExpr: " << "\n";
+    IndentLevel++;
+    visit(Node->getArrayNameExpr());
+    OS << "Index: \n" ;
+    for(const auto& Index: Node->getIndexVector()) {
+      getDerived().visit(Index.get());
+    }
+    IndentLevel--;
+  }
+
   void ASTPrinter::visitASExpr(ASExpr *Node) {
     indent();
     OS << "ASExpr: " << '\n';

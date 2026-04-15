@@ -36,6 +36,9 @@ namespace trsc {
       std::unique_ptr<trsc::Stmt> parseStmt();
       std::unique_ptr<trsc::LetStmt> parseLetStmt();
       std::unique_ptr<trsc::Expr> parseExpr(int);
+      std::unique_ptr<trsc::ArrayExpr> parseArray();
+      std::unique_ptr<trsc::ArrayAccessExpr> parseArrayAccessExpr(
+          Lex::Token Token);
       std::unique_ptr<trsc::Expr> parsePrimary();
       std::unique_ptr<trsc::BinExpr> parseBinExpr();
       std::unique_ptr<trsc::RangeExpr> parseRangeExpr();

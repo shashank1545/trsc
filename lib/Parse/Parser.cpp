@@ -163,6 +163,9 @@ namespace trsc {
         if(currentToken().getKind() == Lex::TokenKind::DE_LPAREN) {
           return parseFunCall(IdentToken);
         }
+        else if(currentToken().getKind() == Lex::TokenKind::DE_LBRACKET) {
+          return parseArrayAccessExpr(IdentToken);
+        }
         else {
           EndLoc = currentToken().getLocation();
           Range = SourceRange(StartLoc, EndLoc);
@@ -180,6 +183,9 @@ namespace trsc {
         }
         consume(Lex::TokenKind::DE_RPAREN);
         return E;
+      }
+      case Lex::TokenKind::DE_LBRACKET: {
+        return parseArray();
       }
       case Lex::TokenKind::OP_AMP: {
         consume(Lex::TokenKind::OP_AMP);
@@ -219,11 +225,8 @@ namespace trsc {
     while(true) {
       Lex::TokenKind CurrentOp = currentToken().getKind();
       int CurrentPrecedence = getOperatorPrecedence(CurrentOp);
-      
       if (CurrentPrecedence < MinPrecedence) break;
-
       consume(CurrentOp);
-
       auto RHS = parseExpr(CurrentPrecedence + 1);
       if(!RHS) return nullptr;
 
@@ -233,6 +236,50 @@ namespace trsc {
           Range);
     }
     return LHS;
+  }
+
+  // Case1: [elem; num]
+  // Case2: [elem, elem, .. elem]
+  // Mix: [[elem1;num1], [elem2;num2], [elem, elem... elem]];
+  std::unique_ptr<ArrayExpr> Parser::parseArray() {
+    consume(Lex::TokenKind::DE_LBRACKET);
+    std::vector<std::unique_ptr<Expr>> ChildElemExprVec;
+    std::unique_ptr<Expr> BaseExpr = parsePrimary();
+    std::unique_ptr<IntExpr> CountExpr;
+    ChildElemExprVec.emplace_back(std::move(BaseExpr));
+    if(currentToken().getKind() == Lex::TokenKind::DE_SEMICOLON) {
+      consume(Lex::TokenKind::DE_SEMICOLON);
+       CountExpr = std::unique_ptr<IntExpr>(
+           static_cast<IntExpr*>(parsePrimary().release()));
+      expectToken(Lex::TokenKind::DE_RBRACKET);
+      return std::make_unique<ArrayExpr>(std::move(ChildElemExprVec), 
+          std::move(CountExpr));
+    }
+    while(currentToken().getKind() != Lex::TokenKind::DE_RBRACKET) {
+      expectToken(Lex::TokenKind::DE_COMMA);
+      std::unique_ptr<Expr> ElemExpr = parsePrimary();
+      ChildElemExprVec.emplace_back(std::move(ElemExpr));
+    }
+    consume(Lex::TokenKind::DE_RBRACKET);
+    CountExpr = std::make_unique<IntExpr>(ChildElemExprVec.size());
+    return std::make_unique<ArrayExpr>(std::move(ChildElemExprVec), 
+        std::move(CountExpr));
+  }
+
+  std::unique_ptr<ArrayAccessExpr> Parser::parseArrayAccessExpr(
+      Lex::Token IndentToken) {
+    std::vector<std::unique_ptr<Expr>> IndexExprVec;
+    while(true) {
+      if(currentToken().getKind() != Lex::TokenKind::DE_LBRACKET) break;
+      consume(Lex::TokenKind::DE_LBRACKET);
+      IndexExprVec.emplace_back(std::move(parsePrimary().release()));
+      expectToken(Lex::TokenKind::DE_RBRACKET);
+    }
+    std::unique_ptr<VarExpr> ArrayExprName;
+    ArrayExprName = std::make_unique<VarExpr>(std::string(
+          IndentToken.getText()));
+    return std::make_unique<ArrayAccessExpr>(std::move(ArrayExprName), 
+        std::move(IndexExprVec));
   }
 
   std::unique_ptr<RangeExpr> Parser::parseRangeExpr() {

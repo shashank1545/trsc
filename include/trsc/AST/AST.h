@@ -30,6 +30,8 @@ enum class ASTNodeKind {
   ASTK_FLOATEXPR,
   ASTK_VAREXPR,
   ASTK_REFREXPR,
+  ASTK_ARRAYEXPR,
+  ASTK_ARRAYACCESSEXPR,
   ASTK_BINEXPR,
   ASTK_RANGEEXPR,
   ASTK_STMT,
@@ -177,8 +179,8 @@ class NumExpr : public Expr {
 class IntExpr : public NumExpr {
   long long Value;
   public:
-    IntExpr(long long Value, SourceRange Loc = {}): NumExpr(ASTNodeKind::ASTK_INTEXPR, Loc), 
-    Value(Value) {}
+    IntExpr(long long Value, SourceRange Loc = {}): 
+      NumExpr(ASTNodeKind::ASTK_INTEXPR, Loc), Value(Value) {}
     long long getValue() const {return Value;} 
     bool isInt() const override {return true;}
 };
@@ -186,8 +188,8 @@ class IntExpr : public NumExpr {
 class FloatExpr: public NumExpr {
   double Value;
   public:
-    FloatExpr(double Value, SourceRange Loc = {}): NumExpr(ASTNodeKind::ASTK_FLOATEXPR, Loc),
-    Value(Value) {}
+    FloatExpr(double Value, SourceRange Loc = {}): 
+      NumExpr(ASTNodeKind::ASTK_FLOATEXPR, Loc), Value(Value) {}
     double getValue() const {return Value;}
     bool isFloat() const override {return true;}
 };
@@ -249,6 +251,43 @@ class ASExpr : public Expr {
     Expr *getFromExpr() const { return FromExpr.get(); }
     Type *getToType() const { return ToType.get(); }
   
+};
+
+class ArrayExpr : public Expr {
+  private:
+    std::vector<std::unique_ptr<Expr>> ChildElemExprVec;
+    /* For n dimensional array , LastDim will give the number/count of the 
+       underlying n-1 dimensional array.*/
+    std::unique_ptr<IntExpr> LastDim;
+  public:
+    ArrayExpr(std::vector<std::unique_ptr<Expr>> ChildElemExprVec,
+        std::unique_ptr<IntExpr> LastDim, SourceRange Loc = {}):
+      Expr(ASTNodeKind::ASTK_ARRAYEXPR, Loc),
+      ChildElemExprVec(std::move(ChildElemExprVec)), 
+      LastDim(std::move(LastDim)) {}
+
+    const std::vector<std::unique_ptr<Expr>>& getChildElemExprVec() const { 
+      return ChildElemExprVec; }
+    // Expr* getBaseElemExpr() const { return }
+    IntExpr* getCount() const { return LastDim.get(); }
+};
+
+class ArrayAccessExpr: public Expr {
+  private:
+    std::unique_ptr<VarExpr> ArrayNameExpr;
+    std::vector<std::unique_ptr<Expr>> IndexExprVec;
+
+  public:
+    ArrayAccessExpr(std::unique_ptr<VarExpr> ArrayNameExpr, std::vector
+        <std::unique_ptr<Expr>> IndexExprVeci, SourceRange Loc = {}):
+      Expr(ASTNodeKind::ASTK_ARRAYACCESSEXPR, Loc),
+      ArrayNameExpr(std::move(ArrayNameExpr)), 
+      IndexExprVec(std::move( IndexExprVeci)) {}
+
+  VarExpr* getArrayNameExpr() { return ArrayNameExpr.get(); }
+  const std::vector<std::unique_ptr<Expr>>& getIndexVector() const {
+    return IndexExprVec;
+  }
 };
 
 class RangeExpr : public Expr {

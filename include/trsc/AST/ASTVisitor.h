@@ -52,6 +52,12 @@ public:
       case ASTNodeKind::ASTK_RANGEEXPR:
         getDerived().visitRangeExpr(static_cast<RangeExpr*>(Node));
         break;
+      case ASTNodeKind::ASTK_ARRAYEXPR:
+        getDerived().visitArrayExpr(static_cast<ArrayExpr*>(Node));
+        break;
+      case ASTNodeKind::ASTK_ARRAYACCESSEXPR:
+        getDerived().visitArrayAccessExpr(static_cast<ArrayAccessExpr*>(Node));
+        break;
       case ASTNodeKind::ASTK_LETSTMT:
         getDerived().visitLetStmt(static_cast<LetStmt*>(Node));
         break;
@@ -165,6 +171,20 @@ public:
     getDerived().visit(E->getEnd());
   }
 
+  void visitArrayExpr(ArrayExpr *E) {
+    for(const auto &ChildElem: E->getChildElemExprVec()) {
+      getDerived().visit(ChildElem.get());
+    }
+    getDerived().visit(E->getCount());
+  }
+
+  void visitArrayAccessExpr(ArrayAccessExpr *E) {
+    getDerived().visit(E->getArrayNameExpr());
+    for(const auto& Index: E->getIndexVector()) {
+      getDerived().visit(Index.get());
+    }
+  }
+ 
   void visitFunCall(FunCall *E) {
     getDerived().visit(E->getFuncName());
     for (const auto &Param : E->getParams()) {
