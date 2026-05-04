@@ -12,8 +12,8 @@ void NameResolver::visitProgram(Program *P) {
 
 void NameResolver::visitLetStmt(LetStmt *S) {
   S->setScope(ST.getCurrentScope());
-  Symbol SymInfo;
-  if (!ST.addSymbol(S->getDeclaredVar()->getName(), SymInfo)) {
+  Symbol Sym;
+  if (!ST.addSymbol(S->getDeclaredVar()->getName(), Sym)) {
     Diags.Report(DiagKind::Error, "Redefinition of Variable",
         S->getSourceRange().getStart());
   }
@@ -23,8 +23,8 @@ void NameResolver::visitLetStmt(LetStmt *S) {
 void NameResolver::visitForStmt(ForStmt* S) {
   ScopedRAII Scoped(ST, ScopeKind::SCOPE_FORSTMT); 
   S->setScope(ST.getCurrentScope());
-  Symbol SymInfo;
-  if(!ST.addSymbol(S->getInit()->getName(), SymInfo)) {
+  Symbol Sym;
+  if(!ST.addSymbol(S->getInit()->getName(), Sym)) {
     Diags.Report(DiagKind::Error, "Variable already defined",
         S->getSourceRange().getStart());
   }
@@ -121,7 +121,6 @@ void NameResolver::visitFunCall(FunCall *E) {
     Diags.Report(DiagKind::Error, "Undeclared function",
         E->getSourceRange().getStart());
   }
-  // std::string Name = E->getFuncName()->getName();
   for (const auto& Param: E->getParams()) {
     visit(Param.get());
   }
