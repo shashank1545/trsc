@@ -122,53 +122,31 @@ bool ASTContext::areTypesCompatible(QualType T1, QualType T2) const {
 bool ASTContext::canImplicitlyConvert(QualType From, QualType To) const {
     if (areTypesCompatible(From, To)) {
         return true;
-    }
-
-    if (From.isIntegerType() && To.isIntegerType()) {
+    } if (From.isIntegerType() && To.isIntegerType()) {
         return true;
-    }
-
-    if (From.isFloatingType() && To.isFloatingType()) {
+    } if (From.isFloatingType() && To.isFloatingType()) {
         return true;
-    }
-
-    if (From.isIntegerType() && To.isFloatingType()) {
+    } if (From.isIntegerType() && To.isFloatingType()) {
         return true;
-    }
-
-    if (From.isBooleanType() && To.isBooleanType()) {
+    } if (From.isBooleanType() && To.isBooleanType()) {
         return true;
-    }
-
-    return false;
+    } return false;
 }
 
 bool ASTContext::canExplicitlyConvert(QualType From, QualType To) const {
     if (areTypesCompatible(From, To)) {
         return true;
-    }
-
-    if (From.isIntegerType() && To.isIntegerType()) {
+    } if (From.isIntegerType() && To.isIntegerType()) {
         return true;
-    }
-
-    if (From.isFloatingType() && To.isFloatingType()) {
+    } if (From.isFloatingType() && To.isFloatingType()) {
         return true;
-    }
-
-    if (From.isIntegerType() && To.isFloatingType()) {
+    } if (From.isIntegerType() && To.isFloatingType()) {
         return true;
-    }
-
-    if (From.isFloatingType() && To.isIntegerType()) {
+    } if (From.isFloatingType() && To.isIntegerType()) {
       return true;
-    }
-
-    if (From.isBooleanType() && To.isBooleanType()) {
+    } if (From.isBooleanType() && To.isBooleanType()) {
         return true;
-    }
-
-    return false;
+    } return false;
 }
 
 
