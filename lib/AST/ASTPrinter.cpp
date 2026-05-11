@@ -157,7 +157,7 @@ namespace trsc {
     for(const auto& Child: Node->getChildElemExprVec()) {
       visit(Child.get());
     }
-    OS << "NumElement: " << Node->getCount()->getValue() << "\n";
+    OS << "NumElement: " << Node->getTrailingDim()->getValue() << "\n";
     IndentLevel--;
   }
 

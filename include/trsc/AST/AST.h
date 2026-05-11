@@ -7,6 +7,7 @@
 #include "trsc/AST/QualType.h"
 #include "trsc/Sema/Scope.h"
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
@@ -177,11 +178,11 @@ class NumExpr : public Expr {
 };
 
 class IntExpr : public NumExpr {
-  long long Value;
+  int64_t Value;
   public:
-    IntExpr(long long Value, SourceRange Loc = {}): 
+    IntExpr(int64_t Value, SourceRange Loc = {}): 
       NumExpr(ASTNodeKind::ASTK_INTEXPR, Loc), Value(Value) {}
-    long long getValue() const {return Value;} 
+    int64_t getValue() const {return Value;} 
     bool isInt() const override {return true;}
 };
 
@@ -259,17 +260,20 @@ class ArrayExpr : public Expr {
     /* For n dimensional array , LastDim will give the number/count of the 
        underlying n-1 dimensional array.*/
     std::unique_ptr<IntExpr> LastDim;
+    std::vector<int> Shape;
   public:
     ArrayExpr(std::vector<std::unique_ptr<Expr>> ChildElemExprVec,
-        std::unique_ptr<IntExpr> LastDim, SourceRange Loc = {}):
+        std::unique_ptr<IntExpr> LastDim, 
+        std::vector<int> Shape, SourceRange Loc = {}):
       Expr(ASTNodeKind::ASTK_ARRAYEXPR, Loc),
       ChildElemExprVec(std::move(ChildElemExprVec)), 
-      LastDim(std::move(LastDim)) {}
+      LastDim(std::move(LastDim)), Shape(std::move(Shape)) {}
 
     const std::vector<std::unique_ptr<Expr>>& getChildElemExprVec() const { 
       return ChildElemExprVec; }
     // Expr* getBaseElemExpr() const { return }
-    IntExpr* getCount() const { return LastDim.get(); }
+    IntExpr* getTrailingDim() const { return LastDim.get(); }
+    const std::vector<int>& getShape() const { return Shape; }
 };
 
 class ArrayAccessExpr: public Expr {

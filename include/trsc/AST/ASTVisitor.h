@@ -175,7 +175,7 @@ public:
     for(const auto &ChildElem: E->getChildElemExprVec()) {
       getDerived().visit(ChildElem.get());
     }
-    getDerived().visit(E->getCount());
+    getDerived().visit(E->getTrailingDim());
   }
 
   void visitArrayAccessExpr(ArrayAccessExpr *E) {
