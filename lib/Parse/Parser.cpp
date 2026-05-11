@@ -141,7 +141,7 @@ namespace trsc {
       }
       case Lex::TokenKind::LT_INTEGER: {
         Lex::Token NumToken = consume(Lex::TokenKind::LT_INTEGER);
-        long long Val = std::stoll(std::string(NumToken.getText()));
+        int64_t Val = std::stoll(std::string(NumToken.getText()));
         EndLoc = currentToken().getLocation();
         Range = SourceRange(StartLoc, EndLoc);
         return std::make_unique<IntExpr>(Val, Range);
@@ -185,17 +185,16 @@ namespace trsc {
         return E;
       }
       case Lex::TokenKind::DE_LBRACKET: {
-        return parseArray();
+        std::vector<int> Shape;
+        return parseArray(Shape);
       }
       case Lex::TokenKind::OP_AMP: {
         consume(Lex::TokenKind::OP_AMP);
-        bool IsMut;
+        bool IsMut = false;
         if(currentToken().getKind() == Lex::TokenKind::KW_MUT){
           consume(Lex::TokenKind::KW_MUT);
           IsMut = true;
-        } else {
-          IsMut = false;
-        }
+        } 
         std::unique_ptr<Expr> ReferentExpr = parsePrimary();
         EndLoc = currentToken().getLocation();
         Range = SourceRange(StartLoc, EndLoc);
@@ -241,7 +240,7 @@ namespace trsc {
   // Case1: [elem; num]
   // Case2: [elem, elem, .. elem]
   // Mix: [[elem1;num1], [elem2;num2], [elem, elem... elem]];
-  std::unique_ptr<ArrayExpr> Parser::parseArray() {
+  std::unique_ptr<ArrayExpr> Parser::parseArray(std::vector<int> Shape) {
     consume(Lex::TokenKind::DE_LBRACKET);
     std::vector<std::unique_ptr<Expr>> ChildElemExprVec;
     std::unique_ptr<Expr> BaseExpr = parsePrimary();
@@ -252,8 +251,9 @@ namespace trsc {
        CountExpr = std::unique_ptr<IntExpr>(
            static_cast<IntExpr*>(parsePrimary().release()));
       expectToken(Lex::TokenKind::DE_RBRACKET);
+      Shape.emplace_back(CountExpr->getValue());
       return std::make_unique<ArrayExpr>(std::move(ChildElemExprVec), 
-          std::move(CountExpr));
+          std::move(CountExpr), std::move(Shape));
     }
     while(currentToken().getKind() != Lex::TokenKind::DE_RBRACKET) {
       expectToken(Lex::TokenKind::DE_COMMA);
@@ -262,8 +262,9 @@ namespace trsc {
     }
     consume(Lex::TokenKind::DE_RBRACKET);
     CountExpr = std::make_unique<IntExpr>(ChildElemExprVec.size());
+    Shape.emplace_back(CountExpr->getValue());
     return std::make_unique<ArrayExpr>(std::move(ChildElemExprVec), 
-        std::move(CountExpr));
+        std::move(CountExpr), std::move(Shape));
   }
 
   std::unique_ptr<ArrayAccessExpr> Parser::parseArrayAccessExpr(

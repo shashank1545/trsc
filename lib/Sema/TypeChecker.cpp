@@ -1,8 +1,11 @@
 #include "trsc/Sema/TypeChecker.h"
+#include "trsc/AST/AST.h"
 #include "trsc/AST/QualType.h"
+#include "trsc/Basic/Diagnostics.h"
 #include "trsc/Lex/Token.h"
 #include "trsc/Sema/Scope.h"
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace trsc {
@@ -82,6 +85,120 @@ namespace trsc {
 
   void TypeChecker::visitBoolExpr(BoolExpr *Node) {
     Node->setType(Ctx.getBoolType());
+  }
+
+  void TypeChecker::visitArrayExpr(ArrayExpr *Node) {
+    for(const auto& Child: Node->getChildElemExprVec()) {
+      visit(Child.get());
+    }
+    if(Node->getTrailingDim()->getValue() < 0) {
+      Diags.Report(DiagKind::Error, "Array size cannot be negative.");
+    }
+    Node->setType(Ctx.getArrayType(Node->getChildElemExprVec()[0]->getType(), 
+          static_cast<size_t>(Node->getTrailingDim()->getValue())));
+  }
+
+  // void TypeChecker::visitArrayAccessExpr(ArrayAccessExpr *Node) {
+  //   Symbol* Sym = ST.lookupSymbol(Node->getArrayNameExpr()->getName(), 
+  //       Node->getScope());
+  //   if(!Sym) Diags.Report(DiagKind::Error, "Array not found in SymbolTable.");
+  //   if(!Sym->Ty.isArrayType()) {
+  //     Diags.Report(DiagKind::Error, Node->getArrayNameExpr()->getName() + 
+  //         " is not an array.");
+  //   }
+  //   const ArrayType* ArrayTyPtr = dynamic_cast<const ArrayType*>(
+  //       Sym->Ty.getTypePtr());
+  //   bool IsElementArray = true;
+  //   for(int I = 0; I < Node->getIndexVector().size(); ++I) {
+  //     if(!IsElementArray) {
+  //       Diags.Report(DiagKind::Error, "Unable to access " + std::to_string(I) + 
+  //           " dimension " + "in an array with" + std::to_string(I-1) + 
+  //           " dimension.");
+  //       break;
+  //     }
+  //     size_t ArraySize = ArrayTyPtr->getArraySize();
+  //     if(ArrayTyPtr->getElementType().isArrayType()) {
+  //       ArrayTyPtr = dynamic_cast<const ArrayType*>(ArrayTyPtr->
+  //           getElementType().getTypePtr());
+  //     } else IsElementArray = false;
+  //     if(Node->getIndexVector()[I]->isNum()) {
+  //       NumExpr* Num = static_cast<NumExpr*>(Node->getIndexVector()[I].get());
+  //       if(Num->isInt()) {
+  //         int64_t IndexValue = static_cast<IntExpr*>(Num)->getValue();
+  //         if(IndexValue < 0) { 
+  //           Diags.Report(DiagKind::Error, "Array index cannot be negative.");
+  //         }
+  //         if(IndexValue > ArraySize) {
+  //           Diags.Report(DiagKind::Error, "Array index out of bound.");
+  //         }
+  //       } else Diags.Report(DiagKind::Error, "Index can only be integers.");
+  //     }
+  //   }
+  // }
+
+  void TypeChecker::visitArrayAccessExpr(ArrayAccessExpr *Node) {
+    Symbol *Sym = ST.lookupSymbol(Node->getArrayNameExpr()->getName(),
+        Node->getArrayNameExpr()->getScope());
+    if (!Sym) {
+      Diags.Report(DiagKind::Error, "Array not found in SymbolTable.",
+          Node->getSourceRange().getStart());
+      return;
+    }
+    if (!Sym->Ty.isArrayType()) {
+      Diags.Report(DiagKind::Error, 
+          Node->getArrayNameExpr()->getName() + " is not an array.",
+          Node->getSourceRange().getStart());
+      return;
+    }
+
+    const ArrayType *ArrayTyPtr = static_cast<const ArrayType*>(
+        Sym->Ty.getTypePtr());
+
+    for (size_t I = 0; I < Node->getIndexVector().size(); ++I) {
+      if (!ArrayTyPtr) {
+        Diags.Report(DiagKind::Error,
+            "Too many indices: array has fewer dimensions.",
+            Node->getIndexVector()[I]->getSourceRange().getStart());
+        return;
+      }
+
+      visit(Node->getIndexVector()[I].get());
+
+      QualType IdxTy = Node->getIndexVector()[I]->getType();
+      if (!IdxTy.isIntegerType()) {
+        Diags.Report(DiagKind::Error, "Array index must be an integer type.",
+            Node->getIndexVector()[I]->getSourceRange().getStart());
+      }
+
+      if (Node->getIndexVector()[I]->isNum()) {
+        auto *Num = static_cast<NumExpr*>(Node->getIndexVector()[I].get());
+        if (Num->isInt()) {
+          int64_t IndexValue = static_cast<IntExpr*>(Num)->getValue();
+          if (IndexValue < 0) {
+            Diags.Report(DiagKind::Error, "Array index cannot be negative.",
+                Node->getIndexVector()[I]->getSourceRange().getStart());
+          } else if (static_cast<size_t>(IndexValue) >= ArrayTyPtr->getArraySize()) {
+            Diags.Report(DiagKind::Error, "Array index out of bounds.",
+                Node->getIndexVector()[I]->getSourceRange().getStart());
+          }
+        }
+      }
+
+      QualType ElemTy = ArrayTyPtr->getElementType();
+      ArrayTyPtr = ElemTy.isArrayType()
+        ? static_cast<const ArrayType*>(ElemTy.getTypePtr())
+        : nullptr;
+    }
+
+    QualType ResultTy = Sym->Ty;
+    const auto *Cur = static_cast<const ArrayType*>(ResultTy.getTypePtr());
+    for (size_t I = 0; I < Node->getIndexVector().size(); ++I) {
+      ResultTy = Cur->getElementType();
+      if (ResultTy.isArrayType())
+        Cur = static_cast<const ArrayType*>(ResultTy.getTypePtr());
+    }
+
+    Node->setType(ResultTy); 
   }
 
   void TypeChecker::visitLetStmt(LetStmt *Node) {

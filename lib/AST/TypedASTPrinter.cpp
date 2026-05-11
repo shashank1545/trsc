@@ -1,4 +1,5 @@
 #include "trsc/AST/TypedASTPrinter.h"
+#include "trsc/AST/AST.h"
 #include "trsc/Lex/Token.h"
 #include <iomanip>
 
@@ -502,6 +503,75 @@ namespace trsc {
       }
     }
 
+    IndentLevel--;
+  }
+
+  void TypedASTPrinter::visitArrayExpr(ArrayExpr *Node) {
+    printNodeHeader(Node, "ArrayExpr");
+    OS << getTypeString(Node);
+
+    OS << " shape=[";
+    const auto &Shape = Node->getShape();
+    for (size_t I = 0; I < Shape.size(); ++I) {
+      OS << Shape[I];
+      if (I + 1 < Shape.size()) OS << ", ";
+    }
+    OS << "]";
+
+    int Total = 1;
+    for (int D : Shape) Total *= D;
+    OS << " (" << Total << " elements)";
+    OS << "\n";
+
+    constexpr size_t PrintThreshold = 4;
+    const auto &Elems = Node->getChildElemExprVec();
+
+    if (Elems.empty()) return;
+
+    IndentLevel++;
+    size_t PrintCount = std::min(Elems.size(), PrintThreshold);
+
+    for (size_t I = 0; I < PrintCount; ++I) {
+      bool IsLast = (I == Elems.size() - 1) ||
+        (I == PrintThreshold - 1 && Elems.size() > PrintThreshold);
+      IsLastStack.resize(IndentLevel - 1);
+      IsLastStack.push_back(IsLast);
+      printIndent(IsLast);
+      visit(Elems[I].get());
+      IsLastStack.pop_back();
+    }
+
+    if (Elems.size() > PrintThreshold) {
+      IsLastStack.resize(IndentLevel - 1);
+      IsLastStack.push_back(true);
+      printIndent(true);
+      OS << "... (" << (Elems.size() - PrintThreshold) 
+        << " more elements)\n";
+      IsLastStack.pop_back();
+    }
+
+    IndentLevel--;
+  }
+
+  void TypedASTPrinter::visitArrayAccessExpr(ArrayAccessExpr *Node) {
+    printNodeHeader(Node, "ArrayAccessExpr");
+    OS << getTypeString(Node);
+    OS << " '" << Node->getArrayNameExpr()->getName() << "'";
+    OS << "\n";
+
+    const auto &Indices = Node->getIndexVector();
+    if (Indices.empty()) return;
+
+    IndentLevel++;
+    for (size_t I = 0; I < Indices.size(); ++I) {
+      bool IsLast = (I == Indices.size() - 1);
+      IsLastStack.resize(IndentLevel - 1);
+      IsLastStack.push_back(IsLast);
+      printIndent(IsLast);
+      OS << "[" << I << "] ";
+      visit(Indices[I].get());
+      IsLastStack.pop_back();
+    }
     IndentLevel--;
   }
 

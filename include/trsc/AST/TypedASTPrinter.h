@@ -45,6 +45,8 @@ namespace trsc {
       void visitVarExpr(VarExpr *Node);
       void visitRefrExpr(RefrExpr *Node);
       void visitBoolExpr(BoolExpr *Node);
+      void visitArrayExpr(ArrayExpr *Node);
+      void visitArrayAccessExpr(ArrayAccessExpr *Node);
       void visitBinExpr(BinExpr *Node);
       void visitASExpr(ASExpr *Node);
       void visitRangeExpr(RangeExpr *Node);

@@ -116,6 +116,16 @@ void NameResolver::visitRefrExpr(RefrExpr *E) {
   ASTVisitor<NameResolver>::visitRefrExpr(E);
 }
 
+void NameResolver::visitArrayExpr(ArrayExpr *E) {
+  E->setScope(ST.getCurrentScope());
+  ASTVisitor<NameResolver>::visitArrayExpr(E);
+}
+
+void NameResolver::visitArrayAccessExpr(ArrayAccessExpr *E) {
+  E->setScope(ST.getCurrentScope());
+  ASTVisitor<NameResolver>::visitArrayAccessExpr(E);
+}
+
 void NameResolver::visitFunCall(FunCall *E) {
   if (!ST.lookupSymbol(E->getFuncName()->getName())) {
     Diags.Report(DiagKind::Error, "Undeclared function",

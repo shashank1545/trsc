@@ -21,6 +21,8 @@ public:
   void visitVarExpr(VarExpr *Node);
   void visitBoolExpr(BoolExpr *Node);
   void visitASExpr(ASExpr *Node);
+  void visitArrayExpr(ArrayExpr *Node);
+  void visitArrayAccessExpr(ArrayAccessExpr *Node);
   void visitRefrExpr(RefrExpr *Node);
   void visitBinExpr(BinExpr *Node);
   void visitLetStmt(LetStmt *Node);
