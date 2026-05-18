@@ -1,5 +1,4 @@
 #include "trsc/Sema/NameResolver.h"
-#include "trsc/AST/AST.h"
 #include "trsc/AST/ASTVisitor.h"
 #include "trsc/Basic/Diagnostics.h"
 #include "trsc/Sema/Scope.h"
@@ -13,6 +12,7 @@ void NameResolver::visitProgram(Program *P) {
 void NameResolver::visitLetStmt(LetStmt *S) {
   S->setScope(ST.getCurrentScope());
   Symbol Sym;
+  Sym.setScope(ST.getCurrentScope());
   if (!ST.addSymbol(S->getDeclaredVar()->getName(), Sym)) {
     Diags.Report(DiagKind::Error, "Redefinition of Variable",
         S->getSourceRange().getStart());
@@ -24,6 +24,7 @@ void NameResolver::visitForStmt(ForStmt* S) {
   ScopedRAII Scoped(ST, ScopeKind::SCOPE_FORSTMT); 
   S->setScope(ST.getCurrentScope());
   Symbol Sym;
+  Sym.setScope(ST.getCurrentScope());
   if(!ST.addSymbol(S->getInit()->getName(), Sym)) {
     Diags.Report(DiagKind::Error, "Variable already defined",
         S->getSourceRange().getStart());
@@ -123,7 +124,11 @@ void NameResolver::visitArrayExpr(ArrayExpr *E) {
 
 void NameResolver::visitArrayAccessExpr(ArrayAccessExpr *E) {
   E->setScope(ST.getCurrentScope());
-  ASTVisitor<NameResolver>::visitArrayAccessExpr(E);
+  Symbol* Sym = ST.lookupSymbol(E->getArrayNameExpr()->getName());
+  E->getArrayNameExpr()->setScope(Sym->getScope());
+  for (const auto& Index: E->getIndexVector()) {
+    ASTVisitor<NameResolver>::visit(Index.get());
+  }
 }
 
 void NameResolver::visitFunCall(FunCall *E) {

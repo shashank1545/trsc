@@ -1,9 +1,7 @@
 #include "trsc/Sema/TypeChecker.h"
-#include "trsc/AST/AST.h"
 #include "trsc/AST/QualType.h"
 #include "trsc/Basic/Diagnostics.h"
 #include "trsc/Lex/Token.h"
-#include "trsc/Sema/Scope.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -177,7 +175,8 @@ namespace trsc {
           if (IndexValue < 0) {
             Diags.Report(DiagKind::Error, "Array index cannot be negative.",
                 Node->getIndexVector()[I]->getSourceRange().getStart());
-          } else if (static_cast<size_t>(IndexValue) >= ArrayTyPtr->getArraySize()) {
+          } else if (static_cast<size_t>(IndexValue) >= 
+              ArrayTyPtr->getArraySize()) {
             Diags.Report(DiagKind::Error, "Array index out of bounds.",
                 Node->getIndexVector()[I]->getSourceRange().getStart());
           }

@@ -28,9 +28,11 @@ namespace trsc {
   const char* getSymbolKindName(SymbolKind Kind);
   const char* getScopeKindName(ScopeKind Kind);
   
+  class Scope;
 
   struct Symbol {
     void* Op = nullptr;
+    Scope* Scp = nullptr;
     QualType Ty;
     SymbolKind Kind;
     bool IsMutable;
@@ -50,6 +52,8 @@ namespace trsc {
      IsMutable(IsMutable), IsInitialized(IsInitialized) {}
 
     void setOp(void* OpPtr) {this->Op = OpPtr; }
+    void setScope(Scope* S) {this->Scp = S; }
+    Scope* getScope() { return this->Scp; }
 
     template <typename T>
     T getOpAs() const {return reinterpret_cast<T>(Op); }
