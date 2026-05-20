@@ -175,6 +175,9 @@ class NumExpr : public Expr {
     bool isNum() const override { return true; }
     virtual bool isInt() const { return false; }
     virtual bool isFloat() const { return false; }
+    static bool classof(const Expr *E) {
+      return E->getASTNodeKind() == ASTNodeKind::ASTK_NUMEXPR;
+    }
 };
 
 class IntExpr : public NumExpr {
@@ -184,6 +187,9 @@ class IntExpr : public NumExpr {
       NumExpr(ASTNodeKind::ASTK_INTEXPR, Loc), Value(Value) {}
     int64_t getValue() const {return Value;} 
     bool isInt() const override {return true;}
+    static bool classof(const Expr *E) {
+      return E->getASTNodeKind() == ASTNodeKind::ASTK_INTEXPR;
+    }
 };
 
 class FloatExpr: public NumExpr {
@@ -193,6 +199,9 @@ class FloatExpr: public NumExpr {
       NumExpr(ASTNodeKind::ASTK_FLOATEXPR, Loc), Value(Value) {}
     double getValue() const {return Value;}
     bool isFloat() const override {return true;}
+    static bool classof(const Expr *E) {
+      return E->getASTNodeKind() == ASTNodeKind::ASTK_FLOATEXPR;
+    }
 };
 
 class BoolExpr : public Expr {
@@ -203,6 +212,9 @@ public:
       : Expr(ASTNodeKind::ASTK_BOOLEXPR, Loc), Value(Value) {}
   bool getValue() const { return Value; }
   bool isBool() const override { return true; }
+  static bool classof(const Expr *E) {
+    return E->getASTNodeKind() == ASTNodeKind::ASTK_BOOLEXPR;
+  }
 };
 
 class VarExpr : public Expr {
@@ -213,6 +225,9 @@ public:
       : Expr(ASTNodeKind::ASTK_VAREXPR, Loc), Name(Name) {}
   const std::string &getName() const { return Name; }
   bool isVar() const override { return true; }
+  static bool classof(const Expr *E) {
+        return E->getASTNodeKind() == ASTNodeKind::ASTK_VAREXPR;
+    }
 };
 
 class RefrExpr : public Expr {
@@ -224,6 +239,9 @@ class RefrExpr : public Expr {
     IsMut(IsMut) {}
   Expr *getReferent() const { return ReferentExpr.get(); }
   bool isMut() const { return IsMut; }
+  static bool classof(const Expr *E) {
+    return E->getASTNodeKind() == ASTNodeKind::ASTK_REFREXPR;
+  }
 };
 
 class BinExpr : public Expr {
@@ -238,6 +256,9 @@ public:
   Lex::TokenKind getOp() const { return Op; }
   Expr *getLHS() const { return LHS.get(); }
   Expr *getRHS() const { return RHS.get(); }
+  static bool classof(const Expr *E) {
+    return E->getASTNodeKind() == ASTNodeKind::ASTK_BINEXPR;
+  }
 };
 
 class ASExpr : public Expr {
@@ -251,6 +272,9 @@ class ASExpr : public Expr {
     
     Expr *getFromExpr() const { return FromExpr.get(); }
     Type *getToType() const { return ToType.get(); }
+    static bool classof(const Expr *E) {
+      return E->getASTNodeKind() == ASTNodeKind::ASTK_ASEXPR;
+    }
   
 };
 
@@ -274,6 +298,9 @@ class ArrayExpr : public Expr {
     // Expr* getBaseElemExpr() const { return }
     IntExpr* getTrailingDim() const { return LastDim.get(); }
     const std::vector<int>& getShape() const { return Shape; }
+    static bool classof(const Expr *E) {
+      return E->getASTNodeKind() == ASTNodeKind::ASTK_ARRAYEXPR;
+    }
 };
 
 class ArrayAccessExpr: public Expr {
@@ -292,6 +319,9 @@ class ArrayAccessExpr: public Expr {
   const std::vector<std::unique_ptr<Expr>>& getIndexVector() const {
     return IndexExprVec;
   }
+  static bool classof(const Expr *E) {
+    return E->getASTNodeKind() == ASTNodeKind::ASTK_ARRAYACCESSEXPR;
+  }
 };
 
 class RangeExpr : public Expr {
@@ -308,6 +338,9 @@ public:
   Expr *getStart() const { return Start.get(); }
   Expr *getEnd() const { return End.get(); }
   bool isExpr() const override { return true; }
+  static bool classof(const Expr *E) {
+    return E->getASTNodeKind() == ASTNodeKind::ASTK_RANGEEXPR;
+  }
 };
 
 class LetStmt : public Stmt {
@@ -452,6 +485,9 @@ public:
   VarExpr* getFuncName() const { return FuncName.get(); }
   const std::vector<std::unique_ptr<Expr>> &getParams() const { return Params;}
   bool isExpr() const override { return true; }
+  static bool classof(const Expr *E) {
+    return E->getASTNodeKind() == ASTNodeKind::ASTK_FUNCALL;
+  }
 };
 
 class ReturnStmt : public Stmt {
