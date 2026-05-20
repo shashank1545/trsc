@@ -15,6 +15,7 @@
 #include "trsc/AST/ExprVisitor.h"
 #include "trsc/AST/QualType.h"
 #include "trsc/Sema/SymbolTable.h"
+#include "llvm/ADT/SmallVector.h"
 #include <vector>
 
 namespace mlir {
@@ -44,12 +45,17 @@ namespace trsc {
       void genReturnStmt(ReturnStmt *Node);
       void genProgram(Program *Node);
       void genStmt(Stmt *Node);
+      void genArrayInit(ArrayExpr *Node, mlir::Value DestMemRef, 
+          QualType ArrayTy);
+      void genArrayInitImpl(ArrayExpr *Node, mlir::Value DestMemRef,
+          llvm::SmallVectorImpl<mlir::Value> &Indices);
 
       mlir::Value visitFunCall(FunCall *Node);
       mlir::Value visitIntExpr(IntExpr *Node);
       mlir::Value visitFloatExpr(FloatExpr *Node);
       mlir::Value visitVarExpr(VarExpr *Node);
       mlir::Value visitASExpr(ASExpr *Node);
+      mlir::Value visitArrayAccessExpr(ArrayAccessExpr *Node);
       mlir::Value visitRefrExpr(RefrExpr *Node);
       mlir::Value visitBoolExpr(BoolExpr *Node);
       mlir::Value visitBinExpr(BinExpr *Node);

@@ -5,11 +5,13 @@
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/Types.h"
 #include "mlir/IR/Value.h"
+#include "mlir/IR/ValueRange.h"
 #include "mlir/Support/LLVM.h"
 #include "trsc/AST/AST.h"
 #include "trsc/AST/QualType.h"
 #include "trsc/AST/ASTContext.h"
 #include "trsc/MLIR/TrscMLIRGen.h"
+#include "trsc/Sema/Scope.h"
 #include "trsc/Sema/SymbolTable.h"
 
 #include "mlir/IR/Builders.h"
@@ -24,6 +26,7 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/ErrorHandling.h"
 #include <cstdint>
 #include <vector>
 
@@ -213,19 +216,25 @@ const llvm::APFloat MLIRGen::toAPFloat(double D, QualType& Type) {
 }
 
 bool MLIRGen::isLValue(Expr *E) {
-  return E->isVar();
+  return E->isVar() || E->getASTNodeKind() == ASTNodeKind::ASTK_ARRAYACCESSEXPR;
 }
 
 mlir::Value MLIRGen::getLValueMemRef(Expr *E) {
-  if (auto *VE = static_cast<VarExpr*>(E)) {
+  if (auto *VE = llvm::dyn_cast<VarExpr>(E)) {
     Symbol *Sym = ST.lookupSymbol(VE->getName(), VE->getScope());
     
     mlir::Operation* RawOp = static_cast<mlir::Operation*>(Sym->Op);
     auto AllocaOp = llvm::dyn_cast<mlir::memref::AllocaOp>(RawOp);
     
     return AllocaOp.getMemref();
+  } else if (auto *AE = llvm::dyn_cast<ArrayAccessExpr>(E)) {
+    Symbol *Sym = ST.lookupSymbol(AE->getArrayNameExpr()->getName(),
+        AE->getArrayNameExpr()->getScope());
+
+    mlir::Operation* RawOp = static_cast<mlir::Operation*>(Sym->Op);
+    auto AllocaOp = llvm::dyn_cast<mlir::memref::AllocaOp>(RawOp);
+    return AllocaOp.getMemref();
   }
-  
   return mlir::Value();
 }
 
@@ -304,11 +313,97 @@ void MLIRGen::genLetStmt(LetStmt *Node) {
   }
   Sym->setOp(static_cast<void*>(VarAlloca.getOperation()));
 
-  if (Node->getInitializer()) visit(Node->getInitializer());
-  if(InitValue) {
-    mlir::memref::StoreOp::create(Builder,
-        Loc, InitValue, VarAlloca.getResult());
+  Expr* Init = Node->getInitializer();
+  if(!Init) return;
+  if(Init->getASTNodeKind() == ASTNodeKind::ASTK_ARRAYEXPR) {
+    genArrayInit(static_cast<ArrayExpr*>(Init), VarAlloca.getResult(), VarTy);
+  } else {
+    InitValue = visit(Init);
+    if(InitValue) {
+      mlir::memref::StoreOp::create(
+          Builder,
+          Loc, 
+          InitValue, 
+          VarAlloca.getResult());
+    }
   }
+}
+
+void MLIRGen::genArrayInitImpl(ArrayExpr *Node, mlir::Value DestMemRef,
+                               llvm::SmallVectorImpl<mlir::Value> &Indices) {
+  auto Loc = Builder.getUnknownLoc();
+  const auto &Elems = Node->getChildElemExprVec();
+  int64_t Count = Node->getTrailingDim()->getValue();
+
+  for (int64_t I = 0; I < Count; ++I) {
+    mlir::Value Idx = mlir::arith::ConstantIndexOp::create(Builder, Loc, I);
+    Indices.push_back(Idx);
+
+    // [e; N] → Elems.size()==1, I % 1 == 0 always → repeats Elems[0]
+    // [e1,e2,..] → Elems.size()==N, I % N == I → picks Elems[I]
+    Expr *Elem = Elems[I % Elems.size()].get();
+    if (Elem->getASTNodeKind() == ASTNodeKind::ASTK_ARRAYEXPR) {
+      genArrayInitImpl(static_cast<ArrayExpr *>(Elem), DestMemRef, Indices);
+    } else if (Elem->isVar()) {
+      Symbol* Sym = ST.lookupSymbol(static_cast<VarExpr*>(Elem)->getName(), 
+          Elem->getScope());
+      if (Sym && Sym->Ty.isArrayType()) {
+        mlir::Operation *RawOp = static_cast<mlir::Operation *>(Sym->Op);
+        auto SrcAlloca = llvm::dyn_cast<mlir::memref::AllocaOp>(RawOp);
+        mlir::Value SrcMemRef = SrcAlloca.getMemref();
+        auto SrcType = llvm::cast<mlir::MemRefType>(SrcMemRef.getType());
+        auto DestType = llvm::cast<mlir::MemRefType>(DestMemRef.getType());
+
+        llvm::SmallVector<mlir::OpFoldResult> Offsets, Sizes, Strides;
+
+        for (mlir::Value Idx : Indices) {
+          Offsets.push_back(mlir::OpFoldResult(Idx));
+          Sizes.push_back(Builder.getIndexAttr(1));
+          Strides.push_back(Builder.getIndexAttr(1));
+        }
+        for (int64_t Dim : SrcType.getShape()) {
+          Offsets.push_back(Builder.getIndexAttr(0));
+          Sizes.push_back(Builder.getIndexAttr(Dim));
+          Strides.push_back(Builder.getIndexAttr(1));
+        }
+
+        auto SubViewTy = mlir::memref::SubViewOp::inferRankReducedResultType(
+            SrcType.getShape(), DestType, Offsets, Sizes, Strides);
+
+        mlir::Value SubView = mlir::memref::SubViewOp::create(
+            Builder, Loc,
+            llvm::cast<mlir::MemRefType>(SubViewTy),
+            DestMemRef, Offsets, Sizes, Strides).getResult();
+
+        mlir::memref::CopyOp::create(Builder, Loc, SrcMemRef, SubView);
+      } else { 
+        mlir::Value Val = visit(Elem); 
+        if (Val)
+          mlir::memref::StoreOp::create(Builder, Loc, Val, DestMemRef,
+              mlir::ValueRange(Indices));
+        else
+          llvm::errs() << "Error: failed to generate array element at index "
+            << I << "\n";
+        Indices.pop_back();
+
+      }
+    } else { 
+      mlir::Value Val = visit(Elem); 
+      if (Val)
+        mlir::memref::StoreOp::create(Builder, Loc, Val, DestMemRef,
+            mlir::ValueRange(Indices));
+      else
+        llvm::errs() << "Error: failed to generate array element at index "
+          << I << "\n";
+    }
+    Indices.pop_back();
+  }
+}
+
+void MLIRGen::genArrayInit(ArrayExpr *Node, mlir::Value DestMemRef,
+                           QualType ArrayTy) {
+  llvm::SmallVector<mlir::Value, 4> Indices;
+  genArrayInitImpl(Node, DestMemRef, Indices);
 }
 
 mlir::Value MLIRGen::visitIntExpr(IntExpr *Node) {
@@ -341,6 +436,30 @@ mlir::Value MLIRGen::visitRefrExpr(RefrExpr *Node) {
       toMemRefType(Referent->getType()));
   mlir::memref::StoreOp::create(Builder, Loc, Val, TempAlloca.getResult());
   return TempAlloca.getResult();
+}
+
+mlir::Value MLIRGen::visitArrayAccessExpr(ArrayAccessExpr *Node) {
+  auto Loc = Builder.getUnknownLoc();
+  Symbol* Sym = ST.lookupSymbol(Node->getArrayNameExpr()->getName(),
+      Node->getArrayNameExpr()->getScope());
+  mlir::Operation* RawPtr = static_cast<mlir::Operation*>(Sym->Op);
+  auto allocaOp = llvm::dyn_cast<mlir::memref::AllocaOp>(RawPtr);
+  llvm::SmallVector<mlir::Value, 4> IndexValueVec;
+  for(const auto& Index: Node->getIndexVector()) {
+    mlir::Value IndexValue;
+    if(Index->isNum()) {
+      IndexValue = visitIntExpr(static_cast<IntExpr*>(Index.get()));
+    } else if(Index->isVar()) {
+      IndexValue = visitVarExpr(static_cast<VarExpr*>(Index.get()));
+    } else llvm_unreachable("Index can only be integer or variable.");
+    mlir::Value IV = mlir::arith::IndexCastOp::create(Builder, Loc, 
+        Builder.getIndexType(), IndexValue);
+    IndexValueVec.push_back(IV);
+  }
+  mlir::ValueRange Indices(IndexValueVec);
+  mlir::memref::LoadOp loadOp = mlir::memref::LoadOp::create(Builder,
+      Loc, allocaOp.getMemref(), Indices); 
+  return loadOp.getResult();
 }
 
 mlir::Value MLIRGen::visitASExpr(ASExpr *Node) {
@@ -447,8 +566,8 @@ mlir::Value MLIRGen::visitBinExpr(BinExpr *Node) {
       } else {
         return mlir::arith::CmpIOp::create(Builder,
             Loc,
-            OpIsSigned ? mlir::arith::CmpIPredicate::slt : mlir::arith::CmpIPredicate::ult,
-            LHS, RHS);
+            OpIsSigned ? mlir::arith::CmpIPredicate::slt : 
+            mlir::arith::CmpIPredicate::ult, LHS, RHS);
       }
 
     case Lex::TokenKind::OP_LESSEQUAL:
@@ -460,8 +579,8 @@ mlir::Value MLIRGen::visitBinExpr(BinExpr *Node) {
       } else {
         return mlir::arith::CmpIOp::create(Builder,
             Loc,
-            OpIsSigned ? mlir::arith::CmpIPredicate::sle : mlir::arith::CmpIPredicate::ule,
-            LHS, RHS);
+            OpIsSigned ? mlir::arith::CmpIPredicate::sle : 
+            mlir::arith::CmpIPredicate::ule, LHS, RHS);
       }
 
     case Lex::TokenKind::OP_GREATER:
@@ -473,7 +592,8 @@ mlir::Value MLIRGen::visitBinExpr(BinExpr *Node) {
       } else {
         return mlir::arith::CmpIOp::create(Builder,
             Loc,
-            OpIsSigned ? mlir::arith::CmpIPredicate::sgt : mlir::arith::CmpIPredicate::ugt,
+            OpIsSigned ? mlir::arith::CmpIPredicate::sgt : 
+            mlir::arith::CmpIPredicate::ugt,
             LHS, RHS);
       }
 
@@ -486,7 +606,8 @@ mlir::Value MLIRGen::visitBinExpr(BinExpr *Node) {
       } else {
         return mlir::arith::CmpIOp::create(Builder,
             Loc,
-            OpIsSigned ? mlir::arith::CmpIPredicate::sge : mlir::arith::CmpIPredicate::uge,
+            OpIsSigned ? mlir::arith::CmpIPredicate::sge : 
+            mlir::arith::CmpIPredicate::uge,
             LHS, RHS);
       }
 
@@ -595,7 +716,11 @@ void MLIRGen::genParams(const std::vector<FuncDecl::Param>& Params) {
     mlir::Value BlockArg = CurrentEntryBlock->getArgument(i);
 
     // Store the block argument into the alloca
-    mlir::memref::StoreOp::create(Builder, Loc, BlockArg, ParamAlloca.getResult());
+    mlir::memref::StoreOp::create(
+        Builder, 
+        Loc, 
+        BlockArg, 
+        ParamAlloca.getResult());
 
     // Update symbol table to point to this alloca
     ParamSym->setOp(static_cast<void*>(ParamAlloca.getOperation())); 
@@ -735,36 +860,81 @@ void MLIRGen::genAssignment(BinExpr *Node) {
 
   // 2. Get the memref for the variable
   mlir::Value LHSMemRef = getLValueMemRef(Node->getLHS());
+  
+  if(Node->getRHS()->getASTNodeKind() == ASTNodeKind::ASTK_ARRAYEXPR) {
+    genArrayInit(static_cast<ArrayExpr*>(Node->getRHS()), 
+        LHSMemRef, Node->getRHS()->getType());
+    return;
+  }
+  if(auto *AAE = llvm::dyn_cast<ArrayAccessExpr>(Node->getLHS())) {
+    mlir::Value BaseMemRef = getLValueMemRef(Node->getLHS());
+    llvm::SmallVector<mlir::Value, 4> IndexValueVec;
+    for(const auto& Index: AAE->getIndexVector()) {
+      mlir::Value IndexValue;
+      if(Index->isNum()) {
+        IndexValue = visitIntExpr(static_cast<IntExpr*>(Index.get()));
+      } else if(Index->isVar()) {
+        IndexValue = visitVarExpr(static_cast<VarExpr*>(Index.get()));
+      } else llvm_unreachable("Index can only be integer or variable.");
+      mlir::Value IV = mlir::arith::IndexCastOp::create(Builder, Loc, 
+          Builder.getIndexType(), IndexValue);
+      IndexValueVec.push_back(IV);
+    }
+    mlir::Value ValueToStore;
+    Lex::TokenKind Op = Node->getOp();
+    if (Op == Lex::TokenKind::OP_EQUAL) {
+      ValueToStore = visit(Node->getRHS());
+    } else {
+      mlir::Value Current = mlir::memref::LoadOp::create(Builder, Loc,
+          BaseMemRef, mlir::ValueRange(IndexValueVec));
+      mlir::Value RHS = visit(Node->getRHS());
+      bool IsFloat = Node->getType().isFloatingType();
+      if (Op == Lex::TokenKind::OP_PLUSEQUAL) {
+        ValueToStore = IsFloat
+          ? mlir::arith::AddFOp::create(Builder, Loc, Current, RHS).getResult()
+          : mlir::arith::AddIOp::create(Builder, Loc, Current, RHS).getResult();
+      } else if (Op == Lex::TokenKind::OP_MINUSEQUAL) {
+        ValueToStore = IsFloat
+          ? mlir::arith::SubFOp::create(Builder, Loc, Current, RHS).getResult()
+          : mlir::arith::SubIOp::create(Builder, Loc, Current, RHS).getResult();
+      }
+    }
+
+    if (ValueToStore)
+      mlir::memref::StoreOp::create(Builder, Loc, ValueToStore, BaseMemRef,
+          mlir::ValueRange(IndexValueVec));
+    return;
+
+  }
 
   mlir::Value ValueToStore;
   Lex::TokenKind Op = Node->getOp();
 
   if (Op == Lex::TokenKind::OP_EQUAL) {
-    // Simple: a = b
     ValueToStore = visit(Node->getRHS());
-
   } else {
     // Compound: a += b or a -= b
-
     mlir::Value CurrentValue = mlir::memref::LoadOp::create(Builder,
         Loc, LHSMemRef);
-
     // Evaluate RHS
     mlir::Value RHSValue = visit(Node->getRHS());
-
     // Perform operation
     QualType ResultTy = Node->getType();
     bool IsFloat = ResultTy.isFloatingType();
 
     if (Op == Lex::TokenKind::OP_PLUSEQUAL) {
       ValueToStore = IsFloat 
-        ? mlir::arith::AddFOp::create(Builder, Loc, CurrentValue, RHSValue).getResult()
-        : mlir::arith::AddIOp::create(Builder, Loc, CurrentValue, RHSValue).getResult();
+        ? mlir::arith::AddFOp::create(
+            Builder, Loc, CurrentValue, RHSValue).getResult()
+        : mlir::arith::AddIOp::create(
+            Builder, Loc, CurrentValue, RHSValue).getResult();
 
     } else if (Op == Lex::TokenKind::OP_MINUSEQUAL) {
       ValueToStore = IsFloat
-        ? mlir::arith::SubFOp::create(Builder, Loc, CurrentValue, RHSValue).getResult()
-        : mlir::arith::SubIOp::create(Builder, Loc, CurrentValue, RHSValue).getResult();
+        ? mlir::arith::SubFOp::create(
+            Builder, Loc, CurrentValue, RHSValue).getResult()
+        : mlir::arith::SubIOp::create(
+            Builder, Loc, CurrentValue, RHSValue).getResult();
     }
   }
 

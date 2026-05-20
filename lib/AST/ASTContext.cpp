@@ -130,6 +130,10 @@ bool ASTContext::canImplicitlyConvert(QualType From, QualType To) const {
         return true;
     } if (From.isBooleanType() && To.isBooleanType()) {
         return true;
+    } if (From.isArrayType() && To.isArrayType()) {
+        if(canImplicitlyConvert(From.getBaseType(), To.getBaseType())) {
+          return true;
+        }
     } return false;
 }
 

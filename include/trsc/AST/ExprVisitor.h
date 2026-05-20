@@ -36,6 +36,11 @@ public:
         return getDerived().visitVarExpr(static_cast<VarExpr*>(E));
       case ASTNodeKind::ASTK_ASEXPR:
         return getDerived().visitASExpr(static_cast<ASExpr*>(E));
+      case ASTNodeKind::ASTK_ARRAYEXPR:
+        return getDerived().visitArrayExpr(static_cast<ArrayExpr*>(E));
+      case ASTNodeKind::ASTK_ARRAYACCESSEXPR:
+        return getDerived().visitArrayAccessExpr(
+            static_cast<ArrayAccessExpr*>(E));
       case ASTNodeKind::ASTK_INTEXPR:
         return getDerived().visitIntExpr(static_cast<IntExpr*>(E));
       case ASTNodeKind::ASTK_FLOATEXPR:
@@ -54,15 +59,11 @@ public:
     }
   }
 
-  // Default implementations for leaf expressions
-  // Derived classes should override these to provide actual code generation
   RetTy visitBoolExpr(BoolExpr *E) { return RetTy(); }
   RetTy visitVarExpr(VarExpr *E) { return RetTy(); }
   RetTy visitIntExpr(IntExpr *E) { return RetTy(); }
   RetTy visitFloatExpr(FloatExpr *E) { return RetTy(); }
   
-  // Default implementations for composite expressions
-  // These visit children and return a default value
   RetTy visitBinExpr(BinExpr *E) {
     getDerived().visit(E->getLHS());
     getDerived().visit(E->getRHS());
@@ -89,6 +90,21 @@ public:
   RetTy visitFunCall(FunCall *E) {
     for (const auto &Arg : E->getParams()) {
       getDerived().visit(Arg.get());
+    }
+    return RetTy();
+  }
+
+  RetTy visitArrayExpr(ArrayExpr *E) {
+   for (const auto& Child: E->getChildElemExprVec()) {
+     getDerived().visit(Child.get());
+   }
+   return RetTy();
+  }
+
+  RetTy visitArrayAccessExpr(ArrayAccessExpr *E) {
+    getDerived().visit(E->getArrayNameExpr());
+    for (const auto& Index: E->getIndexVector()) {
+      getDerived().visit(Index.get());
     }
     return RetTy();
   }

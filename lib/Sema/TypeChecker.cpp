@@ -1,4 +1,5 @@
 #include "trsc/Sema/TypeChecker.h"
+#include "trsc/AST/AST.h"
 #include "trsc/AST/QualType.h"
 #include "trsc/Basic/Diagnostics.h"
 #include "trsc/Lex/Token.h"
@@ -86,14 +87,30 @@ namespace trsc {
   }
 
   void TypeChecker::visitArrayExpr(ArrayExpr *Node) {
-    for(const auto& Child: Node->getChildElemExprVec()) {
+    if (Node->getTrailingDim()->getValue() < 0) {
+      Diags.Report(DiagKind::Error, "Array size cannot be negative.");
+      return;
+    }
+
+    QualType OldExpectedType = ExpectedType;
+    ExpectedType = OldExpectedType.isArrayType()
+      ? OldExpectedType.getBaseType()
+      : QualType();
+
+    for (const auto &Child : Node->getChildElemExprVec()) {
       visit(Child.get());
     }
-    if(Node->getTrailingDim()->getValue() < 0) {
-      Diags.Report(DiagKind::Error, "Array size cannot be negative.");
+
+    ExpectedType = OldExpectedType;
+
+    if (!OldExpectedType.isNull() && OldExpectedType.isArrayType() &&
+        !OldExpectedType.isReferenceType() && !OldExpectedType.isPointerType()) {
+      Node->setType(OldExpectedType);
+    } else {
+      Node->setType(Ctx.getArrayType(
+            Node->getChildElemExprVec()[0]->getType(),
+            static_cast<size_t>(Node->getTrailingDim()->getValue())));
     }
-    Node->setType(Ctx.getArrayType(Node->getChildElemExprVec()[0]->getType(), 
-          static_cast<size_t>(Node->getTrailingDim()->getValue())));
   }
 
   // void TypeChecker::visitArrayAccessExpr(ArrayAccessExpr *Node) {
@@ -224,20 +241,22 @@ namespace trsc {
       }
 
       FinalType = DeclaredQualType;
-      QualType OldExpectedTpe = ExpectedType;
+      QualType OldExpectedType = ExpectedType;
       ExpectedType = DeclaredQualType;
 
       if (Node->getInitializer()) {
         visit(Node->getInitializer());
         InitializerQualType = Node->getInitializer()->getType();
       }
-      ExpectedType = OldExpectedTpe;
+      ExpectedType = OldExpectedType;
 
       if (!InitializerQualType.isNull()) {
         if (!Ctx.canImplicitlyConvert(DeclaredQualType, InitializerQualType)) {
           Diags.Report(DiagKind::Error,
-              "Type mismatch: cannot initialize variable of type '" + DeclaredQualType.getAsString() +
-              "' with value of type '" + InitializerQualType.getAsString() + "'",
+              "Type mismatch: cannot initialize variable of type '" + 
+              DeclaredQualType.getAsString() +
+              "' with value of type '" + 
+              InitializerQualType.getAsString() + "'",
               Node->getInitializer()->getSourceRange().getStart());
           return;
         }
@@ -261,9 +280,28 @@ namespace trsc {
     }
   }
 
+  void TypeChecker::visitExprStmt(ExprStmt *Node) {
+    visit(Node->getExpression());  
+  }
+
   void TypeChecker::visitBinExpr(BinExpr *Node) {
-    visit(Node->getLHS());
-    visit(Node->getRHS());
+    Lex::TokenKind Op = Node->getOp();
+
+    if (Op == Lex::TokenKind::OP_EQUAL   ||
+        Op == Lex::TokenKind::OP_PLUSEQUAL ||
+        Op == Lex::TokenKind::OP_MINUSEQUAL) {
+
+      visit(Node->getLHS());
+
+      QualType OldExpectedType = ExpectedType;
+      ExpectedType = Node->getLHS()->getType(); 
+      visit(Node->getRHS());
+      ExpectedType = OldExpectedType;
+
+    } else {
+      visit(Node->getLHS());
+      visit(Node->getRHS());
+    }
 
     QualType LHSQualType = Node->getLHS()->getType();
     QualType RHSQualType = Node->getRHS()->getType();
@@ -277,11 +315,23 @@ namespace trsc {
     bool Error = false;
 
     switch (Node->getOp()) {
+      case Lex::TokenKind::OP_EQUAL:
+        if(Ctx.canImplicitlyConvert(RHSQualType, LHSQualType)) {
+          ResultType = LHSQualType;
+          Node->getRHS()->setType(LHSQualType);
+        } else {
+          Diags.Report(DiagKind::Error,
+              "Operator '=' cannot be applied to different types ('" +
+              LHSQualType.getAsString() + "' and '" +
+              RHSQualType.getAsString() + "')",
+              Node->getSourceRange().getStart());
+          Error = true;
+        }
+        break;
       case Lex::TokenKind::OP_PLUS:
       case Lex::TokenKind::OP_MINUS:
       case Lex::TokenKind::OP_STAR:
       case Lex::TokenKind::OP_SLASH:
-      case Lex::TokenKind::OP_EQUAL:
       case Lex::TokenKind::OP_MINUSEQUAL:
       case Lex::TokenKind::OP_PLUSEQUAL:
         if (LHSQualType.isNumericType() && RHSQualType.isNumericType()) {
