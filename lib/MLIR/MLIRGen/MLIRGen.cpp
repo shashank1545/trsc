@@ -22,11 +22,13 @@
 #include "mlir/Dialect/ControlFlow/IR/ControlFlow.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/ErrorHandling.h"
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -42,6 +44,7 @@ MLIRGen::MLIRGen(mlir::MLIRContext &MLIRCtx, trsc::ASTContext &ASTCtx,
     Registry.insert<mlir::memref::MemRefDialect>();
     Registry.insert<mlir::arith::ArithDialect>();
     Registry.insert<mlir::scf::SCFDialect>();
+    Registry.insert<mlir::linalg::LinalgDialect>();
     MLIRCtx.appendDialectRegistry(Registry);
     MLIRCtx.loadAllAvailableDialects();
   }
@@ -219,21 +222,31 @@ bool MLIRGen::isLValue(Expr *E) {
   return E->isVar() || E->getASTNodeKind() == ASTNodeKind::ASTK_ARRAYACCESSEXPR;
 }
 
+mlir::Value MLIRGen::getOpMemRef(mlir::Operation* Op) {
+  if(auto AllocaOp = dyn_cast<mlir::memref::AllocaOp>(Op)) {
+    return AllocaOp.getMemref();
+  } else if (auto AllocOp = dyn_cast<mlir::memref::AllocOp>(Op)) {
+    return AllocOp.getMemref();
+  } else {
+    llvm_unreachable("Operation not handling is not supported.");
+    mlir::Value();
+  }
+}
+
 mlir::Value MLIRGen::getLValueMemRef(Expr *E) {
   if (auto *VE = llvm::dyn_cast<VarExpr>(E)) {
     Symbol *Sym = ST.lookupSymbol(VE->getName(), VE->getScope());
     
     mlir::Operation* RawOp = static_cast<mlir::Operation*>(Sym->Op);
-    auto AllocaOp = llvm::dyn_cast<mlir::memref::AllocaOp>(RawOp);
-    
-    return AllocaOp.getMemref();
+    auto MemRef = getOpMemRef(RawOp);
+    return MemRef;
   } else if (auto *AE = llvm::dyn_cast<ArrayAccessExpr>(E)) {
     Symbol *Sym = ST.lookupSymbol(AE->getArrayNameExpr()->getName(),
         AE->getArrayNameExpr()->getScope());
 
     mlir::Operation* RawOp = static_cast<mlir::Operation*>(Sym->Op);
-    auto AllocaOp = llvm::dyn_cast<mlir::memref::AllocaOp>(RawOp);
-    return AllocaOp.getMemref();
+    auto MemRef = getOpMemRef(RawOp);
+    return MemRef;
   }
   return mlir::Value();
 }
@@ -304,27 +317,36 @@ void MLIRGen::genLetStmt(LetStmt *Node) {
       Node->getScope());
   QualType VarTy = Sym->Ty; 
 
-  mlir::memref::AllocaOp VarAlloca;
-  {
+  static constexpr size_t StackThreshold = 1024; // 1 KB
+  size_t SizeInByte = VarTy.getSizeInBytes();
+  
+  mlir::Operation *StorageOp = nullptr;
+  mlir::Value MemRef;
+  if(SizeInByte > StackThreshold) {
     mlir::OpBuilder::InsertionGuard Guard(Builder);
     Builder.setInsertionPointToStart(this->CurrentEntryBlock);
-    VarAlloca = mlir::memref::AllocaOp::create(Builder, 
+    auto HeapAlloc = mlir::memref::AllocOp::create(Builder, Loc, 
+        toMemRefType(VarTy));
+    StorageOp = HeapAlloc.getOperation();
+    MemRef = HeapAlloc.getMemref();
+  } else {
+    mlir::OpBuilder::InsertionGuard Guard(Builder);
+    Builder.setInsertionPointToStart(this->CurrentEntryBlock);
+    auto StackAlloc = mlir::memref::AllocaOp::create(Builder, 
         Loc, toMemRefType(VarTy));  
+    StorageOp = StackAlloc.getOperation();
+    MemRef = StackAlloc.getMemref();
   }
-  Sym->setOp(static_cast<void*>(VarAlloca.getOperation()));
+  Sym->setOp(static_cast<void*>(StorageOp));
 
   Expr* Init = Node->getInitializer();
   if(!Init) return;
   if(Init->getASTNodeKind() == ASTNodeKind::ASTK_ARRAYEXPR) {
-    genArrayInit(static_cast<ArrayExpr*>(Init), VarAlloca.getResult(), VarTy);
+    genArrayInit(static_cast<ArrayExpr*>(Init), MemRef, VarTy);
   } else {
     InitValue = visit(Init);
     if(InitValue) {
-      mlir::memref::StoreOp::create(
-          Builder,
-          Loc, 
-          InitValue, 
-          VarAlloca.getResult());
+      mlir::memref::StoreOp::create(Builder, Loc, InitValue, MemRef);
     }
   }
 }
@@ -349,8 +371,7 @@ void MLIRGen::genArrayInitImpl(ArrayExpr *Node, mlir::Value DestMemRef,
           Elem->getScope());
       if (Sym && Sym->Ty.isArrayType()) {
         mlir::Operation *RawOp = static_cast<mlir::Operation *>(Sym->Op);
-        auto SrcAlloca = llvm::dyn_cast<mlir::memref::AllocaOp>(RawOp);
-        mlir::Value SrcMemRef = SrcAlloca.getMemref();
+        auto SrcMemRef = getOpMemRef(RawOp);
         auto SrcType = llvm::cast<mlir::MemRefType>(SrcMemRef.getType());
         auto DestType = llvm::cast<mlir::MemRefType>(DestMemRef.getType());
 
@@ -384,8 +405,6 @@ void MLIRGen::genArrayInitImpl(ArrayExpr *Node, mlir::Value DestMemRef,
         else
           llvm::errs() << "Error: failed to generate array element at index "
             << I << "\n";
-        Indices.pop_back();
-
       }
     } else { 
       mlir::Value Val = visit(Elem); 
@@ -400,8 +419,40 @@ void MLIRGen::genArrayInitImpl(ArrayExpr *Node, mlir::Value DestMemRef,
   }
 }
 
+Expr* getUniformRepeatChild(ArrayExpr *Node) {
+  const auto &Elems = Node->getChildElemExprVec();
+  if (Elems.size() != 1)               
+    return nullptr;
+
+  Expr *Elem = Elems[0].get();
+
+  if (Elem->getASTNodeKind() == ASTNodeKind::ASTK_ARRAYEXPR)
+    return getUniformRepeatChild(static_cast<ArrayExpr *>(Elem));
+
+  if (!Elem->getType().isNull() && Elem->getType().isArrayType())
+    return nullptr;
+
+  return Elem; 
+}
+
 void MLIRGen::genArrayInit(ArrayExpr *Node, mlir::Value DestMemRef,
                            QualType ArrayTy) {
+  //FIXME:: When initializing array of size greater than StackThreshold(1KB),
+  //linalg.fill will only be used for array with one element all other cases
+  //will go to AllocOp.
+  //Example: [[1,2,3,4];167], this mlirgen for this will be repeated alloc 167 
+  //times.
+  size_t SizeInByte = Node->getType().getSizeInBytes();
+  if(SizeInByte > 1024) {
+    if(Expr *Child = getUniformRepeatChild(Node)) {
+      mlir::Value FillValue = visit(Child);
+      if(FillValue) {
+        mlir::linalg::FillOp::create(Builder, Builder.getUnknownLoc(), 
+            mlir::ValueRange{FillValue}, mlir::ValueRange{DestMemRef});
+        return;
+      }
+    }
+  }
   llvm::SmallVector<mlir::Value, 4> Indices;
   genArrayInitImpl(Node, DestMemRef, Indices);
 }

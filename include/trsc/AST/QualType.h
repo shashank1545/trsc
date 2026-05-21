@@ -355,7 +355,7 @@ namespace trsc {
     size_t Size;
     public:
     ArrayType(QualType ET, size_t Size): 
-      BuiltinType(ET.getKind(), ET.getSizeInBytes(), ET.getAlignment()), 
+      BuiltinType(ET.getKind(), ET.getSizeInBytes()*Size, ET.getAlignment()), 
       ElementType(ET), Size(Size) {}
     std::string getName() const override {
       return "[" + ElementType.getAsString() + "; " + std::to_string(Size) +"]";

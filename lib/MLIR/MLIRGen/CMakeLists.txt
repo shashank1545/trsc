@@ -18,6 +18,7 @@ add_mlir_library(TrscMLIRGen
   MLIRMemRefDialect
   MLIRArithDialect
   MLIRSCFDialect
+  MLIRLinalgDialect
 )
 
 target_include_directories(TrscMLIRGen PUBLIC

@@ -5,6 +5,7 @@
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/MLIRContext.h"
+#include "mlir/IR/Operation.h"
 #include "mlir/IR/OwningOpRef.h"
 
 #include "mlir/IR/Types.h"
@@ -74,6 +75,7 @@ namespace trsc {
       const llvm::APFloat toAPFloat(double D, QualType &Type);
       mlir::Value getLValueMemRef(Expr *E);
       mlir::Value convertValueToType(mlir::Value V, mlir::Type T);
+      mlir::Value getOpMemRef(mlir::Operation* E);
       bool isLValue(Expr *E);
 
   };
