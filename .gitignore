@@ -30,5 +30,12 @@ Release/
 # Cache
 .cache/
 
+# Profiling
+callgrind.out.*
+perf.data
+perf.data.old
+
 # Other
-trsc_chat.md
+*.md
+*.json
+!README.md
