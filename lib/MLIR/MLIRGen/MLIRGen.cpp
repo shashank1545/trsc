@@ -494,7 +494,7 @@ mlir::Value MLIRGen::visitArrayAccessExpr(ArrayAccessExpr *Node) {
   Symbol* Sym = ST.lookupSymbol(Node->getArrayNameExpr()->getName(),
       Node->getArrayNameExpr()->getScope());
   mlir::Operation* RawPtr = static_cast<mlir::Operation*>(Sym->Op);
-  auto allocaOp = llvm::dyn_cast<mlir::memref::AllocaOp>(RawPtr);
+  auto memref = getOpMemRef(RawPtr);
   llvm::SmallVector<mlir::Value, 4> IndexValueVec;
   for(const auto& Index: Node->getIndexVector()) {
     mlir::Value IndexValue;
@@ -509,7 +509,7 @@ mlir::Value MLIRGen::visitArrayAccessExpr(ArrayAccessExpr *Node) {
   }
   mlir::ValueRange Indices(IndexValueVec);
   mlir::memref::LoadOp loadOp = mlir::memref::LoadOp::create(Builder,
-      Loc, allocaOp.getMemref(), Indices); 
+      Loc, memref, Indices); 
   return loadOp.getResult();
 }
 
@@ -1016,7 +1016,13 @@ void MLIRGen::genExprStmt(ExprStmt *Node) {
 
 void MLIRGen::genForStmt(ForStmt *Node) {
   auto loc = Builder.getUnknownLoc();
-
+  VarExpr* Init = Node->getInit();
+  if(Init) {
+    Symbol* Sym = ST.lookupSymbol(Init->getName(), Init->getScope());
+    auto InitTy = toMemRefType(Sym->Ty);
+    auto AllocaOp = mlir::memref::AllocaOp::create(Builder, loc, InitTy);
+    Sym->setOp(static_cast<void*>(AllocaOp));
+  }
   // 1. Generate loop bounds and step
   mlir::Value lbValue = visit(Node->getRange()->getStart());
   mlir::Value ubValue = visit(Node->getRange()->getEnd());
@@ -1026,13 +1032,21 @@ void MLIRGen::genForStmt(ForStmt *Node) {
       loc, Builder.getIndexType(), ubValue);
   mlir::Value step = mlir::arith::ConstantIndexOp::create(Builder, loc, 1);
 
-  // 2. Create the ForOp
-  // Note: If you don't have loop-carried variables, iterArgs is empty
   auto forOp = mlir::scf::ForOp::create(Builder, loc, lb, ub, step);
 
-  // 3. Setup the Body
   mlir::OpBuilder::InsertionGuard guard(Builder);
   Builder.setInsertionPointToStart(forOp.getBody());
+
+  if(Init) {
+    Symbol* Sym = ST.lookupSymbol(Init->getName(), Init->getScope());
+    mlir::Value iv = forOp.getInductionVar();  
+    mlir::Type elemTy = toMLIRType(Sym->Ty);
+    mlir::Value ivCast = mlir::arith::IndexCastOp::create(
+        Builder, loc, elemTy, iv);
+    mlir::Operation* RawOp = static_cast<mlir::Operation*>(Sym->Op);
+    mlir::Value memref = getOpMemRef(RawOp);
+    mlir::memref::StoreOp::create(Builder, loc, ivCast, memref);
+  }
 
   genStmt(Node->getBody());
 
