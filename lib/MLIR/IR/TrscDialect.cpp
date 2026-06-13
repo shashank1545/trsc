@@ -1,7 +1,6 @@
 #include "trsc/MLIR/TrscDialect.h"
 #include "trsc/MLIR/TrscOps.h"
 
-#include "mlir/IR/DialectImplementation.h"
 #include "mlir/IR/Builders.h"
 
 using namespace trsc;

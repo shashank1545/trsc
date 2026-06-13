@@ -21,3 +21,9 @@ target_include_directories(TrscDialect PUBLIC
   ${CMAKE_BINARY_DIR}/lib/MLIR
   ${MLIR_INCLUDE_DIRS}
 )
+
+target_precompile_headers(TrscDialect PRIVATE
+  <mlir/IR/Dialect.h>
+  <mlir/IR/BuiltinOps.h>
+  <mlir/IR/OpDefinition.h>
+)

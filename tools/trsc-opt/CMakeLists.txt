@@ -1,23 +1,19 @@
-# Get all dialect and conversion libraries
-get_property(dialect_libs GLOBAL PROPERTY MLIR_DIALECT_LIBS)
-get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)
-
-# Define all libraries to link against
 set(LIBS
-    ${dialect_libs}
-    ${conversion_libs}
-    # Your TRSC libraries
-    # TrscDialect
-    TrscTransforms
-    # TrscMLIRGen
-    # MLIR Core
-    MLIRIR
-    MLIRPass
-    MLIRTransforms
-    MLIRAnalysis
-    MLIRParser
-    MLIRSupport
-    MLIROptLib
+  TrscTransforms
+  MLIRIR
+  MLIRPass
+  MLIRTransforms
+  MLIRAnalysis
+  MLIRParser
+  MLIRSupport
+  MLIROptLib
+  MLIRFuncDialect
+  MLIRArithDialect
+  MLIRSCFDialect
+  MLIRMemRefDialect
+  MLIRLinalgDialect
+  MLIRControlFlowDialect
+  MLIRSCFToControlFlow
 )
 
 add_llvm_executable(trsc-opt

@@ -3,30 +3,31 @@
 
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
-#include "mlir/IR/BuiltinTypeInterfaces.h"
-#include "mlir/IR/MLIRContext.h"
-#include "mlir/IR/Operation.h"
 #include "mlir/IR/OwningOpRef.h"
-
-#include "mlir/IR/Types.h"
 #include "mlir/IR/Value.h"
-#include "mlir/Support/LLVM.h"
-#include "trsc/AST/AST.h"
-#include "trsc/AST/ASTContext.h"
 #include "trsc/AST/ExprVisitor.h"
 #include "trsc/AST/QualType.h"
-#include "trsc/Sema/SymbolTable.h"
-#include "llvm/ADT/SmallVector.h"
 #include <vector>
 
 namespace mlir {
   class MLIRContext;
+  class Type;
   class ModuleOp;
+  class MemRefType;
+  class Block;
+  class Operation;
+}
+
+namespace llvm {
+  class APFloat;
+  template <typename T> class SmallVectorImpl;
 }
 
 namespace trsc {
 
   class Program;
+  class ASTContext;
+  class SymbolTable;
   class MLIRGen : public ExprVisitor<MLIRGen, mlir::Value>{
     public:
       MLIRGen(mlir::MLIRContext &MLIRCtx, trsc::ASTContext &ASTCtx, 
