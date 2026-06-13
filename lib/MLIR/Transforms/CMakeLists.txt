@@ -1,6 +1,11 @@
-add_mlir_library(TrscToStandard
+add_mlir_library(TrscTransforms
   TrscToStandard.cpp
   Passes.cpp
+  PassPipeline.cpp
+  LICM.cpp
+  LoopFusion.cpp
+  LoopTiling.cpp
+  LoopUnrolling.cpp
   
   ADDITIONAL_HEADER_DIRS
   ${CMAKE_SOURCE_DIR}/include/trsc/MLIR
@@ -12,16 +17,19 @@ add_mlir_library(TrscToStandard
   
   LINK_LIBS PUBLIC
   TrscDialect
+  MLIRIR
+  MLIRSupport
   MLIRFuncDialect
   MLIRArithDialect
-  MLIRControlFlowDialect
+  # MLIRControlFlowDialect
   MLIRMemRefDialect
+  MLIRLinalgDialect
   MLIRSCFDialect
   MLIRPass
   MLIRTransforms
 )
 
-target_include_directories(TrscToStandard PUBLIC
+target_include_directories(TrscTransforms PUBLIC
   ${CMAKE_BINARY_DIR}/lib/MLIR
 )
 

@@ -8,7 +8,7 @@ set(LIBS
     ${conversion_libs}
     # Your TRSC libraries
     # TrscDialect
-    # TrscToStandard
+    TrscTransforms
     # TrscMLIRGen
     # MLIR Core
     MLIRIR
@@ -20,7 +20,6 @@ set(LIBS
     MLIROptLib
 )
 
-# Use add_llvm_executable (not add_executable!)
 add_llvm_executable(trsc-opt
     main.cpp
 )
@@ -37,5 +36,5 @@ target_include_directories(trsc-opt PRIVATE
     ${CMAKE_BINARY_DIR}/lib/MLIR
 )
 
-# Check all link libraries (helps catch linking issues)
+# Check all link libraries 
 mlir_check_all_link_libraries(trsc-opt)

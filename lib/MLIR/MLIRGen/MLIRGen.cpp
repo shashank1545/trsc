@@ -19,7 +19,6 @@
 #include "mlir/IR/OwningOpRef.h"
 #include "mlir/IR/Verifier.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Dialect/ControlFlow/IR/ControlFlow.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
@@ -40,7 +39,6 @@ MLIRGen::MLIRGen(mlir::MLIRContext &MLIRCtx, trsc::ASTContext &ASTCtx,
   Builder(&MLIRCtx) {
     mlir::DialectRegistry Registry;
     Registry.insert<mlir::func::FuncDialect>();
-    Registry.insert<mlir::cf::ControlFlowDialect>();
     Registry.insert<mlir::memref::MemRefDialect>();
     Registry.insert<mlir::arith::ArithDialect>();
     Registry.insert<mlir::scf::SCFDialect>();

@@ -14,7 +14,7 @@ add_mlir_library(TrscMLIRGen
   MLIRIR
   MLIRSupport
   MLIRFuncDialect
-  MLIRControlFlowDialect
+  # MLIRControlFlowDialect
   MLIRMemRefDialect
   MLIRArithDialect
   MLIRSCFDialect
