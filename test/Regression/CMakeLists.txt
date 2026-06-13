@@ -32,6 +32,7 @@ add_test(
     ${CMAKE_CURRENT_SOURCE_DIR}/Sema
     ${CMAKE_CURRENT_SOURCE_DIR}/Lex
     ${CMAKE_CURRENT_SOURCE_DIR}/Parse
+    ${CMAKE_CURRENT_SOURCE_DIR}/MLIR
 )
 set_tests_properties(regression PROPERTIES
   LABELS            "Regression"

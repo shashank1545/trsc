@@ -26,7 +26,7 @@ config.test_source_root = os.getenv("TEST_SOURCE_ROOT")
 config.test_exec_root = os.getenv("TEST_EXEC_ROOT")
 
 # substitutions
-config.substitutions.append(("%trsc", os.getenv("TRSC_BIN")))
 config.substitutions.append(("%trsc-opt", os.getenv("TRSC_OPT_BIN")))
+config.substitutions.append(("%trsc", os.getenv("TRSC_BIN")))
 config.substitutions.append(("%FileCheck", os.getenv("FILECHECK_BIN")))
 config.substitutions.append(("%not", os.getenv("NOT_BIN")))
