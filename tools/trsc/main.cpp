@@ -5,6 +5,8 @@
 #include <fstream>
 
 #include "mlir/IR/MLIRContext.h"
+#include "mlir/Pass/PassManager.h"
+#include "mlir/Support/LLVM.h"
 
 #include "trsc/AST/AST.h"
 #include "trsc/Lex/Lexer.h"
@@ -19,6 +21,8 @@
 #include "trsc/Sema/SymbolTable.h"
 #include "trsc/Sema/SymbolTablePrinter.h"
 #include "trsc/MLIR/TrscMLIRGen.h"
+#include "trsc/MLIR/Transforms/PassPipeline.h"
+
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -190,6 +194,32 @@ int main(int argc, char **argv) {
       std::cerr << "Error: MLIR generation failed.\n";
       return 1;
     }
+    if (options.Optim != trsc::OptimizationStage::RawMLIR) {
+      if(options.Verbose) {
+        std::cerr << "Running optimization passes.\n";
+      }
+      mlir::PassManager pm(&MLIRCtx);
+      switch (options.Optim) {
+        case trsc::OptimizationStage::RawMLIR:
+          break;
+        case trsc::OptimizationStage::CleanedMLIR:
+          trsc::buildCleanupPipeline(pm);
+          break;
+        case trsc::OptimizationStage::LoopOptimized:
+          trsc::buildLoopOptPipeline(pm);
+          break;
+        case trsc::OptimizationStage::StandardLowering:
+          trsc::buildLoweringPipeline(pm);
+          break;
+        default:
+          std::cerr << "Unknown optimization pass.\n";
+          break;
+        }
+      if(mlir::failed(pm.run(*Module))) {
+        std::cerr << "Error: Optimization pipeline failed.\n";
+        return 1;
+      }
+    } 
     if(!options.OutputFile.empty()) {
       std::error_code ec;
       llvm::raw_fd_ostream outfile(options.OutputFile, ec, llvm::sys::fs::OF_None);

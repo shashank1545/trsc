@@ -5,6 +5,14 @@
 
 namespace trsc {
 
+enum class OptimizationStage {
+  RawMLIR,
+  CleanedMLIR,
+  LoopOptimized,
+  StandardLowering,
+  OptimizedMLIR,
+};
+
 struct CompilerOptions {
   std::string InputFile;
   std::string OutputFile;
@@ -15,6 +23,7 @@ struct CompilerOptions {
   bool DumpSymbolTable = false;
   bool DumpTypedAST = false;
   bool EmitMLIR = false;
+  OptimizationStage Optim = OptimizationStage::OptimizedMLIR;
 };
 
 bool parseCommandLine(int Argc, char **Argv, CompilerOptions &Options);

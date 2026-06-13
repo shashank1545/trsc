@@ -22,6 +22,22 @@ bool parseCommandLine(int argc, char **argv, CompilerOptions &options) {
       options.DumpTypedAST = true;
     } else if (arg == "-emit-mlir") {
       options.EmitMLIR = true;
+    } else if (arg.rfind("-optim=", 0) == 0) {
+      std::string val = arg.substr(7);
+      if (val == "raw") {
+        options.Optim = OptimizationStage::RawMLIR;
+      } else if (val == "rawcln") {
+        options.Optim = OptimizationStage::CleanedMLIR;
+      } else if (val == "loop") {
+        options.Optim = OptimizationStage::LoopOptimized;
+      } else if (val == "stdlowering") {
+        options.Optim = OptimizationStage::StandardLowering;
+      } else if (val == "finopt") {
+        options.Optim = OptimizationStage::OptimizedMLIR;
+      } else { 
+        std::cerr << "Unrecognized optimization pass."; 
+        return 1;
+      }
     } else if (arg == "-o") {
       if (i + 1 < argc) {
         options.OutputFile = argv[++i];
