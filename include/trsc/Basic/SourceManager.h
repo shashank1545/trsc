@@ -2,7 +2,6 @@
 #define TRSC_BASIC_SOURCEMANAGER_H
 
 #include "SourceLocation.h"
-#include <string>
 #include <vector>
 
 namespace trsc {

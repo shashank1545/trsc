@@ -1,11 +1,7 @@
 #include "trsc/Sema/TypeChecker.h"
-#include "trsc/AST/AST.h"
-#include "trsc/AST/QualType.h"
+#include "trsc/AST/ASTContext.h"
 #include "trsc/Basic/Diagnostics.h"
-#include "trsc/Lex/Token.h"
-#include <memory>
-#include <string>
-#include <vector>
+#include "trsc/Sema/SymbolTable.h"
 
 namespace trsc {
 

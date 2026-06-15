@@ -3,21 +3,21 @@
 
 include "mlir/Pass/PassBase.td"
 
-def LowerTrscToStandard : Pass<"lower-trsc-to-standard", "mlir::ModuleOp"> {
-  let summary = "Lower the TRSC dialect to standard dialects.";
-  let description = [{
-    This pass lowers the TRSC dialect to a combination of standard dialects,
-    like Func, Arith, and StructuredControlFlow.
-  }];
-
-  let constructor = "trsc::createTrscToStandard()";
-  
-  let dependentDialects = [
-    "mlir::arith::ArithDialect",
-    "mlir::func::FuncDialect",
-    "mlir::scf::SCFDialect"
-  ];
-}
+//def LowerTrscToStandard : Pass<"lower-trsc-to-standard", "mlir::ModuleOp"> {
+//  let summary = "Lower the TRSC dialect to standard dialects.";
+//  let description = [{
+//    This pass lowers the TRSC dialect to a combination of standard dialects,
+//    like Func, Arith, and StructuredControlFlow.
+//  }];
+//
+//  let constructor = "trsc::createTrscToStandard()";
+//  
+//  let dependentDialects = [
+//    "mlir::arith::ArithDialect",
+//    "mlir::func::FuncDialect",
+//    "mlir::scf::SCFDialect"
+//  ];
+//}
 
 def TrscLICM : Pass<"trsc-licm", "mlir::func::FuncOp"> {
     let summary = "Move loop invariant code out of scf.for loops.";

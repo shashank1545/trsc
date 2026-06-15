@@ -1,35 +1,13 @@
-#include "mlir/Dialect/Arith/IR/Arith.h"
-#include "mlir/IR/BuiltinOps.h"
-#include "mlir/IR/BuiltinTypeInterfaces.h"
-#include "mlir/IR/Location.h"
-#include "mlir/IR/Operation.h"
-#include "mlir/IR/Types.h"
-#include "mlir/IR/Value.h"
-#include "mlir/IR/ValueRange.h"
-#include "mlir/Support/LLVM.h"
-#include "trsc/AST/AST.h"
-#include "trsc/AST/QualType.h"
-#include "trsc/AST/ASTContext.h"
-#include "trsc/MLIR/TrscMLIRGen.h"
-#include "trsc/Sema/Scope.h"
-#include "trsc/Sema/SymbolTable.h"
-
-#include "mlir/IR/Builders.h"
-#include "mlir/IR/MLIRContext.h"
-#include "mlir/IR/OwningOpRef.h"
 #include "mlir/IR/Verifier.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
-#include "llvm/ADT/APFloat.h"
-#include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/SmallVector.h"
-#include "llvm/Support/Casting.h"
-#include "llvm/Support/ErrorHandling.h"
-#include <cstddef>
-#include <cstdint>
-#include <vector>
+
+#include "trsc/AST/ASTContext.h"
+#include "trsc/MLIR/TrscMLIRGen.h"
+#include "trsc/Sema/SymbolTable.h"
 
 using namespace trsc; 
 using namespace mlir;

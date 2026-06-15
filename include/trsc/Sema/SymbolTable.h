@@ -2,7 +2,6 @@
 #define TRSC_SEMA_SYMBOLTABLE_H
 
 #include <memory>
-#include <vector>
 
 #include "trsc/Sema/Scope.h"
 

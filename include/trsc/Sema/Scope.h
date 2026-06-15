@@ -4,9 +4,6 @@
 #include "trsc/AST/QualType.h"
 
 #include <map>
-#include <string>
-#include <vector>
-#include <cstdint>
 
 namespace trsc {
   

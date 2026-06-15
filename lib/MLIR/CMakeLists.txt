@@ -36,7 +36,7 @@ add_library(TrscMLIRComponents INTERFACE)
 
 target_link_libraries(TrscMLIRComponents
   INTERFACE
-  TrscDialect 
+  # TrscDialect 
   TrscTransforms 
   TrscMLIRGen 
 )

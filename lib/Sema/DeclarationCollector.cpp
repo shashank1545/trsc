@@ -1,5 +1,6 @@
 #include "trsc/Sema/DeclarationCollector.h"
-#include "trsc/AST/AST.h"
+#include "trsc/Sema/SymbolTable.h"
+#include "trsc/Basic/Diagnostics.h"
 
 using namespace trsc;
 
@@ -11,11 +12,11 @@ void DeclarationCollector::visitProgram(Program *P) {
   }
 }
 
-// TODO: Make the name mangling implementation gloabal for the compiler
+// TODO: Make the name mangling implementation global for the compiler
 // Name Mangling is currently only done for Function names and not fully 
 // feldged. C++ naming scheme is used right now , i need to do more 
 // research before implementing the rust, till then this will do.
-//
+
 void DeclarationCollector::visitFuncDecl(FuncDecl* D) {
   Symbol FuncInfo(SymbolKind::SYMBOL_FUNCTION); 
   // std::string Name = D->getFuncName()->getName();

@@ -2,11 +2,7 @@
 #ifndef TRSC_AST_TYPEDASTPRINTER_H
 #define TRSC_AST_TYPEDASTPRINTER_H
 
-#include "trsc/AST/AST.h"
 #include "trsc/AST/ASTVisitor.h"
-
-#include <iostream>
-#include <ostream>
 
 namespace trsc {
   class TypedASTPrinter : public ASTVisitor<TypedASTPrinter> {

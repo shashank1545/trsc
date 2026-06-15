@@ -1,11 +1,9 @@
 #ifndef TRSC_AST_QUALTYPE_H
 #define TRSC_AST_QUALTYPE_H
 
-#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
-#include <utility>
 
 namespace trsc {
 

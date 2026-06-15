@@ -1,37 +1,37 @@
 #ifndef TRSC_SEMA_SEMA_H
 #define TRSC_SEMA_SEMA_H
 
-#include "trsc/AST/AST.h"
-#include "trsc/AST/ASTContext.h"
-#include "trsc/Basic/Diagnostics.h"
 #include "trsc/Sema/BorrowChecker.h"
 #include "trsc/Sema/DeclarationCollector.h"
 #include "trsc/Sema/NameResolver.h"
-#include "trsc/Sema/SymbolTable.h"
 #include "trsc/Sema/TypeChecker.h"
 
 namespace trsc {
 
-class SemanticAnalyzer {
-public:
-  SemanticAnalyzer(DiagnosticsEngine &Diags, SymbolTable &ST, ASTContext &Ctx); 
-  ~SemanticAnalyzer(); 
+  class DiagnosticsEngine;
+  class SymbolTable;
+  class ASTContext;
 
-  void analyze(ASTNode *Ast);
+  class SemanticAnalyzer {
+    public:
+      SemanticAnalyzer(DiagnosticsEngine &Diags, SymbolTable &ST, ASTContext &Ctx); 
+      ~SemanticAnalyzer(); 
 
-  SymbolTable& getSymbolTable() { return ST; }
-  ASTContext& getASTContext() { return Ctx; }
-  DiagnosticsEngine& getDiagnostics() { return Diags; }
+      void analyze(ASTNode *Ast);
 
-private:
-  DiagnosticsEngine &Diags;
-  SymbolTable &ST;
-  ASTContext &Ctx;
-  DeclarationCollector DeclarationCollector;
-  NameResolver NameResolver;
-  TypeChecker TypeChecker;
-  BorrowChecker BorrowChecker;
-};
+      SymbolTable& getSymbolTable() { return ST; }
+      ASTContext& getASTContext() { return Ctx; }
+      DiagnosticsEngine& getDiagnostics() { return Diags; }
+
+    private:
+      DiagnosticsEngine &Diags;
+      SymbolTable &ST;
+      ASTContext &Ctx;
+      DeclarationCollector DeclarationCollector;
+      NameResolver NameResolver;
+      TypeChecker TypeChecker;
+      BorrowChecker BorrowChecker;
+  };
 
 } // namespace trsc
 

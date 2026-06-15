@@ -1,7 +1,5 @@
 #include "trsc/Parse/Parser.h"
-#include "trsc/Basic/SourceLocation.h"
-
-#include <string>
+#include "trsc/Basic/Diagnostics.h"
 
 namespace trsc {
 

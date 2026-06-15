@@ -1,17 +1,10 @@
 #ifndef TRSC_AST_AST_H
 #define TRSC_AST_AST_H
 
-#include "trsc/AST/QualType.h"
-#include "trsc/Basic/SourceLocation.h"
 #include "trsc/Lex/Token.h"
-#include "trsc/AST/QualType.h"
 #include "trsc/Sema/Scope.h"
 
-#include <cstdint>
 #include <memory>
-#include <string>
-#include <utility>
-#include <vector>
 
 namespace trsc {
 

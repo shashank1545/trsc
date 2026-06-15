@@ -6,7 +6,6 @@
 
 namespace trsc {
 
-  std::unique_ptr<mlir::Pass> createTrscToStandard();
   std::unique_ptr<mlir::Pass> createTrscLICM();
   std::unique_ptr<mlir::Pass> optimizeStandard();
 

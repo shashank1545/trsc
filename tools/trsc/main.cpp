@@ -1,30 +1,20 @@
-#include <ostream>
-#include <system_error>
-#include <vector>
-#include <iostream>
 #include <fstream>
 
-#include "mlir/IR/MLIRContext.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Support/LLVM.h"
 
-#include "trsc/AST/AST.h"
 #include "trsc/Lex/Lexer.h"
 #include "trsc/Parse/Parser.h"
 #include "trsc/AST/ASTPrinter.h"
-#include "trsc/AST/ASTContext.h"
 #include "trsc/AST/TypedASTPrinter.h"
+#include "trsc/AST/ASTContext.h"
 #include "trsc/Basic/CommandLine.h"
-#include "trsc/Basic/Diagnostics.h"
-#include "trsc/Basic/SourceManager.h"
 #include "trsc/Sema/Sema.h" 
-#include "trsc/Sema/SymbolTable.h"
 #include "trsc/Sema/SymbolTablePrinter.h"
 #include "trsc/MLIR/TrscMLIRGen.h"
 #include "trsc/MLIR/Transforms/PassPipeline.h"
 
 #include "llvm/Support/FileSystem.h"
-#include "llvm/Support/raw_ostream.h"
 
 int main(int argc, char **argv) {
   trsc::CompilerOptions options;

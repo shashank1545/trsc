@@ -1,13 +1,13 @@
 #ifndef TRSC_SEMA_BORROWCHECKER_H
 #define TRSC_SEMA_BORROWCHECKER_H
 
-#include "trsc/AST/ASTContext.h"
 #include "trsc/AST/ASTVisitor.h"
-#include "trsc/Basic/Diagnostics.h"
-#include "trsc/Sema/SymbolTable.h"
 
 namespace trsc {
 class SemanticAnalyzer;
+class DiagnosticsEngine;
+class SymbolTable;
+class ASTContext;
 
 class BorrowChecker : public ASTVisitor<BorrowChecker> {
 public:

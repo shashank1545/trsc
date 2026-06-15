@@ -1,10 +1,7 @@
 #ifndef TRSC_SEMA_DECLARATIONCOLLECTER_H
 #define TRSC_SEMA_DECLARATIONCOLLECTER_H
 
-#include "trsc/AST/AST.h"
 #include "trsc/AST/ASTVisitor.h"
-#include "trsc/Basic/Diagnostics.h"
-#include "trsc/Sema/SymbolTable.h"
 
 namespace trsc {
 
@@ -13,6 +10,9 @@ namespace trsc {
   // to the SymbolTable for name resolution. It could be done in the 
   // NameResolver class but if i have to add two passes i want them to be 
   // seperate and want them to have different jobs.
+
+  class DiagnosticsEngine;
+  class SymbolTable;
 
   class DeclarationCollector: public ASTVisitor<DeclarationCollector> {
     protected:

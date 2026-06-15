@@ -20,7 +20,20 @@ set(TRSC_LIB
   ${CMAKE_CURRENT_SOURCE_DIR}/Sema/SymbolTablePrinter.cpp
 )
 
-
 add_library(trsc_lib STATIC ${TRSC_LIB})
 
 target_include_directories(trsc_lib PUBLIC ${CMAKE_SOURCE_DIR}/include)
+
+target_precompile_headers(trsc_lib PRIVATE
+  <memory>
+  <vector>
+  <string>
+  <unordered_map>
+  <map>
+  <set>
+  <optional>
+  <variant>
+  <functional>
+  <cstdint>
+  <string_view>
+)

@@ -1,7 +1,5 @@
 
 #include "trsc/AST/ASTContext.h"
-#include "trsc/AST/QualType.h"
-#include <memory>
 
 namespace trsc {
 

@@ -2,8 +2,6 @@
 #define TRSC_AST_ASTCONTEXT_H
 
 #include <memory>
-#include <string>
-#include <vector>
 #include <unordered_map>
 #include "trsc/AST/QualType.h"
 

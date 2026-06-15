@@ -2,15 +2,12 @@
 #define TRSC_PARSE_PARSER_H
 
 #include "trsc/AST/AST.h"
-#include "trsc/Lex/Token.h"
-#include "trsc/Basic/Diagnostics.h"
 
 #include <memory>
-#include <vector>
 #include <optional>
-#include <initializer_list>
 
 namespace trsc {
+  class DiagnosticsEngine;
   class Parser {
     public:
       Parser(DiagnosticsEngine &Diag, const std::vector<Lex::Token> &Tokens);

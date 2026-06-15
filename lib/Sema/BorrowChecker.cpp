@@ -1,5 +1,6 @@
 #include "trsc/Sema/BorrowChecker.h"
-#include "trsc/AST/AST.h"
+#include "trsc/Sema/SymbolTable.h"
+#include "trsc/Basic/Diagnostics.h"
 
 namespace trsc {
 

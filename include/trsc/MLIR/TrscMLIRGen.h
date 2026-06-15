@@ -4,10 +4,7 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/OwningOpRef.h"
-#include "mlir/IR/Value.h"
 #include "trsc/AST/ExprVisitor.h"
-#include "trsc/AST/QualType.h"
-#include <vector>
 
 namespace mlir {
   class MLIRContext;

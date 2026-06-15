@@ -1,7 +1,6 @@
 #include "trsc/Sema/NameResolver.h"
-#include "trsc/AST/ASTVisitor.h"
 #include "trsc/Basic/Diagnostics.h"
-#include "trsc/Sema/Scope.h"
+#include "trsc/Sema/SymbolTable.h"
 
 using namespace trsc;
 

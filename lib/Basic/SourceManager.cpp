@@ -1,8 +1,6 @@
 #include "trsc/Basic/SourceManager.h"
 #include "trsc/Basic/Diagnostics.h"
 #include <fstream>
-#include <algorithm>
-#include <iterator>
 
 namespace trsc {
 SourceManager::SourceManager(DiagnosticsEngine &Diag) : Diag(Diag) {}

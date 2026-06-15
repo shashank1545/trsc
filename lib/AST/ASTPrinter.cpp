@@ -1,5 +1,4 @@
 // TODO :: Fix this after completing Sema.
-#include "trsc/Lex/Token.h"
 #include "trsc/AST/ASTPrinter.h"
 
 namespace trsc {

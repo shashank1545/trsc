@@ -1,6 +1,4 @@
 #include "trsc/AST/TypedASTPrinter.h"
-#include "trsc/AST/AST.h"
-#include "trsc/Lex/Token.h"
 #include <iomanip>
 
 namespace trsc {

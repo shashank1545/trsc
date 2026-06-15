@@ -1,12 +1,12 @@
 #ifndef TRSC_SEMA_NAMERESOLVER_H
 #define TRSC_SEMA_NAMERESOLVER_H
 
-#include "trsc/AST/AST.h"
 #include "trsc/AST/ASTVisitor.h"
-#include "trsc/Sema/SymbolTable.h"
-#include "trsc/Basic/Diagnostics.h"
 
 namespace trsc {
+
+  class DiagnosticsEngine;
+  class SymbolTable;
 
   class NameResolver : public ASTVisitor<NameResolver> {
     private:

@@ -1,5 +1,4 @@
 add_mlir_library(TrscTransforms
-  TrscToStandard.cpp
   Passes.cpp
   PassPipeline.cpp
   LICM.cpp
@@ -16,7 +15,6 @@ add_mlir_library(TrscTransforms
   TrscPassesIncGen
   
   LINK_LIBS PUBLIC
-  TrscDialect
   MLIRIR
   MLIRSupport
   MLIRFuncDialect
@@ -31,14 +29,5 @@ add_mlir_library(TrscTransforms
 
 target_include_directories(TrscTransforms PUBLIC
   ${CMAKE_BINARY_DIR}/lib/MLIR
-)
-
-target_precompile_headers(TrscTransforms PRIVATE
-  <mlir/Pass/Pass.h>
-  <mlir/Transforms/Passes.h>
-  <mlir/Dialect/Func/IR/FuncOps.h>
-  <mlir/Dialect/SCF/IR/SCF.h>
-  <mlir/Dialect/Arith/IR/Arith.h>
-  <mlir/Interfaces/SideEffectInterfaces.h>
 )
 

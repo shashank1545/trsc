@@ -10,7 +10,7 @@ add_mlir_library(TrscMLIRGen
   TrscOpsIncGen
   
   LINK_LIBS PUBLIC
-  TrscDialect
+  # TrscDialect
   MLIRIR
   MLIRSupport
   MLIRFuncDialect
