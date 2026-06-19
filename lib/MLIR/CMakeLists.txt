@@ -29,6 +29,7 @@ mlir_tablegen(TrscPasses.cpp.inc -gen-pass-decls -name Passes)
 add_public_tablegen_target(TrscPassesIncGen)
 
 add_subdirectory(IR)
+add_subdirectory(Utils)
 add_subdirectory(Transforms)
 add_subdirectory(MLIRGen)
 
@@ -37,6 +38,7 @@ add_library(TrscMLIRComponents INTERFACE)
 target_link_libraries(TrscMLIRComponents
   INTERFACE
   TrscDialect 
+  TrscUtils
   TrscTransforms 
   TrscMLIRGen 
 )

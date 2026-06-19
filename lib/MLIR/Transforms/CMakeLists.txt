@@ -15,6 +15,7 @@ add_mlir_library(TrscTransforms
   TrscPassesIncGen
   
   LINK_LIBS PUBLIC
+  TrscUtils
   MLIRIR
   MLIRSupport
   MLIRFuncDialect

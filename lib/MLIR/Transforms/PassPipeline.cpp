@@ -14,6 +14,7 @@ namespace mlir {
 
     void buildLoopOptPipeline(mlir::OpPassManager &pm) {
       pm.addNestedPass<mlir::func::FuncOp>(createTrscLICM());
+      pm.addNestedPass<mlir::func::FuncOp>(createTrscLoopFusion());
     }
 
     void buildLoweringPipeline(mlir::OpPassManager &pm) {
