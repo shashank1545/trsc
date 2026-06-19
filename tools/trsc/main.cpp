@@ -193,13 +193,13 @@ int main(int argc, char **argv) {
         case trsc::OptimizationStage::RawMLIR:
           break;
         case trsc::OptimizationStage::CleanedMLIR:
-          trsc::buildCleanupPipeline(pm);
+          mlir::trscd::buildCleanupPipeline(pm);
           break;
         case trsc::OptimizationStage::LoopOptimized:
-          trsc::buildLoopOptPipeline(pm);
+          mlir::trscd::buildLoopOptPipeline(pm);
           break;
         case trsc::OptimizationStage::StandardLowering:
-          trsc::buildLoweringPipeline(pm);
+          mlir::trscd::buildLoweringPipeline(pm);
           break;
         default:
           std::cerr << "Unknown optimization pass.\n";

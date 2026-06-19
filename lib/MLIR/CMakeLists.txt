@@ -18,8 +18,8 @@ set(MLIR_TABLEGEN_INCLUDE_DIRS
 set(LLVM_TARGET_DEFINITIONS ${CMAKE_SOURCE_DIR}/include/trsc/MLIR/TrscOps.td)
 mlir_tablegen(TrscOps.h.inc -gen-op-decls)
 mlir_tablegen(TrscOps.cpp.inc -gen-op-defs)
-mlir_tablegen(TrscDialect.h.inc -gen-dialect-decls -dialect=trsc)
-mlir_tablegen(TrscDialect.cpp.inc -gen-dialect-defs -dialect=trsc)
+mlir_tablegen(TrscDialect.h.inc -gen-dialect-decls -dialect=trscd)
+mlir_tablegen(TrscDialect.cpp.inc -gen-dialect-defs -dialect=trscd)
 add_public_tablegen_target(TrscOpsIncGen)
 
 # Generate passes from TableGen files
@@ -36,7 +36,7 @@ add_library(TrscMLIRComponents INTERFACE)
 
 target_link_libraries(TrscMLIRComponents
   INTERFACE
-  # TrscDialect 
+  TrscDialect 
   TrscTransforms 
   TrscMLIRGen 
 )

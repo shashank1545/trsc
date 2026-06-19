@@ -4,15 +4,19 @@
 #include "mlir/Pass/Pass.h"
 #include <memory>
 
-namespace trsc {
+namespace mlir {
+  namespace trscd {
 
-  std::unique_ptr<mlir::Pass> createTrscLICM();
-  std::unique_ptr<mlir::Pass> optimizeStandard();
+    std::unique_ptr<mlir::Pass> createTrscLICM();
+    std::unique_ptr<mlir::Pass> createTrscLoopFusion();
+    std::unique_ptr<mlir::Pass> optimizeStandard();
 
-  void registerTrscPasses();
-  void registerOptStdPasses();
+    void registerTrscPasses();
+    void registerOptStdPasses();
 
-#define GEN_PASS_DECL
-#include "TrscPasses.h.inc"
-}
+    #define GEN_PASS_DECL
+    #include "TrscPasses.h.inc"
+
+  } // namespace trscd
+} // namespace mlir
 #endif // TRSC_MLIR_TRSCPASSES_H 

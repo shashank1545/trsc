@@ -1,4 +1,5 @@
 set(LIBS
+  TrscDialect
   TrscTransforms
   MLIRIR
   MLIRPass

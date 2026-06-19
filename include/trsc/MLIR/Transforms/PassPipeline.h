@@ -7,14 +7,16 @@ namespace mlir {
   class OpPassManager; 
 } // namespace mlir
 
-namespace trsc {
+namespace mlir {
+  namespace trscd {
 
-  void buildCleanupPipeline(mlir::OpPassManager &pm);
-  void buildLoopOptPipeline(mlir::OpPassManager &pm);
-  void buildLoweringPipeline(mlir::OpPassManager &pm);
+    void buildCleanupPipeline(mlir::OpPassManager &pm);
+    void buildLoopOptPipeline(mlir::OpPassManager &pm);
+    void buildLoweringPipeline(mlir::OpPassManager &pm);
 
-} // namespace trsc
+  } // namespace  mlir
 
+} // namespace trscd
 
 #endif // TRSC_MLIR_PASSPIPELINE_H
 

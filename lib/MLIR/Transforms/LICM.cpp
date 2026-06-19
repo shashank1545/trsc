@@ -5,14 +5,16 @@
 #include "trsc/MLIR/TrscPasses.h"
 #include <memory>
 
-namespace trsc {
+namespace mlir {
+  namespace trscd {
 #define GEN_PASS_DEF_TRSCLICM
 #include "TrscPasses.h.inc"
-}
+  } // namespace trscd
+} // namespace mlir
 
 using namespace mlir;
 
-struct TrscLICMPass : public trsc::impl::TrscLICMBase<TrscLICMPass> {
+struct TrscLICMPass : public trscd::impl::TrscLICMBase<TrscLICMPass> {
 
   void runOnOperation( ) override{
     func::FuncOp funcOp = getOperation();
@@ -59,6 +61,6 @@ struct TrscLICMPass : public trsc::impl::TrscLICMBase<TrscLICMPass> {
     }
 };
 
-std::unique_ptr<mlir::Pass> trsc::createTrscLICM() {
+std::unique_ptr<mlir::Pass> trscd::createTrscLICM() {
   return std::make_unique<TrscLICMPass>();
 }

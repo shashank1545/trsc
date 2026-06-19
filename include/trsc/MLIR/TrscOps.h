@@ -1,13 +1,9 @@
 #ifndef TRSC_MLIR_TRSCOPS_H
 #define TRSC_MLIR_TRSCOPS_H
 
-#include "mlir/IR/Builders.h"
-#include "mlir/IR/OpDefinition.h"
-#include "mlir/IR/OpImplementation.h"
-#include "mlir/IR/Operation.h"
 #include "mlir/Interfaces/InferTypeOpInterface.h"
- 
-#include "trsc/MLIR/TrscDialect.h"
+#include "mlir/Interfaces/SideEffectInterfaces.h"
+#include "mlir/Bytecode/BytecodeOpInterface.h"
 
 #define GET_OP_CLASSES
 #include "TrscOps.h.inc"

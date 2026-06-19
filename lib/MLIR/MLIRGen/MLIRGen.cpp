@@ -10,7 +10,6 @@
 #include "trsc/Sema/SymbolTable.h"
 
 using namespace trsc; 
-using namespace mlir;
 
 MLIRGen::MLIRGen(mlir::MLIRContext &MLIRCtx, trsc::ASTContext &ASTCtx, 
     trsc::SymbolTable &ST) : MLIRCtx(MLIRCtx), ASTCtx(ASTCtx), ST(ST), 
@@ -199,9 +198,9 @@ bool MLIRGen::isLValue(Expr *E) {
 }
 
 mlir::Value MLIRGen::getOpMemRef(mlir::Operation* Op) {
-  if(auto AllocaOp = dyn_cast<mlir::memref::AllocaOp>(Op)) {
+  if(auto AllocaOp = mlir::dyn_cast<mlir::memref::AllocaOp>(Op)) {
     return AllocaOp.getMemref();
-  } else if (auto AllocOp = dyn_cast<mlir::memref::AllocOp>(Op)) {
+  } else if (auto AllocOp = mlir::dyn_cast<mlir::memref::AllocOp>(Op)) {
     return AllocOp.getMemref();
   } else {
     llvm_unreachable("Operation not handling is not supported.");

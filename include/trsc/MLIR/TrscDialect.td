@@ -4,10 +4,9 @@
 include "mlir/IR/OpBase.td"
 
 def TrscDialect : Dialect {
-    let name = "trsc";
+    let name = "trscd";
     let summary = "A high level dialect for my rust compiler.";
-    let cppNamespace = "::trsc";
-    let hasConstantMaterializer = 1;
+    let cppNamespace = "::mlir::trscd";
   }
 
 #endif // TRSC_DIALECT

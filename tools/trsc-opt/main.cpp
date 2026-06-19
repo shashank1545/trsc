@@ -9,6 +9,7 @@
 #include "mlir/Tools/mlir-opt/MlirOptMain.h"
 
 #include "trsc/MLIR/TrscPasses.h"
+#include "trsc/MLIR/TrscDialect.h"
 
 int main(int argc, char **argv) {
   // Register MLIR command line options
@@ -22,12 +23,13 @@ int main(int argc, char **argv) {
   registry.insert<mlir::memref::MemRefDialect>();
   registry.insert<mlir::scf::SCFDialect>();
   registry.insert<mlir::linalg::LinalgDialect>();
+  registry.insert<mlir::trscd::TrscDialect>();
 
   mlir::registerCanonicalizerPass();
   mlir::registerCSEPass();
   mlir::registerMem2RegPass();
 
-  trsc::registerTrscPasses();
+  mlir::trscd::registerTrscPasses();
 
   return mlir::asMainReturnCode(
       mlir::MlirOptMain(argc, argv, "TRSC optimizer driver\n", registry));

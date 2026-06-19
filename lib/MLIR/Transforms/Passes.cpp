@@ -1,12 +1,13 @@
 #include "trsc/MLIR/TrscPasses.h"
 
-using namespace trsc;
-using namespace mlir;
-
+namespace mlir {
+  namespace trscd {
 #define GEN_PASS_REGISTRATION
 #include "TrscPasses.h.inc"
+  }
+}
 
-void trsc::registerTrscPasses() {
+void mlir::trscd::registerTrscPasses() {
   registerPassesPasses();
 };
 
