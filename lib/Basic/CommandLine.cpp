@@ -22,6 +22,10 @@ bool parseCommandLine(int argc, char **argv, CompilerOptions &options) {
       options.DumpTypedAST = true;
     } else if (arg == "-emit-mlir") {
       options.EmitMLIR = true;
+    } else if (arg == "-emit-llvm") {
+      options.EmitLLVM = true;
+    } else if (arg == "-emit-obj") {
+      options.EmitObj = true;
     } else if (arg.rfind("-optim=", 0) == 0) {
       std::string val = arg.substr(7);
       if (val == "raw") {
