@@ -9,6 +9,12 @@
 #include "trsc/MLIR/TrscMLIRGen.h"
 #include "trsc/MLIR/TrscDialect.h"
 #include "trsc/Sema/SymbolTable.h"
+#include "mlir/Dialect/GPU/IR/GPUDialect.h"
+#include "mlir/Dialect/LLVMIR/NVVMDialect.h"
+#include "mlir/Dialect/Vector/IR/VectorOps.h"
+#include "mlir/InitAllExtensions.h"
+#include "mlir/Target/LLVM/NVVM/Target.h"
+#include "mlir/Target/LLVMIR/Dialect/All.h"
 
 using namespace trsc; 
 
@@ -21,7 +27,15 @@ MLIRGen::MLIRGen(mlir::MLIRContext &MLIRCtx, trsc::ASTContext &ASTCtx,
     Registry.insert<mlir::arith::ArithDialect>();
     Registry.insert<mlir::scf::SCFDialect>();
     Registry.insert<mlir::linalg::LinalgDialect>();
+    Registry.insert<mlir::gpu::GPUDialect>();
+    Registry.insert<mlir::NVVM::NVVMDialect>();
+    Registry.insert<mlir::vector::VectorDialect>();
     Registry.insert<mlir::trscd::TrscDialect>();
+    mlir::registerAllExtensions(Registry);
+    mlir::NVVM::registerNVVMTargetInterfaceExternalModels(Registry);
+    // gpu-module-to-binary serializes device modules to LLVM IR mid-pipeline,
+    // so translation interfaces must be registered up front.
+    mlir::registerAllToLLVMIRTranslations(Registry);
     MLIRCtx.appendDialectRegistry(Registry);
     MLIRCtx.loadAllAvailableDialects();
   }

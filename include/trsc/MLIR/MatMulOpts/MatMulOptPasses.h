@@ -1,0 +1,38 @@
+#ifndef TRSC_MLIR_MATMULOPTS_MATMULOPTPASSES_H
+#define TRSC_MLIR_MATMULOPTS_MATMULOPTPASSES_H
+
+#include "mlir/Pass/Pass.h"
+#include <memory>
+#include <optional>
+#include <string>
+
+namespace mlir {
+namespace trscd {
+
+// Configuration for the AutoTuning pass
+struct AutoTuneConfig {
+  enum class Strategy { Heuristic, CompileTimeSearch, RuntimeJIT };
+  Strategy strategy = Strategy::CompileTimeSearch;
+  int maxVariants = 8;
+  std::optional<std::string> targetArch;
+};
+
+// Pass to recognize matmul patterns and lower them to trscd.gemm
+std::unique_ptr<mlir::Pass> createMatMulRecognitionPass();
+
+// Pass to compute optimal parameters and attach them as attributes to
+// trscd.gemm
+std::unique_ptr<mlir::Pass> createAutoTuningPass(AutoTuneConfig config = {});
+
+// Pass to lower trscd.gemm into standard optimized MLIR (scf, memref, gpu,
+// vector) based on the optimization level
+std::unique_ptr<mlir::Pass> createLowerTrscdMatMulPass(int optLevel);
+
+// Pipeline builder to compose the passes
+void buildMatMulOptPipeline(mlir::PassManager &pm, int optLevel,
+                            AutoTuneConfig tuneConfig = {});
+
+} // namespace trscd
+} // namespace mlir
+
+#endif // TRSC_MLIR_MATMULOPTS_MATMULOPTPASSES_H

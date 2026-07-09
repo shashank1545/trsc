@@ -34,9 +34,17 @@ bool parseCommandLine(int argc, char **argv, CompilerOptions &options) {
         options.Optim = OptimizationStage::StandardLowering;
       } else if (val == "finopt") {
         options.Optim = OptimizationStage::OptimizedMLIR;
-      } else { 
-        std::cerr << "Unrecognized optimization pass."; 
-        return 1;
+      } else {
+        std::cerr << "Unrecognized optimization pass.";
+        return false;
+      }
+    } else if (arg.rfind("--matmul-opt-level=", 0) == 0) {
+      std::string Val = arg.substr(19);
+      try {
+        options.MatMulOptLevel = std::stoi(Val);
+      } catch (const std::exception &) {
+        std::cerr << "Invalid integer for --matmul-opt-level.\n";
+        return false;
       }
     } else if (arg == "-o") {
       if (i + 1 < argc) {

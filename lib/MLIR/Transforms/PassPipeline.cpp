@@ -3,6 +3,9 @@
 #include "mlir/Transforms/Passes.h"
 #include "trsc/MLIR/TrscPasses.h"
 
+#include "mlir/Dialect/GPU/Pipelines/Passes.h"
+#include "mlir/Dialect/Linalg/Passes.h"
+
 namespace mlir {
   namespace trscd {
 
@@ -18,7 +21,12 @@ namespace mlir {
     }
 
     void buildLoweringPipeline(mlir::OpPassManager &pm) {
-
+      // NVVM pipeline never lowers linalg; turn it into loops first.
+      pm.addPass(mlir::createConvertLinalgToLoopsPass());
+      mlir::gpu::GPUToNVVMPipelineOptions options;
+      options.cubinFormat = "isa";
+      options.optLevel = 3;
+      mlir::gpu::buildLowerToNVVMPassPipeline(pm, options);
     }
   } // namespace trscd
 } // namespace mlir

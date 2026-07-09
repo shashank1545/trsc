@@ -23,6 +23,7 @@ struct CompilerOptions {
   bool DumpSymbolTable = false;
   bool DumpTypedAST = false;
   bool EmitMLIR = false;
+  int MatMulOptLevel = 6;
   OptimizationStage Optim = OptimizationStage::OptimizedMLIR;
 };
 

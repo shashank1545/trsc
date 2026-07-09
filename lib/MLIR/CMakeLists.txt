@@ -32,6 +32,7 @@ add_subdirectory(IR)
 add_subdirectory(Utils)
 add_subdirectory(Transforms)
 add_subdirectory(MLIRGen)
+add_subdirectory(MatMulOpts)
 
 add_library(TrscMLIRComponents INTERFACE)
 
@@ -41,4 +42,5 @@ target_link_libraries(TrscMLIRComponents
   TrscUtils
   TrscTransforms 
   TrscMLIRGen 
+  TrscMatMulOpts
 )

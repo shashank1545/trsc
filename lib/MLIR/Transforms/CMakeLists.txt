@@ -23,9 +23,18 @@ add_mlir_library(TrscTransforms
   # MLIRControlFlowDialect
   MLIRMemRefDialect
   MLIRLinalgDialect
+  MLIRLinalgTransforms
   MLIRSCFDialect
   MLIRPass
   MLIRTransforms
+  MLIRGPUTransforms
+  MLIRGPUPipelines
+  MLIRGPUToNVVMTransforms
+  MLIRGPUToGPURuntimeTransforms
+  MLIRLLVMDialect
+  MLIRNVVMDialect
+  MLIRTargetLLVMIRExport
+  MLIRNVVMToLLVMIRTranslation
 )
 
 target_include_directories(TrscTransforms PUBLIC

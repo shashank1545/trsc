@@ -13,6 +13,7 @@
 #include "trsc/Sema/SymbolTablePrinter.h"
 #include "trsc/MLIR/TrscMLIRGen.h"
 #include "trsc/MLIR/Transforms/PassPipeline.h"
+#include "trsc/MLIR/MatMulOpts/MatMulOptPasses.h"
 
 #include "llvm/Support/FileSystem.h"
 
@@ -176,40 +177,58 @@ int main(int argc, char **argv) {
   }
 
   mlir::MLIRContext MLIRCtx;
+
   trsc::MLIRGen MLIRGen(MLIRCtx, Ctx, ST);
   mlir::OwningOpRef<mlir::ModuleOp> Module = MLIRGen.genModule(*AST);
 
-  if(options.EmitMLIR) {
-    if (!Module) {
-      std::cerr << "Error: MLIR generation failed.\n";
+  if (!Module) {
+    std::cerr << "Error: MLIR generation failed.\n";
+    return 1;
+  }
+
+  {
+    if(options.Verbose) {
+      std::cerr << "Running optimization passes.\n";
+    }
+    mlir::PassManager PM(&MLIRCtx);
+    switch (options.Optim) {
+      case trsc::OptimizationStage::RawMLIR:
+        break;
+      case trsc::OptimizationStage::CleanedMLIR:
+        mlir::trscd::buildCleanupPipeline(PM);
+        break;
+      case trsc::OptimizationStage::LoopOptimized:
+        mlir::trscd::buildLoopOptPipeline(PM);
+        break;
+      case trsc::OptimizationStage::StandardLowering:
+        break;
+      case trsc::OptimizationStage::OptimizedMLIR:
+        mlir::trscd::buildCleanupPipeline(PM);
+        mlir::trscd::buildLoopOptPipeline(PM);
+        break;
+      default:
+        std::cerr << "Unknown optimization pass.\n";
+        break;
+    }
+
+    // MatMul recognition/lowering must see trscd ops, so it runs before
+    // the LLVM lowering pipeline.
+    if (options.Optim != trsc::OptimizationStage::RawMLIR &&
+        options.MatMulOptLevel > 0) {
+      mlir::trscd::buildMatMulOptPipeline(PM, options.MatMulOptLevel);
+    }
+
+    if (options.Optim == trsc::OptimizationStage::StandardLowering) {
+      mlir::trscd::buildLoweringPipeline(PM);
+    }
+
+    if(mlir::failed(PM.run(*Module))) {
+      std::cerr << "Error: Optimization pipeline failed.\n";
       return 1;
     }
-    if (options.Optim != trsc::OptimizationStage::RawMLIR) {
-      if(options.Verbose) {
-        std::cerr << "Running optimization passes.\n";
-      }
-      mlir::PassManager pm(&MLIRCtx);
-      switch (options.Optim) {
-        case trsc::OptimizationStage::RawMLIR:
-          break;
-        case trsc::OptimizationStage::CleanedMLIR:
-          mlir::trscd::buildCleanupPipeline(pm);
-          break;
-        case trsc::OptimizationStage::LoopOptimized:
-          mlir::trscd::buildLoopOptPipeline(pm);
-          break;
-        case trsc::OptimizationStage::StandardLowering:
-          mlir::trscd::buildLoweringPipeline(pm);
-          break;
-        default:
-          std::cerr << "Unknown optimization pass.\n";
-          break;
-        }
-      if(mlir::failed(pm.run(*Module))) {
-        std::cerr << "Error: Optimization pipeline failed.\n";
-        return 1;
-      }
-    } 
+  }
+
+  if(options.EmitMLIR) {
     if(!options.OutputFile.empty()) {
       std::error_code ec;
       llvm::raw_fd_ostream outfile(options.OutputFile, ec, llvm::sys::fs::OF_None);
@@ -222,8 +241,10 @@ int main(int argc, char **argv) {
       Module->print(llvm::outs());
     }
     if(options.Verbose) {
-      std::cerr << "Exiting after EMlitting MLIR (emit-mlir requested)." << "\n";
+      std::cerr << "Exiting after Emitting MLIR (emit-mlir requested)." << "\n";
     }
     return 0;
   }
+
+  return 0;
 }

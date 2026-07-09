@@ -19,6 +19,12 @@ add_mlir_library(TrscMLIRGen
   MLIRArithDialect
   MLIRSCFDialect
   MLIRLinalgDialect
+  MLIRGPUDialect
+  MLIRNVVMDialect
+  MLIRVectorDialect
+  MLIRRegisterAllExtensions
+  MLIRNVVMTarget
+  MLIRToLLVMIRTranslationRegistration
 )
 
 target_include_directories(TrscMLIRGen PUBLIC
