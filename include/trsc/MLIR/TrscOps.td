@@ -134,5 +134,32 @@ def ReturnOp : Op<TrscDialect, "ret" , [Terminator, Pure]> {
   let assemblyFormat = "($operands^ `:` type($operands))? attr-dict";
 }
 
+//===----------------------------------------------------------------------===//
+// MatMul / GEMM Operations
+//===----------------------------------------------------------------------===//
+
+def GemmOp : Op<TrscDialect, "gemm", []> {
+  let summary = "High-level GEMM operation";
+  let description = [{
+    The `trscd.gemm` operation represents a dense matrix multiplication:
+    C = alpha * A * B + beta * C.
+  }];
+
+  let arguments = (ins
+    AnyMemRef:$A,
+    AnyMemRef:$B,
+    AnyMemRef:$C,
+    DefaultValuedAttr<F32Attr, "1.0">:$alpha,
+    DefaultValuedAttr<F32Attr, "0.0">:$beta,
+    OptionalAttr<I64Attr>:$M,
+    OptionalAttr<I64Attr>:$N,
+    OptionalAttr<I64Attr>:$K,
+    OptionalAttr<DictionaryAttr>:$tiling_params
+  );
+
+  let assemblyFormat = "`(` $A `,` $B `,` $C `)` attr-dict `:` "
+                       "type($A) `,` type($B) `,` type($C)";
+}
+
 #endif //TRSC_OPS_TD
 

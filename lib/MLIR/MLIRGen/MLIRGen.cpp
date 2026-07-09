@@ -7,6 +7,7 @@
 
 #include "trsc/AST/ASTContext.h"
 #include "trsc/MLIR/TrscMLIRGen.h"
+#include "trsc/MLIR/TrscDialect.h"
 #include "trsc/Sema/SymbolTable.h"
 
 using namespace trsc; 
@@ -20,6 +21,7 @@ MLIRGen::MLIRGen(mlir::MLIRContext &MLIRCtx, trsc::ASTContext &ASTCtx,
     Registry.insert<mlir::arith::ArithDialect>();
     Registry.insert<mlir::scf::SCFDialect>();
     Registry.insert<mlir::linalg::LinalgDialect>();
+    Registry.insert<mlir::trscd::TrscDialect>();
     MLIRCtx.appendDialectRegistry(Registry);
     MLIRCtx.loadAllAvailableDialects();
   }
