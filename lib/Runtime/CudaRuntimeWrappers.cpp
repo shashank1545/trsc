@@ -70,6 +70,13 @@ static bool isDebugEnabled() {
               __func__, __VA_ARGS__);                                          \
   } while (0)
 
+/// Helper method that checks environment value for kernel-time profiling.
+static bool isProfileEnabled() {
+  const char *kProfileEnvironmentVariable = "TRSC_PROFILE";
+  static bool isEnabled = getenv(kProfileEnvironmentVariable) != nullptr;
+  return isEnabled;
+}
+
 // Returns default CUdevice
 static CUdevice getDefaultCuDevice() {
   CUdevice device;
@@ -190,6 +197,25 @@ mgpuLaunchKernel(CUfunction function, intptr_t gridX, intptr_t gridY,
               "threads: %ld, %ld, %ld, "
               "smem: %dkb\n",
               gridX, gridY, gridZ, blockX, blockY, blockZ, smem);
+  if (isProfileEnabled()) {
+    // TRSC_PROFILE=1: time this launch with CUDA events. Serializes the
+    // stream per launch, so only enable for benchmarking.
+    CUevent start = nullptr, stop = nullptr;
+    CUDA_REPORT_IF_ERROR(cuEventCreate(&start, CU_EVENT_DEFAULT));
+    CUDA_REPORT_IF_ERROR(cuEventCreate(&stop, CU_EVENT_DEFAULT));
+    CUDA_REPORT_IF_ERROR(cuEventRecord(start, stream));
+    CUDA_REPORT_IF_ERROR(cuLaunchKernel(function, gridX, gridY, gridZ, blockX,
+                                        blockY, blockZ, smem, stream, params,
+                                        extra));
+    CUDA_REPORT_IF_ERROR(cuEventRecord(stop, stream));
+    CUDA_REPORT_IF_ERROR(cuEventSynchronize(stop));
+    float ms = 0.0f;
+    CUDA_REPORT_IF_ERROR(cuEventElapsedTime(&ms, start, stop));
+    fprintf(stderr, "TRSC_PROFILE kernel_ms=%.4f\n", ms);
+    CUDA_REPORT_IF_ERROR(cuEventDestroy(start));
+    CUDA_REPORT_IF_ERROR(cuEventDestroy(stop));
+    return;
+  }
   CUDA_REPORT_IF_ERROR(cuLaunchKernel(function, gridX, gridY, gridZ, blockX,
                                       blockY, blockZ, smem, stream, params,
                                       extra));
