@@ -57,7 +57,7 @@ struct LowerTrscdMatMulPass
       // GPU levels stage operands in device memory. Zero-copy pinned host
       // memory makes every kernel access cross PCIe (~6 GB/s vs ~128 GB/s
       // GDDR), which caps all kernels at PCIe bandwidth regardless of tiling.
-      bool useDevice = optLevel >= 2 && optLevel <= 7;
+      bool useDevice = optLevel >= 2 && optLevel <= 8;
       // gpu.memcpy/gpu.dealloc only lower to runtime calls in async form
       // (isAsyncWithOneDependency), so chain them on a token and gpu.wait.
       Type tokenType = gpu::AsyncTokenType::get(builder.getContext());
@@ -1736,6 +1736,549 @@ struct LowerTrscdMatMulPass
                 builder, loc, applyEpilogue(loopK.getResult(i * TN + j), sCol),
                 C, ValueRange{sRow, sCol});
             builder.setInsertionPointAfter(storeCIf);
+          }
+        }
+
+        gpu::TerminatorOp::create(builder, loc);
+
+        builder.setInsertionPointAfter(launchOp);
+        finishDevice();
+        gemmOp.erase();
+      } else if (optLevel == 8) {
+        // Level 8: warp tiling on top of level 7's double buffering. The
+        // block tile (BM x BN) splits into warp tiles (WM x WN); each warp
+        // iterates WNITER subtiles of width WSUBN = WN/WNITER, and its 32
+        // lanes cover a WSUBM x WSUBN patch with TM x TN thread tiles. All
+        // SMEM reads within a warp then hit warp-coherent rows, and the
+        // per-thread work stays at WMITER*TM x WNITER*TN accumulators.
+        Value M = memref::DimOp::create(builder, loc, A, 0);
+        Value K = memref::DimOp::create(builder, loc, A, 1);
+        Value N = memref::DimOp::create(builder, loc, B, 1);
+
+        Value zero = arith::ConstantIndexOp::create(builder, loc, 0);
+        Value one = arith::ConstantIndexOp::create(builder, loc, 1);
+
+        int64_t BM = 128;
+        int64_t BN = 64;
+        int64_t BK = 8;
+        int64_t TM = 8;
+        int64_t TN = 4;
+        int64_t WM = 64;
+        int64_t WN = 32;
+        int64_t WNITER = 2;
+
+        if (auto dictAttr =
+                gemmOp->getAttrOfType<DictionaryAttr>("tiling_params")) {
+          if (auto attr =
+                  llvm::dyn_cast_or_null<IntegerAttr>(dictAttr.get("tile_M")))
+            BM = attr.getInt();
+          if (auto attr =
+                  llvm::dyn_cast_or_null<IntegerAttr>(dictAttr.get("tile_N")))
+            BN = attr.getInt();
+          if (auto attr =
+                  llvm::dyn_cast_or_null<IntegerAttr>(dictAttr.get("tile_K")))
+            BK = attr.getInt();
+          if (auto attr = llvm::dyn_cast_or_null<IntegerAttr>(
+                  dictAttr.get("thread_tile_M")))
+            TM = attr.getInt();
+          if (auto attr = llvm::dyn_cast_or_null<IntegerAttr>(
+                  dictAttr.get("thread_tile_N")))
+            TN = attr.getInt();
+          if (auto attr = llvm::dyn_cast_or_null<IntegerAttr>(
+                  dictAttr.get("warp_tile_M")))
+            WM = attr.getInt();
+          if (auto attr = llvm::dyn_cast_or_null<IntegerAttr>(
+                  dictAttr.get("warp_tile_N")))
+            WN = attr.getInt();
+          if (auto attr = llvm::dyn_cast_or_null<IntegerAttr>(
+                  dictAttr.get("warp_n_iter")))
+            WNITER = attr.getInt();
+        }
+
+        // Derive the warp-internal layout; fall back to the defaults if the
+        // requested shape doesn't decompose cleanly into 32-lane warps.
+        auto deriveOk = [&]() {
+          if (BM % WM || BN % WN || WN % WNITER)
+            return false;
+          int64_t wsubN = WN / WNITER;
+          if (wsubN % TN)
+            return false;
+          int64_t cols = wsubN / TN;
+          if (cols <= 0 || 32 % cols)
+            return false;
+          int64_t rows = 32 / cols;
+          int64_t wsubM = rows * TM;
+          if (wsubM <= 0 || WM % wsubM)
+            return false;
+          return true;
+        };
+        if (!deriveOk()) {
+          BM = 128; BN = 64; BK = 8; TM = 8; TN = 4; WM = 64; WN = 32;
+          WNITER = 2;
+        }
+        int64_t WSUBN = WN / WNITER;
+        int64_t laneCols = WSUBN / TN;
+        int64_t laneRows = 32 / laneCols;
+        int64_t WSUBM = laneRows * TM;
+        int64_t WMITER = WM / WSUBM;
+        int64_t numWarps = (BM / WM) * (BN / WN);
+        int64_t threadsPerBlock = numWarps * 32;
+        int64_t regRows = WMITER * TM;
+        int64_t regCols = WNITER * TN;
+
+        Value valBM = arith::ConstantIndexOp::create(builder, loc, BM);
+        Value valBN = arith::ConstantIndexOp::create(builder, loc, BN);
+        Value valBK = arith::ConstantIndexOp::create(builder, loc, BK);
+
+        Value valThreads =
+            arith::ConstantIndexOp::create(builder, loc, threadsPerBlock);
+
+        Value nMinus1 = arith::SubIOp::create(builder, loc, N, one);
+        Value nAdd = arith::AddIOp::create(builder, loc, nMinus1, valBN);
+        Value gridDimX = arith::DivUIOp::create(builder, loc, nAdd, valBN);
+
+        Value mMinus1 = arith::SubIOp::create(builder, loc, M, one);
+        Value mAdd = arith::AddIOp::create(builder, loc, mMinus1, valBM);
+        Value gridDimY = arith::DivUIOp::create(builder, loc, mAdd, valBM);
+
+        auto launchOp = gpu::LaunchOp::create(builder, loc, gridDimX, gridDimY,
+                                              one, valThreads, one, one);
+        launchOp->setAttr(trscd::kGemmGeneratedMarker,
+                          builder.getUnitAttr());
+
+        builder.setInsertionPointToStart(&launchOp.getBody().front());
+
+        auto smemSpace = gpu::AddressSpaceAttr::get(
+            builder.getContext(), gpu::AddressSpace::Workgroup);
+        auto f32Type = builder.getF32Type();
+        auto vec4Type = VectorType::get({4}, f32Type);
+
+        MemRefType smemAType = MemRefType::get(
+            {2, BK, BM}, f32Type, MemRefLayoutAttrInterface(), smemSpace);
+        MemRefType smemBType = MemRefType::get(
+            {2, BK, BN}, f32Type, MemRefLayoutAttrInterface(), smemSpace);
+
+        Value smemA = launchOp.addWorkgroupAttribution(smemAType, loc);
+        Value smemB = launchOp.addWorkgroupAttribution(smemBType, loc);
+
+        Value bx = launchOp.getBlockIds().x;
+        Value by = launchOp.getBlockIds().y;
+        Value tid = launchOp.getThreadIds().x;
+
+        auto cst = [&](int64_t v) {
+          return arith::ConstantIndexOp::create(builder, loc, v);
+        };
+
+        // Warp / lane decomposition of the flat thread id.
+        Value val32 = cst(32);
+        Value warpId = arith::DivUIOp::create(builder, loc, tid, val32);
+        Value laneId = arith::RemUIOp::create(builder, loc, tid, val32);
+        Value warpsPerRow = cst(BN / WN);
+        Value warpRow = arith::DivUIOp::create(builder, loc, warpId,
+                                               warpsPerRow);
+        Value warpCol = arith::RemUIOp::create(builder, loc, warpId,
+                                               warpsPerRow);
+        Value valLaneCols = cst(laneCols);
+        Value laneRow = arith::DivUIOp::create(builder, loc, laneId,
+                                               valLaneCols);
+        Value laneCol = arith::RemUIOp::create(builder, loc, laneId,
+                                               valLaneCols);
+
+        // Per-thread row/col starts inside the block tile, one per warp
+        // subtile: rowInBlock(wm) = warpRow*WM + wm*WSUBM + laneRow*TM,
+        // colInBlock(wn) = warpCol*WN + wn*WSUBN + laneCol*TN.
+        Value blockRow = arith::MulIOp::create(builder, loc, by, valBM);
+        Value blockCol = arith::MulIOp::create(builder, loc, bx, valBN);
+        Value warpRowOff =
+            arith::MulIOp::create(builder, loc, warpRow, cst(WM));
+        Value warpColOff =
+            arith::MulIOp::create(builder, loc, warpCol, cst(WN));
+        Value laneRowOff =
+            arith::MulIOp::create(builder, loc, laneRow, cst(TM));
+        Value laneColOff =
+            arith::MulIOp::create(builder, loc, laneCol, cst(TN));
+
+        SmallVector<Value> rowInBlock(WMITER), colInBlock(WNITER);
+        SmallVector<Value> rowStart(WMITER), colStart(WNITER);
+        for (int64_t wm = 0; wm < WMITER; ++wm) {
+          Value r = arith::AddIOp::create(builder, loc, warpRowOff,
+                                          laneRowOff);
+          if (wm > 0)
+            r = arith::AddIOp::create(builder, loc, r, cst(wm * WSUBM));
+          rowInBlock[wm] = r;
+          rowStart[wm] = arith::AddIOp::create(builder, loc, blockRow, r);
+        }
+        for (int64_t wn = 0; wn < WNITER; ++wn) {
+          Value c = arith::AddIOp::create(builder, loc, warpColOff,
+                                          laneColOff);
+          if (wn > 0)
+            c = arith::AddIOp::create(builder, loc, c, cst(wn * WSUBN));
+          colInBlock[wn] = c;
+          colStart[wn] = arith::AddIOp::create(builder, loc, blockCol, c);
+        }
+
+        int64_t maxT = TM > TN ? TM : TN;
+        if (maxT < 4)
+          maxT = 4;
+        SmallVector<Value> cIdx;
+        for (int64_t t = 0; t < maxT; ++t)
+          cIdx.push_back(cst(t));
+        Value zeroF32 = arith::ConstantOp::create(builder, loc,
+                                                  builder.getF32FloatAttr(0.0));
+
+        // Accumulators from C; flat index (wm*TM+i)*regCols + wn*TN+j.
+        SmallVector<Value> initAcc;
+        initAcc.reserve(regRows * regCols);
+        for (int64_t wm = 0; wm < WMITER; ++wm) {
+          for (int64_t i = 0; i < TM; ++i) {
+            Value rowInit =
+                arith::AddIOp::create(builder, loc, rowStart[wm], cIdx[i]);
+            Value rowCondInit = arith::CmpIOp::create(
+                builder, loc, arith::CmpIPredicate::ult, rowInit, M);
+            for (int64_t wn = 0; wn < WNITER; ++wn) {
+              for (int64_t j = 0; j < TN; ++j) {
+                Value colInit = arith::AddIOp::create(builder, loc,
+                                                      colStart[wn], cIdx[j]);
+                Value colCondInit = arith::CmpIOp::create(
+                    builder, loc, arith::CmpIPredicate::ult, colInit, N);
+                Value inBoundsInit = arith::AndIOp::create(
+                    builder, loc, rowCondInit, colCondInit);
+                auto loadCIf = scf::IfOp::create(builder, loc, f32Type,
+                                                 inBoundsInit,
+                                                 /*withElseRegion=*/true);
+                builder.setInsertionPointToStart(
+                    &loadCIf.getThenRegion().front());
+                Value cVal = memref::LoadOp::create(
+                    builder, loc, C, ValueRange{rowInit, colInit});
+                scf::YieldOp::create(builder, loc, cVal);
+                builder.setInsertionPointToStart(
+                    &loadCIf.getElseRegion().front());
+                scf::YieldOp::create(builder, loc, zeroF32);
+                builder.setInsertionPointAfter(loadCIf);
+                initAcc.push_back(loadCIf.getResult(0));
+              }
+            }
+          }
+        }
+
+        Value val2 = cst(2);
+        Value val4 = cst(4);
+        Value valBKDiv4 = cst(BK / 4);
+        Value valBNDiv4 = cst(BN / 4);
+        Value bmTimesBkDiv4 = cst((BM * BK) / 4);
+        Value bkTimesBnDiv4 = cst((BK * BN) / 4);
+
+        // Cooperative prologue load of the k=0 tile into buffer 0 (same
+        // float4 loads + transposed A scatter as levels 6/7).
+        auto emitTileLoads = [&](Value buf, Value bkVal) {
+          auto loadALoop =
+              scf::ForOp::create(builder, loc, tid, bmTimesBkDiv4, valThreads);
+          builder.setInsertionPointToStart(loadALoop.getBody());
+          Value linearA = loadALoop.getInductionVar();
+          Value aRow = arith::DivUIOp::create(builder, loc, linearA, valBKDiv4);
+          Value aColDiv4 =
+              arith::RemUIOp::create(builder, loc, linearA, valBKDiv4);
+          Value aCol = arith::MulIOp::create(builder, loc, aColDiv4, val4);
+
+          Value globalARow =
+              arith::AddIOp::create(builder, loc, blockRow, aRow);
+          Value globalACol = arith::AddIOp::create(builder, loc, bkVal, aCol);
+
+          Value aRowCond = arith::CmpIOp::create(
+              builder, loc, arith::CmpIPredicate::ult, globalARow, M);
+          Value aColCond = arith::CmpIOp::create(
+              builder, loc, arith::CmpIPredicate::ult, globalACol, K);
+          Value aCond = arith::AndIOp::create(builder, loc, aRowCond, aColCond);
+
+          auto loadAIf =
+              scf::IfOp::create(builder, loc, aCond, /*withElseRegion=*/false);
+          builder.setInsertionPointToStart(&loadAIf.getThenRegion().front());
+
+          Value aVecVal = vector::LoadOp::create(
+              builder, loc, vec4Type, A, ValueRange{globalARow, globalACol});
+          for (int64_t q = 0; q < 4; ++q) {
+            Value elem = vector::ExtractOp::create(builder, loc, aVecVal, q);
+            Value smRow = arith::AddIOp::create(builder, loc, aCol, cIdx[q]);
+            memref::StoreOp::create(builder, loc, elem, smemA,
+                                    ValueRange{buf, smRow, aRow});
+          }
+
+          builder.setInsertionPointAfter(loadAIf);
+          builder.setInsertionPointAfter(loadALoop);
+
+          auto loadBLoop =
+              scf::ForOp::create(builder, loc, tid, bkTimesBnDiv4, valThreads);
+          builder.setInsertionPointToStart(loadBLoop.getBody());
+          Value linearB = loadBLoop.getInductionVar();
+          Value bRow = arith::DivUIOp::create(builder, loc, linearB, valBNDiv4);
+          Value bColDiv4 =
+              arith::RemUIOp::create(builder, loc, linearB, valBNDiv4);
+          Value bCol = arith::MulIOp::create(builder, loc, bColDiv4, val4);
+
+          Value globalBRow = arith::AddIOp::create(builder, loc, bkVal, bRow);
+          Value globalBCol =
+              arith::AddIOp::create(builder, loc, blockCol, bCol);
+
+          Value bRowCond = arith::CmpIOp::create(
+              builder, loc, arith::CmpIPredicate::ult, globalBRow, K);
+          Value bColCond = arith::CmpIOp::create(
+              builder, loc, arith::CmpIPredicate::ult, globalBCol, N);
+          Value bCond = arith::AndIOp::create(builder, loc, bRowCond, bColCond);
+
+          auto loadBIf =
+              scf::IfOp::create(builder, loc, bCond, /*withElseRegion=*/false);
+          builder.setInsertionPointToStart(&loadBIf.getThenRegion().front());
+
+          Value bVecVal = vector::LoadOp::create(
+              builder, loc, vec4Type, B, ValueRange{globalBRow, globalBCol});
+          vector::StoreOp::create(builder, loc, bVecVal, smemB,
+                                  ValueRange{buf, bRow, bCol});
+
+          builder.setInsertionPointAfter(loadBIf);
+          builder.setInsertionPointAfter(loadBLoop);
+        };
+
+        emitTileLoads(zero, zero);
+        gpu::BarrierOp::create(builder, loc);
+
+        auto loopK = scf::ForOp::create(builder, loc, zero, K, valBK, initAcc);
+        if (!loopK.getBody()->empty()) {
+          loopK.getBody()->getTerminator()->erase();
+        }
+        builder.setInsertionPointToStart(loopK.getBody());
+        Value bk = loopK.getInductionVar();
+
+        Value tileIdx = arith::DivUIOp::create(builder, loc, bk, valBK);
+        Value bufIdx = arith::RemUIOp::create(builder, loc, tileIdx, val2);
+        Value otherBuf = arith::SubIOp::create(builder, loc, one, bufIdx);
+
+        // Register-staged prefetch of the next K-tile (see level 7).
+        Value nextBk = arith::AddIOp::create(builder, loc, bk, valBK);
+        Value hasNext = arith::CmpIOp::create(
+            builder, loc, arith::CmpIPredicate::ult, nextBk, K);
+        Value zeroVec = arith::ConstantOp::create(
+            builder, loc, vec4Type, builder.getZeroAttr(vec4Type));
+
+        int64_t vecsA = (BM * BK) / 4;
+        int64_t vecsB = (BK * BN) / 4;
+        int64_t slotsA = (vecsA + threadsPerBlock - 1) / threadsPerBlock;
+        int64_t slotsB = (vecsB + threadsPerBlock - 1) / threadsPerBlock;
+
+        SmallVector<Value> aPreVec, aPreCond, aPreCol, aPreRow;
+        for (int64_t s = 0; s < slotsA; ++s) {
+          Value linear =
+              s == 0 ? tid
+                     : arith::AddIOp::create(builder, loc, tid,
+                                             cst(s * threadsPerBlock));
+          Value aRow = arith::DivUIOp::create(builder, loc, linear, valBKDiv4);
+          Value aColDiv4 =
+              arith::RemUIOp::create(builder, loc, linear, valBKDiv4);
+          Value aCol = arith::MulIOp::create(builder, loc, aColDiv4, val4);
+          Value globalARow =
+              arith::AddIOp::create(builder, loc, blockRow, aRow);
+          Value globalACol = arith::AddIOp::create(builder, loc, nextBk, aCol);
+          Value cond = arith::AndIOp::create(
+              builder, loc, hasNext,
+              arith::AndIOp::create(
+                  builder, loc,
+                  arith::CmpIOp::create(builder, loc,
+                                        arith::CmpIPredicate::ult, globalARow,
+                                        M),
+                  arith::CmpIOp::create(builder, loc,
+                                        arith::CmpIPredicate::ult, globalACol,
+                                        K)));
+          if ((s + 1) * threadsPerBlock > vecsA)
+            cond = arith::AndIOp::create(
+                builder, loc, cond,
+                arith::CmpIOp::create(builder, loc,
+                                      arith::CmpIPredicate::ult, linear,
+                                      cst(vecsA)));
+          auto ldIf = scf::IfOp::create(builder, loc, vec4Type, cond,
+                                        /*withElseRegion=*/true);
+          builder.setInsertionPointToStart(&ldIf.getThenRegion().front());
+          Value v = vector::LoadOp::create(builder, loc, vec4Type, A,
+                                           ValueRange{globalARow, globalACol});
+          scf::YieldOp::create(builder, loc, v);
+          builder.setInsertionPointToStart(&ldIf.getElseRegion().front());
+          scf::YieldOp::create(builder, loc, zeroVec);
+          builder.setInsertionPointAfter(ldIf);
+          aPreVec.push_back(ldIf.getResult(0));
+          aPreCond.push_back(cond);
+          aPreCol.push_back(aCol);
+          aPreRow.push_back(aRow);
+        }
+
+        SmallVector<Value> bPreVec, bPreCond, bPreCol, bPreRow;
+        for (int64_t s = 0; s < slotsB; ++s) {
+          Value linear =
+              s == 0 ? tid
+                     : arith::AddIOp::create(builder, loc, tid,
+                                             cst(s * threadsPerBlock));
+          Value bRow = arith::DivUIOp::create(builder, loc, linear, valBNDiv4);
+          Value bColDiv4 =
+              arith::RemUIOp::create(builder, loc, linear, valBNDiv4);
+          Value bCol = arith::MulIOp::create(builder, loc, bColDiv4, val4);
+          Value globalBRow = arith::AddIOp::create(builder, loc, nextBk, bRow);
+          Value globalBCol =
+              arith::AddIOp::create(builder, loc, blockCol, bCol);
+          Value cond = arith::AndIOp::create(
+              builder, loc, hasNext,
+              arith::AndIOp::create(
+                  builder, loc,
+                  arith::CmpIOp::create(builder, loc,
+                                        arith::CmpIPredicate::ult, globalBRow,
+                                        K),
+                  arith::CmpIOp::create(builder, loc,
+                                        arith::CmpIPredicate::ult, globalBCol,
+                                        N)));
+          if ((s + 1) * threadsPerBlock > vecsB)
+            cond = arith::AndIOp::create(
+                builder, loc, cond,
+                arith::CmpIOp::create(builder, loc,
+                                      arith::CmpIPredicate::ult, linear,
+                                      cst(vecsB)));
+          auto ldIf = scf::IfOp::create(builder, loc, vec4Type, cond,
+                                        /*withElseRegion=*/true);
+          builder.setInsertionPointToStart(&ldIf.getThenRegion().front());
+          Value v = vector::LoadOp::create(builder, loc, vec4Type, B,
+                                           ValueRange{globalBRow, globalBCol});
+          scf::YieldOp::create(builder, loc, v);
+          builder.setInsertionPointToStart(&ldIf.getElseRegion().front());
+          scf::YieldOp::create(builder, loc, zeroVec);
+          builder.setInsertionPointAfter(ldIf);
+          bPreVec.push_back(ldIf.getResult(0));
+          bPreCond.push_back(cond);
+          bPreCol.push_back(bCol);
+          bPreRow.push_back(bRow);
+        }
+
+        // Inner loop over BK; per k: load warp fragments, then
+        // WMITER x TM x WNITER x TN FMAs on SSA accumulators.
+        auto innerLoop = scf::ForOp::create(builder, loc, zero, valBK, one,
+                                            loopK.getRegionIterArgs());
+        if (!innerLoop.getBody()->empty()) {
+          innerLoop.getBody()->getTerminator()->erase();
+        }
+        builder.setInsertionPointToStart(innerLoop.getBody());
+        Value kInner = innerLoop.getInductionVar();
+
+        SmallVector<Value> regA(regRows), regB(regCols);
+        for (int64_t wm = 0; wm < WMITER; ++wm) {
+          if (TM % 4 == 0) {
+            for (int64_t i = 0; i < TM; i += 4) {
+              Value off = arith::AddIOp::create(builder, loc, rowInBlock[wm],
+                                                cIdx[i]);
+              Value v = vector::LoadOp::create(
+                  builder, loc, vec4Type, smemA,
+                  ValueRange{bufIdx, kInner, off});
+              for (int64_t q = 0; q < 4; ++q)
+                regA[wm * TM + i + q] =
+                    vector::ExtractOp::create(builder, loc, v, q);
+            }
+          } else {
+            for (int64_t i = 0; i < TM; ++i) {
+              Value off = arith::AddIOp::create(builder, loc, rowInBlock[wm],
+                                                cIdx[i]);
+              regA[wm * TM + i] = memref::LoadOp::create(
+                  builder, loc, smemA, ValueRange{bufIdx, kInner, off});
+            }
+          }
+        }
+        for (int64_t wn = 0; wn < WNITER; ++wn) {
+          if (TN % 4 == 0) {
+            for (int64_t j = 0; j < TN; j += 4) {
+              Value off = arith::AddIOp::create(builder, loc, colInBlock[wn],
+                                                cIdx[j]);
+              Value v = vector::LoadOp::create(
+                  builder, loc, vec4Type, smemB,
+                  ValueRange{bufIdx, kInner, off});
+              for (int64_t q = 0; q < 4; ++q)
+                regB[wn * TN + j + q] =
+                    vector::ExtractOp::create(builder, loc, v, q);
+            }
+          } else {
+            for (int64_t j = 0; j < TN; ++j) {
+              Value off = arith::AddIOp::create(builder, loc, colInBlock[wn],
+                                                cIdx[j]);
+              regB[wn * TN + j] = memref::LoadOp::create(
+                  builder, loc, smemB, ValueRange{bufIdx, kInner, off});
+            }
+          }
+        }
+
+        SmallVector<Value> nextAcc;
+        nextAcc.reserve(regRows * regCols);
+        for (int64_t r = 0; r < regRows; ++r) {
+          for (int64_t c = 0; c < regCols; ++c) {
+            Value sMul = arith::MulFOp::create(builder, loc, regA[r], regB[c]);
+            nextAcc.push_back(arith::AddFOp::create(
+                builder, loc, innerLoop.getRegionIterArg(r * regCols + c),
+                sMul));
+          }
+        }
+        scf::YieldOp::create(builder, loc, nextAcc);
+
+        builder.setInsertionPointAfter(innerLoop);
+
+        // Commit the prefetched registers to the other buffer, then the one
+        // barrier per K-tile (see level 7 for the ordering argument).
+        for (int64_t s = 0; s < slotsA; ++s) {
+          auto stIf = scf::IfOp::create(builder, loc, aPreCond[s],
+                                        /*withElseRegion=*/false);
+          builder.setInsertionPointToStart(&stIf.getThenRegion().front());
+          for (int64_t q = 0; q < 4; ++q) {
+            Value elem =
+                vector::ExtractOp::create(builder, loc, aPreVec[s], q);
+            Value smRow =
+                arith::AddIOp::create(builder, loc, aPreCol[s], cIdx[q]);
+            memref::StoreOp::create(builder, loc, elem, smemA,
+                                    ValueRange{otherBuf, smRow, aPreRow[s]});
+          }
+          builder.setInsertionPointAfter(stIf);
+        }
+        for (int64_t s = 0; s < slotsB; ++s) {
+          auto stIf = scf::IfOp::create(builder, loc, bPreCond[s],
+                                        /*withElseRegion=*/false);
+          builder.setInsertionPointToStart(&stIf.getThenRegion().front());
+          vector::StoreOp::create(
+              builder, loc, bPreVec[s], smemB,
+              ValueRange{otherBuf, bPreRow[s], bPreCol[s]});
+          builder.setInsertionPointAfter(stIf);
+        }
+
+        gpu::BarrierOp::create(builder, loc);
+        scf::YieldOp::create(builder, loc, innerLoop.getResults());
+
+        builder.setInsertionPointAfter(loopK);
+
+        // Store results (unrolled, epilogue applied)
+        for (int64_t wm = 0; wm < WMITER; ++wm) {
+          for (int64_t i = 0; i < TM; ++i) {
+            Value sRow =
+                arith::AddIOp::create(builder, loc, rowStart[wm], cIdx[i]);
+            Value sRowCond = arith::CmpIOp::create(
+                builder, loc, arith::CmpIPredicate::ult, sRow, M);
+            for (int64_t wn = 0; wn < WNITER; ++wn) {
+              for (int64_t j = 0; j < TN; ++j) {
+                Value sCol = arith::AddIOp::create(builder, loc,
+                                                   colStart[wn], cIdx[j]);
+                Value sColCond = arith::CmpIOp::create(
+                    builder, loc, arith::CmpIPredicate::ult, sCol, N);
+                Value sInBounds = arith::AndIOp::create(builder, loc,
+                                                        sRowCond, sColCond);
+                auto storeCIf = scf::IfOp::create(builder, loc, sInBounds,
+                                                  /*withElseRegion=*/false);
+                builder.setInsertionPointToStart(
+                    &storeCIf.getThenRegion().front());
+                int64_t accIdx =
+                    (wm * TM + i) * regCols + wn * TN + j;
+                memref::StoreOp::create(
+                    builder, loc,
+                    applyEpilogue(loopK.getResult(accIdx), sCol), C,
+                    ValueRange{sRow, sCol});
+                builder.setInsertionPointAfter(storeCIf);
+              }
+            }
           }
         }
 
