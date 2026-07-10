@@ -34,8 +34,9 @@ standalone binary using the same recipe as the integration tests
 `trsc_main` via objcopy and driven by `harness_bench.c`.
 
 - **Timing is honest end-to-end**: one rep = one full `trsc_main()` call —
-  host matrix allocation + initialization, `gpu.host_register` pinning (GPU
-  levels), kernel launch, and sync. `CLOCK_MONOTONIC` wall clock.
+  host matrix allocation + initialization, device staging (`gpu.alloc` +
+  H2D `gpu.memcpy`, GPU levels), kernel launch, D2H copy-back, and sync.
+  `CLOCK_MONOTONIC` wall clock.
 - **Warmup = 2 calls** (CUDA context init + module JIT), **reps = 10** GPU /
   3 CPU. `results.csv` reports median, min, stddev; GFLOP/s = 2N³/t.
 - **Every rep self-verifies** `c[0][0] == 2.0*N` (all-1.0 × all-2.0 input);
@@ -53,11 +54,10 @@ standalone binary using the same recipe as the integration tests
 
 ### Fair-comparison caveats (read before quoting numbers)
 
-- trsc GPU kernels operate on **pinned host memory** (`gpu.host_register`,
-  zero-copy over PCIe); cuBLAS uses device-resident buffers. PCIe bandwidth
-  (~12 GB/s) therefore bounds the trsc levels' absolute GFLOP/s. The kernel
-  ladder still differentiates because SMEM/blocktiling levels cut host
-  traffic.
+- trsc GPU kernels operate on **device-resident buffers** (staged with
+  `gpu.alloc` + `gpu.memcpy` around the launch), same as cuBLAS. End-to-end
+  numbers include the PCIe transfers for both; `{level}-kernel` vs
+  `cublas_kernel` is the apples-to-apples kernel comparison.
 - Level 1 is a naive scalar CPU loop nest — it is the correctness baseline,
   not an optimized CPU implementation.
 - GPU clocks are not locked (needs root); mitigations are warmup, medians,

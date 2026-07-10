@@ -81,31 +81,44 @@ cuBLAS:
 
 | N | L1 | L2 | L3 | L4 | L5 | L6 | cuBLAS e2e | cuBLAS kernel |
 |---|---|---|---|---|---|---|---|---|
-| 128 | 2.46 | 1.82 | 5.37 | 4.97 | 2.07 | 2.33 | 11.98 | 190.65 |
-| 256 | 2.05 | 2.6 | 19.71 | 20.26 | 4.93 | 5.03 | 57.65 | 645.28 |
-| 512 | 0.8 | 2.78 | 33.43 | 36.45 | 8.82 | 8.68 | 135.99 | 1325.61 |
-| 1024 | 0.28 | 2.8 | 42.49 | 39.7 | 9.8 | 9.95 | 172.93 | 1333.43 |
-| 2048 | — | 2.87 | 45.39 | 39.88 | 11.93 | 11.81 | 342.71 | 1200.26 |
+| 128 | 2.16 | 9.52 | 9.54 | 9.77 | 6.4 | 9.41 | 12.0 | 161.32 |
+| 256 | 2.11 | 26.63 | 27.18 | 28.59 | 24.39 | 26.95 | 49.38 | 651.54 |
+| 512 | 0.84 | 35.17 | 47.48 | 59.4 | 57.88 | 63.81 | 132.01 | 1443.2 |
+| 1024 | 0.17 | 40.09 | 54.83 | 81.23 | 84.91 | 84.14 | 131.3 | 1296.01 |
+| 2048 | — | 60.61 | 126.07 | 160.32 | 180.72 | 178.14 | 276.08 | 1259.48 |
 
-GFLOP/s, median of 10 reps (3 for CPU) after 2 warmup calls; full data
-including kernel-only times in [bench/results/](bench/results/).
+GFLOP/s, median of 10 reps (3 for CPU) after 2 warmup calls; full data in
+[bench/results/](bench/results/). Kernel-only times (CUDA events around
+each launch) come from a `--profile` sweep; at N=2048 that ladder reaches
+L2 83 / L3 265 / L4 477 / L5 636 / L6 881 GFLOP/s against a 1292 GFLOP/s
+cuBLAS sgemm — 6.5 / 20.5 / 36.9 / 49.2 / 68.2% of cuBLAS.
 
 **Methodology.** Timing is honest end-to-end: each rep is one full program
-call — host matrix allocation and initialization, `gpu.host_register`
-pinning, kernel launch, and sync — measured with `CLOCK_MONOTONIC`; every
-rep verifies the numerical result before its time counts. trsc kernels
-operate on pinned host memory (zero-copy over PCIe, ~12 GB/s), while cuBLAS
-uses device-resident buffers, so cuBLAS is shown both end-to-end (including
-allocation, copies, and sync) and kernel-only. Kernel-only trsc times
+call — host matrix allocation and initialization, device staging
+(`gpu.alloc` + H2D `gpu.memcpy`), kernel launch, D2H copy-back, and sync —
+measured with `CLOCK_MONOTONIC`; every rep verifies the numerical result
+before its time counts. trsc kernels operate on device-resident buffers,
+same as cuBLAS, which is shown both end-to-end (including allocation,
+copies, and sync) and kernel-only. Kernel-only trsc times
 (`TRSC_PROFILE=1`, CUDA events around each launch) are in the full results.
 GPU clocks are not locked; medians + warmup + per-run clock snapshots
 mitigate. Reproduce with `python3 bench/run_bench.py --all --profile` — see
 [bench/README.md](bench/README.md).
 
-**Findings.** Shared-memory tiling (L3) is the big jump — 16× over the
-coalesced-GMEM kernel (L2) at N=2048, reaching ~13% of cuBLAS kernel
-throughput while reading operands over PCIe. The benchmark also exposed a
-real regression: the 2D-blocktiling and vectorized lowerings (L5/L6) run
-3–4× slower than L3/L4 at every size ≥ 256 (confirmed kernel-only, so it is
-kernel code, not launch overhead) — currently under investigation.
+**Findings.** The kernel-only ladder tracks the reference percentages from
+[Boehm's CUDA matmul worklog](https://siboehm.com/articles/22/CUDA-MMM)
+(his kernels 2–6 on an A6000: 8.5 / 12.8 / 36.5 / 68.7 / 78.4% of cuBLAS;
+trsc L2–L6 on a GTX 1650: 6.5 / 20.5 / 36.9 / 49.2 / 68.2%). Two fixes got
+it there. First, kernels originally read operands from pinned host memory
+(`gpu.host_register` zero-copy), so every access crossed PCIe (~5.6 GB/s
+observed) and capped all levels near 45 GFLOP/s; operands are now staged in
+device memory around the launch. Second, L4–L6 kept per-thread accumulators
+in `memref.alloca` arrays indexed by loop induction variables, which NVPTX
+lowers to off-chip local memory (`ld.local`/`st.local` inside the FMA
+loop) — the reason L5/L6 originally benched 3–4× *slower* than L3. The
+thread tile is now fully unrolled at IR-build time with accumulators as
+`scf.for` iter_args (registers), and L6 additionally stores the A tile
+transposed in SMEM so fragments load as `vector<4xf32>`. Small sizes
+(N ≤ 256) still show inversions — grids of a few blocks can't fill the SMs
+and launch overhead dominates.
 
