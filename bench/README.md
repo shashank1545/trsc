@@ -42,9 +42,10 @@ standalone binary using the same recipe as the integration tests
 - **Every rep self-verifies** `c[0][0] == 2.0*N` (all-1.0 × all-2.0 input);
   a wrong result aborts the variant, so a broken kernel can never post a
   fast number.
-- **cuBLAS is reported in two framings**: `cublas_e2e` (host alloc + init +
-  cudaMalloc + H2D + sgemm + D2H + sync per rep — mirrors the work
-  `trsc_main()` performs) and `cublas_kernel` (CUDA events around the sgemm
+- **cuBLAS is reported in two framings**: `cublas_e2e` (per rep: matrix
+  init + H2D + sgemm + D2H + sync; pinned host buffers, device buffers and
+  the cuBLAS handle are allocated once outside the loop, as a real
+  application would) and `cublas_kernel` (CUDA events around the sgemm
   alone). `cublas_bench --selftest` validates the row-major layout mapping
   with non-uniform matrices before every sweep.
 - **Kernel-only trsc numbers** (`--profile`) rebuild nothing: the runtime
@@ -58,6 +59,10 @@ standalone binary using the same recipe as the integration tests
   `gpu.alloc` + `gpu.memcpy` around the launch), same as cuBLAS. End-to-end
   numbers include the PCIe transfers for both; `{level}-kernel` vs
   `cublas_kernel` is the apples-to-apples kernel comparison.
+- `cublas_e2e` amortizes buffer/handle allocation outside the timed loop;
+  `trsc_main()` re-allocates and re-pins host memory every rep. Expect a
+  structural gap between trsc end-to-end and `cublas_e2e` beyond kernel
+  quality — the closest trsc-vs-cuBLAS read is the kernel framing.
 - Level 1 is a naive scalar CPU loop nest — it is the correctness baseline,
   not an optimized CPU implementation.
 - GPU clocks are not locked (needs root); mitigations are warmup, medians,

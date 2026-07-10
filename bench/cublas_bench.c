@@ -1,8 +1,10 @@
 /* cuBLAS sgemm baseline for the trsc matmul benchmark.
  *
  * Two framings, matching bench/README.md methodology:
- *   e2e    — per rep: host alloc + init loops + cudaMalloc + H2D + sgemm
- *            + D2H + sync + frees. Mirrors the work trsc_main() performs.
+ *   e2e    — one-time setup (pinned host buffers, device buffers, handle)
+ *            outside the loop; per rep times init loops + H2D + sgemm
+ *            + D2H + sync. Allocation/handle costs are amortized as a
+ *            real application would.
  *   kernel — persistent handle/buffers; CUDA events around sgemm only.
  *
  * trsc computes row-major C = A*B. cuBLAS is column-major, so we call
@@ -97,35 +99,43 @@ static int verify_c00(const float *C, int n) {
 
 static void run_e2e(int n, int warmup, int reps) {
   size_t bytes = (size_t)n * n * sizeof(float);
+  /* One-time setup a real application amortizes across many GEMMs:
+   * pinned host buffers (full PCIe bandwidth, no per-rep page faults),
+   * persistent device buffers, and one cuBLAS handle. The timed region
+   * keeps the honest per-call work: matrix init + H2D + sgemm + D2H + sync. */
+  float *A, *B, *C;
+  CHECK_CUDA(cudaMallocHost((void **)&A, bytes));
+  CHECK_CUDA(cudaMallocHost((void **)&B, bytes));
+  CHECK_CUDA(cudaMallocHost((void **)&C, bytes));
+  float *dA, *dB, *dC;
+  CHECK_CUDA(cudaMalloc((void **)&dA, bytes));
+  CHECK_CUDA(cudaMalloc((void **)&dB, bytes));
+  CHECK_CUDA(cudaMalloc((void **)&dC, bytes));
+  cublasHandle_t h;
+  CHECK_CUBLAS(cublasCreate(&h));
+
   for (int r = -warmup; r < reps; r++) {
     double t0 = now_ms();
-    float *A = malloc(bytes), *B = malloc(bytes), *C = malloc(bytes);
-    if (!A || !B || !C) { fprintf(stderr, "host alloc failed\n"); exit(2); }
     for (size_t i = 0; i < (size_t)n * n; i++) {
       A[i] = 1.0f; B[i] = 2.0f; C[i] = 0.0f;
     }
-    float *dA, *dB, *dC;
-    CHECK_CUDA(cudaMalloc((void **)&dA, bytes));
-    CHECK_CUDA(cudaMalloc((void **)&dB, bytes));
-    CHECK_CUDA(cudaMalloc((void **)&dC, bytes));
     CHECK_CUDA(cudaMemcpy(dA, A, bytes, cudaMemcpyHostToDevice));
     CHECK_CUDA(cudaMemcpy(dB, B, bytes, cudaMemcpyHostToDevice));
-    cublasHandle_t h;
-    CHECK_CUBLAS(cublasCreate(&h));
     sgemm_rowmajor(h, n, dA, dB, dC);
     CHECK_CUDA(cudaMemcpy(C, dC, bytes, cudaMemcpyDeviceToHost));
     CHECK_CUDA(cudaDeviceSynchronize());
     double t1 = now_ms();
     int ok = verify_c00(C, n);
-    cublasDestroy(h);
-    cudaFree(dA); cudaFree(dB); cudaFree(dC);
-    free(A); free(B); free(C);
     if (r >= 0) {
       printf("%d,cublas_e2e,%d,%.3f,%d\n", n, r, t1 - t0, ok);
       fflush(stdout);
     }
     if (!ok) { fprintf(stderr, "VERIFY FAIL cublas_e2e n=%d\n", n); exit(1); }
   }
+
+  cublasDestroy(h);
+  cudaFree(dA); cudaFree(dB); cudaFree(dC);
+  cudaFreeHost(A); cudaFreeHost(B); cudaFreeHost(C);
 }
 
 static void run_kernel(int n, int warmup, int reps) {
