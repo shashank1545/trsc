@@ -33,6 +33,8 @@ add_test(
     ${CMAKE_CURRENT_SOURCE_DIR}/Lex
     ${CMAKE_CURRENT_SOURCE_DIR}/Parse
     ${CMAKE_CURRENT_SOURCE_DIR}/MLIR
+    ${CMAKE_CURRENT_SOURCE_DIR}/MatMul
+    ${CMAKE_CURRENT_SOURCE_DIR}/CodeGen
 )
 set_tests_properties(regression PROPERTIES
   LABELS            "Regression"
