@@ -45,3 +45,4 @@ bench/generated/
 bench/work/
 !bench/README.md
 !bench/results/results_table.md
+__pycache__/
