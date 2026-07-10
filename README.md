@@ -66,3 +66,46 @@ Run the `trsc` compiler with various flags to inspect different phases:
 ./bin/trsc --dump-tokens example.rs
 ```
 
+## Performance
+
+trsc recognizes matmul loop nests, rewrites them to a `trscd.gemm` op, and
+lowers them through a CUDA optimization ladder selected with
+`--matmul-opt-level` (1 = naive CPU loops, 2 = coalesced GMEM kernel,
+3 = shared-memory tiling, 4 = 1D blocktiling, 5 = 2D blocktiling,
+6 = vectorized). Measured on a GTX 1650 (sm_75), f32 square matmul, against
+cuBLAS:
+
+![GFLOP/s by optimization level](bench/results/gflops_vs_size.png)
+
+![Percent of cuBLAS at N=2048](bench/results/pct_of_cublas.png)
+
+| N | L1 | L2 | L3 | L4 | L5 | L6 | cuBLAS e2e | cuBLAS kernel |
+|---|---|---|---|---|---|---|---|---|
+| 128 | 2.46 | 1.82 | 5.37 | 4.97 | 2.07 | 2.33 | 11.98 | 190.65 |
+| 256 | 2.05 | 2.6 | 19.71 | 20.26 | 4.93 | 5.03 | 57.65 | 645.28 |
+| 512 | 0.8 | 2.78 | 33.43 | 36.45 | 8.82 | 8.68 | 135.99 | 1325.61 |
+| 1024 | 0.28 | 2.8 | 42.49 | 39.7 | 9.8 | 9.95 | 172.93 | 1333.43 |
+| 2048 | — | 2.87 | 45.39 | 39.88 | 11.93 | 11.81 | 342.71 | 1200.26 |
+
+GFLOP/s, median of 10 reps (3 for CPU) after 2 warmup calls; full data
+including kernel-only times in [bench/results/](bench/results/).
+
+**Methodology.** Timing is honest end-to-end: each rep is one full program
+call — host matrix allocation and initialization, `gpu.host_register`
+pinning, kernel launch, and sync — measured with `CLOCK_MONOTONIC`; every
+rep verifies the numerical result before its time counts. trsc kernels
+operate on pinned host memory (zero-copy over PCIe, ~12 GB/s), while cuBLAS
+uses device-resident buffers, so cuBLAS is shown both end-to-end (including
+allocation, copies, and sync) and kernel-only. Kernel-only trsc times
+(`TRSC_PROFILE=1`, CUDA events around each launch) are in the full results.
+GPU clocks are not locked; medians + warmup + per-run clock snapshots
+mitigate. Reproduce with `python3 bench/run_bench.py --all --profile` — see
+[bench/README.md](bench/README.md).
+
+**Findings.** Shared-memory tiling (L3) is the big jump — 16× over the
+coalesced-GMEM kernel (L2) at N=2048, reaching ~13% of cuBLAS kernel
+throughput while reading operands over PCIe. The benchmark also exposed a
+real regression: the 2D-blocktiling and vectorized lowerings (L5/L6) run
+3–4× slower than L3/L4 at every size ≥ 256 (confirmed kernel-only, so it is
+kernel code, not launch overhead) — currently under investigation.
+

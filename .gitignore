@@ -39,3 +39,9 @@ perf.data.old
 *.md
 *.json
 !README.md
+
+# Benchmarks
+bench/generated/
+bench/work/
+!bench/README.md
+!bench/results/results_table.md
