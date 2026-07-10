@@ -11,6 +11,7 @@
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/Path.h"
+#include "llvm/Support/Program.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
@@ -295,7 +296,8 @@ int main(int argc, char **argv) {
     return 0;
   }
 
-  // Native code generation: lower the LLVM module to a host object file.
+  // Native code generation: -emit-obj stops at the object file, the default
+  // links it into an executable.
   llvm::InitializeNativeTarget();
   llvm::InitializeNativeTargetAsmPrinter();
 
@@ -316,11 +318,19 @@ int main(int argc, char **argv) {
   LLVMModule->setDataLayout(TM->createDataLayout());
 
   llvm::SmallString<128> ObjPath;
-  if (!options.OutputFile.empty()) {
-    ObjPath = options.OutputFile;
+  if (options.EmitObj) {
+    if (!options.OutputFile.empty()) {
+      ObjPath = options.OutputFile;
+    } else {
+      ObjPath = llvm::sys::path::stem(options.InputFile);
+      ObjPath += ".o";
+    }
   } else {
-    ObjPath = llvm::sys::path::stem(options.InputFile);
-    ObjPath += ".o";
+    if (auto EC = llvm::sys::fs::createTemporaryFile("trsc", "o", ObjPath)) {
+      std::cerr << "Error: Could not create temporary object file: "
+                << EC.message() << "\n";
+      return 1;
+    }
   }
 
   {
@@ -340,8 +350,56 @@ int main(int argc, char **argv) {
     CodegenPasses.run(*LLVMModule);
   }
 
+  if (options.EmitObj) {
+    if (options.Verbose) {
+      std::cerr << "Exiting after Emitting object file (emit-obj requested)."
+                << "\n";
+    }
+    return 0;
+  }
+
   if (options.Verbose) {
-    std::cerr << "Object file written to " << ObjPath.c_str() << "\n";
+    std::cerr << "Linking executable..." << "\n";
+  }
+
+  std::string Linker;
+  for (const char *Candidate : {"clang", "gcc", "cc"}) {
+    if (auto Path = llvm::sys::findProgramByName(Candidate)) {
+      Linker = *Path;
+      break;
+    }
+  }
+  if (Linker.empty()) {
+    std::cerr << "Error: No C compiler driver (clang/gcc/cc) found to link.\n";
+    llvm::sys::fs::remove(ObjPath);
+    return 1;
+  }
+
+  // GPU-lowered code references mgpu* symbols; the static wrapper archive
+  // provides them so the binary only needs the system CUDA driver. The
+  // archive is only pulled in when referenced, and --as-needed drops the
+  // libcuda dependency for CPU-only binaries.
+  std::string Output =
+      options.OutputFile.empty() ? "a.out" : options.OutputFile;
+  std::vector<llvm::StringRef> LinkArgs = {
+      Linker, ObjPath, "-o", Output, TRSC_CUDA_RUNTIME_LIB,
+      "-Wl,--as-needed", "-lcuda", "-lstdc++", "-lm"};
+
+  std::string LinkError;
+  int LinkResult = llvm::sys::ExecuteAndWait(Linker, LinkArgs, std::nullopt,
+                                             {}, 0, 0, &LinkError);
+  llvm::sys::fs::remove(ObjPath);
+  if (LinkResult != 0) {
+    std::cerr << "Error: Linking failed";
+    if (!LinkError.empty()) {
+      std::cerr << ": " << LinkError;
+    }
+    std::cerr << "\n";
+    return 1;
+  }
+
+  if (options.Verbose) {
+    std::cerr << "Executable written to " << Output << "\n";
   }
   return 0;
 }

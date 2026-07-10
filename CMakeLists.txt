@@ -46,4 +46,5 @@ include_directories(${LLVM_INCLUDE_DIRS})
 
 add_subdirectory(lib)
 add_subdirectory(lib/MLIR)
+add_subdirectory(lib/Runtime)
 add_subdirectory(tools)
