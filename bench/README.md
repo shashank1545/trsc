@@ -1,6 +1,6 @@
 # trsc matmul benchmarks
 
-Measures the `--matmul-opt-level` ladder (1–6) against cuBLAS on square f32
+Measures the `--matmul-opt-level` ladder (1–8) against cuBLAS on square f32
 matmuls and produces the charts + table embedded in the root README.
 
 ## Prerequisites
@@ -48,6 +48,9 @@ standalone binary using the same recipe as the integration tests
   application would) and `cublas_kernel` (CUDA events around the sgemm
   alone). `cublas_bench --selftest` validates the row-major layout mapping
   with non-uniform matrices before every sweep.
+- **Tile shapes** for levels 6-8 can be overridden per compile with
+  `TRSC_GEMM_TILES=BM,BN,BK,TM,TN[,WM,WN,WNITER]` (used for the autotune
+  sweep that picked the level-8 defaults for the GTX 1650).
 - **Kernel-only trsc numbers** (`--profile`) rebuild nothing: the runtime
   wrappers time each launch with CUDA events when `TRSC_PROFILE=1` is set
   and the orchestrator parses the per-launch times (rows labeled
@@ -74,7 +77,7 @@ After a sweep, sanity-check before publishing:
 
 - level 1: ~0.5–2 GFLOP/s; `cublas_kernel` at N=2048: ~1.5–2.5 TFLOP/s on a
   GTX 1650
-- GPU levels roughly monotone 2 < 3 < 4 < 5 ≤ 6 at large N (the orchestrator
+- GPU levels roughly monotone 2 < 3 < 4 < 5 ≤ 6 ≤ 7 ≤ 8 at large N (the orchestrator
   warns on >5% inversions)
 - with `--profile`: `kernel_ms` ≤ end-to-end ms for every rep
 - two sweeps on different days should agree within ~5% on medians

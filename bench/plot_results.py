@@ -26,10 +26,12 @@ RESULTS_DIR = Path(__file__).resolve().parent / "results"
 SLOT = {
     "1": "#2a78d6", "2": "#1baf7a", "3": "#eda100",
     "4": "#008300", "5": "#4a3aa7", "6": "#e34948",
+    "7": "#b5651d", "8": "#8b1a6b",
 }
 LEVEL_NAME = {
     "1": "L1 CPU naive", "2": "L2 GMEM coalesced", "3": "L3 SMEM tiling",
     "4": "L4 1D blocktile", "5": "L5 2D blocktile", "6": "L6 vectorized",
+    "7": "L7 double buffer", "8": "L8 warp tiled",
 }
 SURFACE = "#fcfcfb"
 INK = "#0b0b0b"
@@ -204,7 +206,7 @@ def write_table(rows):
         cells = [str(gf.get((n, l), "—")) for l in labels]
         lines.append(f"| {n} | " + " | ".join(cells) + " |")
     lines.append("")
-    lines.append("GFLOP/s, median over reps. Levels 1–6 are `--matmul-opt-level`;"
+    lines.append("GFLOP/s, median over reps. Levels 1–8 are `--matmul-opt-level`;"
                  " `-kernel` rows are kernel-only (`TRSC_PROFILE=1`).")
     (RESULTS_DIR / "results_table.md").write_text("\n".join(lines) + "\n")
 

@@ -30,7 +30,7 @@ RESULTS_DIR = BENCH_DIR / "results"
 
 DEFAULT_SIZES = [128, 256, 512, 1024, 2048]
 BIG_SIZES = [4096]
-DEFAULT_LEVELS = [1, 2, 3, 4, 5, 6]
+DEFAULT_LEVELS = [1, 2, 3, 4, 5, 6, 7, 8]
 CPU_LEVELS = {0, 1}
 CPU_SIZE_CAP = 1024  # naive CPU beyond this is ~minutes per rep
 CPU_REPS = 3
