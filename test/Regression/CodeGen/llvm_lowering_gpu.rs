@@ -26,17 +26,17 @@ fn main() -> f32 {
 // LLVMDIALECT:       llvm.func @malloc(i64) -> !llvm.ptr
 // LLVMDIALECT-LABEL: llvm.func @main() -> f32
 // LLVMDIALECT:         llvm.call @malloc
-// LLVMDIALECT-COUNT-3: llvm.call @mgpuMemHostRegisterMemRef
+// LLVMDIALECT-COUNT-3: llvm.call @mgpuMemAlloc
 // LLVMDIALECT:         gpu.launch_func @main_kernel::@main_kernel
+// LLVMDIALECT:         llvm.call @mgpuMemcpy
 // LLVMDIALECT:         llvm.return %{{.*}} : f32
 // LLVMDIALECT:       gpu.binary @main_kernel
-// LLVMDIALECT:       llvm.func @mgpuMemHostRegisterMemRef(i64, !llvm.ptr, i64)
 
 // --- Translated LLVM IR (-emit-llvm) ---
 
 // LLVMIR: declare ptr @malloc(i64)
 // LLVMIR: define float @main()
-// LLVMIR-COUNT-3: call void @mgpuMemHostRegisterMemRef
+// LLVMIR-COUNT-3: call ptr @mgpuMemAlloc
 // LLVMIR: call ptr @mgpuModuleGetFunction
 // LLVMIR: call ptr @mgpuStreamCreate
 // LLVMIR: call void @mgpuLaunchKernel

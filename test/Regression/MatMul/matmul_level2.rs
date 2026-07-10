@@ -21,7 +21,7 @@ fn main() -> f32 {
 
 // CHECK-LABEL: func.func @main
 // CHECK:         %[[C32:.*]] = arith.constant 32 : index
-// CHECK-COUNT-3: gpu.host_register
+// CHECK-COUNT-3: gpu.alloc async
 // CHECK:         gpu.launch blocks({{.*}}) in ({{.*}}) threads({{.*}}) in (%{{.*}} = %[[C32]], %{{.*}} = %[[C32]], %{{.*}} = %{{.*}})
 // CHECK:           arith.cmpi ult
 // CHECK:           arith.cmpi ult

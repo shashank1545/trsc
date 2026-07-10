@@ -20,7 +20,7 @@ fn main() -> f32 {
 }
 
 // CHECK-LABEL: func.func @main
-// CHECK-COUNT-3: gpu.host_register
+// CHECK-COUNT-3: gpu.alloc async
 // CHECK:         gpu.launch blocks({{.*}}) workgroup(%[[SA:.*]] : memref<32x32xf32, #gpu.address_space<workgroup>>, %[[SB:.*]] : memref<32x32xf32, #gpu.address_space<workgroup>>)
 // CHECK:           memref.store %{{.*}}, %[[SA]]
 // CHECK:           memref.store %{{.*}}, %[[SB]]

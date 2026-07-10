@@ -22,7 +22,6 @@ fn main() -> f32 {
 }
 
 // CHECK-LABEL: func.func @main
-// CHECK-COUNT-3: gpu.host_register
 // CHECK:         trscd.gemm(%{{.*}}, %{{.*}}, %{{.*}})
 // CHECK-SAME:      tiling_params
 // CHECK-SAME:      tile_K

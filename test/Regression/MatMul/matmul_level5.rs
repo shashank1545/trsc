@@ -22,10 +22,8 @@ fn main() -> f32 {
 // CHECK-LABEL: func.func @main
 // CHECK:         %[[C8:.*]] = arith.constant 8 : index
 // CHECK:         gpu.launch blocks({{.*}}) threads({{.*}}) in (%{{.*}} = %[[C8]], %{{.*}} = %[[C8]], %{{.*}} = %{{.*}}) workgroup(%[[SA:.*]] : memref<64x8xf32, #gpu.address_space<workgroup>>, %[[SB:.*]] : memref<8x64xf32, #gpu.address_space<workgroup>>)
-// CHECK:           memref.alloca() : memref<8x8xf32>
-// CHECK:           memref.alloca() : memref<8xf32>
-// CHECK:           memref.alloca() : memref<8xf32>
-// CHECK:           scf.for %{{.*}} = %{{.*}} to %{{.*}} step %[[C8]]
+// CHECK-NOT:       memref.alloca
+// CHECK:           scf.for %{{.*}} = %{{.*}} to %{{.*}} step %[[C8]] iter_args(
 // CHECK:             memref.store %{{.*}}, %[[SA]]
 // CHECK:             memref.store %{{.*}}, %[[SB]]
 // CHECK:             gpu.barrier
