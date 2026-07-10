@@ -149,17 +149,18 @@ def GemmOp : Op<TrscDialect, "gemm", []> {
     AnyMemRef:$A,
     AnyMemRef:$B,
     AnyMemRef:$C,
+    Optional<AnyMemRef>:$bias,
     DefaultValuedAttr<F32Attr, "1.0">:$alpha,
     DefaultValuedAttr<F32Attr, "0.0">:$beta,
     OptionalAttr<I64Attr>:$M,
     OptionalAttr<I64Attr>:$N,
     OptionalAttr<I64Attr>:$K,
-    OptionalAttr<DictionaryAttr>:$tiling_params
+    OptionalAttr<DictionaryAttr>:$tiling_params,
+    DefaultValuedAttr<BoolAttr, "false">:$relu
   );
 
-  let assemblyFormat = "`(` $A `,` $B `,` $C `)` attr-dict `:` "
-                       "type($A) `,` type($B) `,` type($C)";
+  let assemblyFormat = "`(` $A `,` $B `,` $C (`,` $bias^)? `)` attr-dict `:` "
+                       "type($A) `,` type($B) `,` type($C) (`,` type($bias)^)?";
 }
 
 #endif //TRSC_OPS_TD
-

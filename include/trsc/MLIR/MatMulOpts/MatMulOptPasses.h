@@ -20,6 +20,9 @@ struct AutoTuneConfig {
 // Pass to recognize matmul patterns and lower them to trscd.gemm
 std::unique_ptr<mlir::Pass> createMatMulRecognitionPass();
 
+// Fuse a column bias-add and ReLU consumer into the producer GEMM's epilogue.
+std::unique_ptr<mlir::Pass> createGemmEpilogueFusionPass();
+
 // Pass to compute optimal parameters and attach them as attributes to
 // trscd.gemm
 std::unique_ptr<mlir::Pass> createAutoTuningPass(AutoTuneConfig config = {});
@@ -31,6 +34,9 @@ std::unique_ptr<mlir::Pass> createLowerTrscdMatMulPass(int optLevel);
 // Pipeline builder to compose the passes
 void buildMatMulOptPipeline(mlir::PassManager &pm, int optLevel,
                             AutoTuneConfig tuneConfig = {});
+
+// Register standalone matmul optimization passes with an MLIR tool driver.
+void registerMatMulOptPasses();
 
 } // namespace trscd
 } // namespace mlir

@@ -171,13 +171,14 @@ struct RecognizeMatMulPattern : public OpRewritePattern<scf::ForOp> {
     // --- Step 5: All checks passed — emit trscd.gemm ---
     rewriter.setInsertionPoint(loopI);
     trscd::GemmOp::create(rewriter, loopI.getLoc(), loadA.getMemRef(),
-                          loadB.getMemRef(), loadC.getMemRef(),
+                          loadB.getMemRef(), loadC.getMemRef(), Value(),
                           rewriter.getF32FloatAttr(1.0f), // alpha
                           rewriter.getF32FloatAttr(1.0f), // beta
                           nullptr,                        // M
                           nullptr,                        // N
                           nullptr,                        // K
-                          nullptr                         // tiling_params
+                          nullptr,                        // tiling_params
+                          rewriter.getBoolAttr(false)     // relu
     );
 
     rewriter.eraseOp(loopI);

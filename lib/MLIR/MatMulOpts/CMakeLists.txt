@@ -1,5 +1,6 @@
 add_mlir_library(TrscMatMulOpts
   AutoTuning.cpp
+  GemmEpilogueFusion.cpp
   GemmLowering.cpp
   MatMulPassPipeline.cpp
   MatMulRecognition.cpp

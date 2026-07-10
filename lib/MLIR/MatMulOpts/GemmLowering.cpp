@@ -34,6 +34,25 @@ struct LowerTrscdMatMulPass
       Value A = gemmOp.getA();
       Value B = gemmOp.getB();
       Value C = gemmOp.getC();
+      Value bias = gemmOp.getBias();
+      bool relu = gemmOp.getRelu();
+
+      // Keep bias-add and ReLU in the accumulator's final store.  This is the
+      // epilogue selected by GemmEpilogueFusionPass and avoids a second pass
+      // over C after GEMM.
+      auto applyEpilogue = [&](Value value, Value column) -> Value {
+        if (bias) {
+          Value biasValue =
+              memref::LoadOp::create(builder, loc, bias, ValueRange{column});
+          value = arith::AddFOp::create(builder, loc, value, biasValue);
+        }
+        if (relu) {
+          Value zero = arith::ConstantOp::create(
+              builder, loc, builder.getF32FloatAttr(0.0f));
+          value = arith::MaximumFOp::create(builder, loc, value, zero);
+        }
+        return value;
+      };
 
       // GPU levels stage operands in device memory. Zero-copy pinned host
       // memory makes every kernel access cross PCIe (~6 GB/s vs ~128 GB/s
@@ -68,6 +87,8 @@ struct LowerTrscdMatMulPass
         A = stageOnDevice(A);
         B = stageOnDevice(B);
         C = stageOnDevice(C);
+        if (bias)
+          bias = stageOnDevice(bias);
         gpu::WaitOp::create(builder, loc, /*asyncToken=*/Type(),
                             ValueRange{token});
       }
@@ -93,6 +114,10 @@ struct LowerTrscdMatMulPass
         token = gpu::DeallocOp::create(builder, loc, tokenType,
                                        ValueRange{token}, C)
                     .getAsyncToken();
+        if (bias)
+          token = gpu::DeallocOp::create(builder, loc, tokenType,
+                                         ValueRange{token}, bias)
+                      .getAsyncToken();
         gpu::WaitOp::create(builder, loc, /*asyncToken=*/Type(),
                             ValueRange{token});
       };
@@ -138,7 +163,8 @@ struct LowerTrscdMatMulPass
 
         builder.setInsertionPointAfter(loopK);
         memref::StoreOp::create(
-            builder, loc, loopK.getResult(0), C,
+            builder, loc,
+            applyEpilogue(loopK.getResult(0), loopJ.getInductionVar()), C,
             ValueRange{loopI.getInductionVar(), loopJ.getInductionVar()});
 
         gemmOp.erase();
@@ -223,7 +249,8 @@ struct LowerTrscdMatMulPass
         Value mul = arith::MulFOp::create(builder, loc, loadA, loadB);
         Value add = arith::AddFOp::create(builder, loc, loadC, mul);
 
-        memref::StoreOp::create(builder, loc, add, C, ValueRange{row, col});
+        memref::StoreOp::create(builder, loc, applyEpilogue(add, col), C,
+                                ValueRange{row, col});
 
         builder.setInsertionPointAfter(ifOp);
         gpu::TerminatorOp::create(builder, loc);
@@ -396,7 +423,8 @@ struct LowerTrscdMatMulPass
         auto storeCIf =
             scf::IfOp::create(builder, loc, inBounds, /*withElseRegion=*/false);
         builder.setInsertionPointToStart(&storeCIf.getThenRegion().front());
-        memref::StoreOp::create(builder, loc, loopK.getResult(0), C,
+        memref::StoreOp::create(builder, loc,
+                                applyEpilogue(loopK.getResult(0), col), C,
                                 ValueRange{row, col});
 
         builder.setInsertionPointAfter(storeCIf);
@@ -643,7 +671,8 @@ struct LowerTrscdMatMulPass
           auto storeCIf = scf::IfOp::create(builder, loc, sInBounds,
                                             /*withElseRegion=*/false);
           builder.setInsertionPointToStart(&storeCIf.getThenRegion().front());
-          memref::StoreOp::create(builder, loc, loopK.getResult(i), C,
+          memref::StoreOp::create(builder, loc,
+                                  applyEpilogue(loopK.getResult(i), col), C,
                                   ValueRange{sRow, col});
           builder.setInsertionPointAfter(storeCIf);
         }
@@ -916,7 +945,8 @@ struct LowerTrscdMatMulPass
                                               /*withElseRegion=*/false);
             builder.setInsertionPointToStart(
                 &storeCIf.getThenRegion().front());
-            memref::StoreOp::create(builder, loc, loopK.getResult(i * TN + j),
+            memref::StoreOp::create(
+                builder, loc, applyEpilogue(loopK.getResult(i * TN + j), sCol),
                                     C, ValueRange{sRow, sCol});
             builder.setInsertionPointAfter(storeCIf);
           }
@@ -1240,7 +1270,8 @@ struct LowerTrscdMatMulPass
                                               /*withElseRegion=*/false);
             builder.setInsertionPointToStart(
                 &storeCIf.getThenRegion().front());
-            memref::StoreOp::create(builder, loc, loopK.getResult(i * TN + j),
+            memref::StoreOp::create(
+                builder, loc, applyEpilogue(loopK.getResult(i * TN + j), sCol),
                                     C, ValueRange{sRow, sCol});
             builder.setInsertionPointAfter(storeCIf);
           }

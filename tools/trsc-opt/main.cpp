@@ -10,6 +10,7 @@
 
 #include "trsc/MLIR/TrscPasses.h"
 #include "trsc/MLIR/TrscDialect.h"
+#include "trsc/MLIR/MatMulOpts/MatMulOptPasses.h"
 
 int main(int argc, char **argv) {
   // Register MLIR command line options
@@ -30,6 +31,7 @@ int main(int argc, char **argv) {
   mlir::registerMem2RegPass();
 
   mlir::trscd::registerTrscPasses();
+  mlir::trscd::registerMatMulOptPasses();
 
   return mlir::asMainReturnCode(
       mlir::MlirOptMain(argc, argv, "TRSC optimizer driver\n", registry));
