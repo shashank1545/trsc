@@ -6,6 +6,7 @@ add_mlir_library(TrscMatMulOpts
 
   DEPENDS
   TrscOpsIncGen
+  TrscPassesIncGen
 
   LINK_LIBS PUBLIC
   MLIRIR

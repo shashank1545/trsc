@@ -25,6 +25,7 @@ add_mlir_library(TrscTransforms
   MLIRLinalgDialect
   MLIRLinalgTransforms
   MLIRSCFDialect
+  MLIRSCFUtils
   MLIRPass
   MLIRTransforms
   MLIRGPUTransforms

@@ -205,38 +205,35 @@ int main(int argc, char **argv) {
       std::cerr << "Running optimization passes.\n";
     }
     mlir::PassManager PM(&MLIRCtx);
-    switch (options.Optim) {
-      case trsc::OptimizationStage::RawMLIR:
-        break;
-      case trsc::OptimizationStage::CleanedMLIR:
-        mlir::trscd::buildCleanupPipeline(PM);
-        break;
-      case trsc::OptimizationStage::LoopOptimized:
-        mlir::trscd::buildLoopOptPipeline(PM);
-        break;
-      case trsc::OptimizationStage::StandardLowering:
-        break;
-      case trsc::OptimizationStage::OptimizedMLIR:
-        mlir::trscd::buildCleanupPipeline(PM);
-        mlir::trscd::buildLoopOptPipeline(PM);
-        break;
-      default:
-        std::cerr << "Unknown optimization pass.\n";
-        break;
-    }
+    // Every major optimization stage is followed by a cleaning round
+    // (canonicalize + CSE). For code-emitting paths (-emit-llvm, -emit-obj,
+    // linking) the full pipeline always runs before lowering; -emit-mlir
+    // uses -optim to select how far the pipeline runs so each stage can be
+    // inspected.
+    trsc::OptimizationStage Stage =
+        options.EmitMLIR ? options.Optim
+                         : trsc::OptimizationStage::StandardLowering;
 
-    // MatMul recognition/lowering must see trscd ops, so it runs before
-    // the LLVM lowering pipeline.
-    if (options.Optim != trsc::OptimizationStage::RawMLIR &&
-        options.MatMulOptLevel > 0) {
-      mlir::trscd::buildMatMulOptPipeline(PM, options.MatMulOptLevel);
+    if (Stage != trsc::OptimizationStage::RawMLIR) {
+      mlir::trscd::buildCleanupPipeline(PM);
+      mlir::trscd::buildMem2RegPipeline(PM);
+      mlir::trscd::buildCleanupPipeline(PM);
     }
-
-    // Translation to LLVM IR requires the module in the LLVM dialect, so
-    // every path except -emit-mlir lowers; -emit-mlir only lowers when
-    // -optim=stdlowering asks for it.
-    if (options.Optim == trsc::OptimizationStage::StandardLowering ||
-        !options.EmitMLIR) {
+    if (Stage != trsc::OptimizationStage::RawMLIR &&
+        Stage != trsc::OptimizationStage::CleanedMLIR) {
+      mlir::trscd::buildLoopOptPipeline(PM);
+      mlir::trscd::buildCleanupPipeline(PM);
+    }
+    if (Stage == trsc::OptimizationStage::OptimizedMLIR ||
+        Stage == trsc::OptimizationStage::StandardLowering) {
+      if (options.MatMulOptLevel > 0) {
+        mlir::trscd::buildMatMulOptPipeline(PM, options.MatMulOptLevel);
+        mlir::trscd::buildCleanupPipeline(PM);
+      }
+      mlir::trscd::buildLateLoopOptPipeline(PM);
+      mlir::trscd::buildCleanupPipeline(PM);
+    }
+    if (Stage == trsc::OptimizationStage::StandardLowering) {
       mlir::trscd::buildLoweringPipeline(PM);
     }
 

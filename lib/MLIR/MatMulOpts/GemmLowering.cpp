@@ -8,6 +8,7 @@
 #include "mlir/Pass/Pass.h"
 #include "trsc/MLIR/MatMulOpts/MatMulOptPasses.h"
 #include "trsc/MLIR/TrscOps.h"
+#include "trsc/MLIR/TrscPasses.h"
 
 using namespace mlir;
 
@@ -59,6 +60,7 @@ struct LowerTrscdMatMulPass
         Value one = arith::ConstantIndexOp::create(builder, loc, 1);
 
         auto loopI = scf::ForOp::create(builder, loc, zero, M, one);
+        loopI->setAttr(trscd::kGemmGeneratedMarker, builder.getUnitAttr());
         builder.setInsertionPointToStart(loopI.getBody());
 
         auto loopJ = scf::ForOp::create(builder, loc, zero, N, one);
@@ -132,6 +134,8 @@ struct LowerTrscdMatMulPass
 
         auto launchOp = gpu::LaunchOp::create(builder, loc, gridDimX, gridDimY,
                                               one, blockDimX, blockDimY, one);
+        launchOp->setAttr(trscd::kGemmGeneratedMarker,
+                          builder.getUnitAttr());
 
         builder.setInsertionPointToStart(&launchOp.getBody().front());
 
@@ -221,6 +225,8 @@ struct LowerTrscdMatMulPass
 
         auto launchOp = gpu::LaunchOp::create(builder, loc, gridDimX, gridDimY,
                                               one, blockDimX, blockDimY, one);
+        launchOp->setAttr(trscd::kGemmGeneratedMarker,
+                          builder.getUnitAttr());
 
         builder.setInsertionPointToStart(&launchOp.getBody().front());
 
@@ -401,6 +407,8 @@ struct LowerTrscdMatMulPass
 
         auto launchOp = gpu::LaunchOp::create(builder, loc, gridDimX, gridDimY,
                                               one, blockDimX, blockDimY, one);
+        launchOp->setAttr(trscd::kGemmGeneratedMarker,
+                          builder.getUnitAttr());
 
         builder.setInsertionPointToStart(&launchOp.getBody().front());
 
@@ -655,6 +663,8 @@ struct LowerTrscdMatMulPass
 
         auto launchOp = gpu::LaunchOp::create(builder, loc, gridDimX, gridDimY,
                                               one, blockDimX, blockDimY, one);
+        launchOp->setAttr(trscd::kGemmGeneratedMarker,
+                          builder.getUnitAttr());
 
         builder.setInsertionPointToStart(&launchOp.getBody().front());
 
@@ -949,6 +959,8 @@ struct LowerTrscdMatMulPass
 
         auto launchOp = gpu::LaunchOp::create(builder, loc, gridDimX, gridDimY,
                                               one, blockDimX, blockDimY, one);
+        launchOp->setAttr(trscd::kGemmGeneratedMarker,
+                          builder.getUnitAttr());
 
         builder.setInsertionPointToStart(&launchOp.getBody().front());
 
