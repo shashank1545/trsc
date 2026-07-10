@@ -10,9 +10,49 @@
 #include "trsc/MLIR/TrscOps.h"
 #include "trsc/MLIR/TrscPasses.h"
 
+#include <cstdlib>
+
 using namespace mlir;
 
 namespace {
+// Tile-shape override for autotuning sweeps: TRSC_GEMM_TILES=
+// "BM,BN,BK,TM,TN[,WM,WN,WNITER]". A tiling_params attr on the gemm op
+// still wins over the environment; absent both, each level's defaults
+// apply.
+struct TileOverride {
+  bool valid = false;
+  int64_t BM, BN, BK, TM, TN;
+  bool hasWarp = false;
+  int64_t WM, WN, WNITER;
+};
+
+static TileOverride readTileOverride() {
+  TileOverride t;
+  const char *env = std::getenv("TRSC_GEMM_TILES");
+  if (!env)
+    return t;
+  SmallVector<int64_t, 8> vals;
+  StringRef s(env);
+  while (!s.empty()) {
+    auto [head, rest] = s.split(',');
+    int64_t v;
+    if (head.trim().getAsInteger(10, v))
+      return t;
+    vals.push_back(v);
+    s = rest;
+  }
+  if (vals.size() != 5 && vals.size() != 8)
+    return t;
+  t.valid = true;
+  t.BM = vals[0]; t.BN = vals[1]; t.BK = vals[2];
+  t.TM = vals[3]; t.TN = vals[4];
+  if (vals.size() == 8) {
+    t.hasWarp = true;
+    t.WM = vals[5]; t.WN = vals[6]; t.WNITER = vals[7];
+  }
+  return t;
+}
+
 struct LowerTrscdMatMulPass
     : public PassWrapper<LowerTrscdMatMulPass, OperationPass<func::FuncOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerTrscdMatMulPass)
@@ -697,6 +737,10 @@ struct LowerTrscdMatMulPass
         int64_t TM = 8;
         int64_t TN = 8;
 
+        if (TileOverride ov = readTileOverride(); ov.valid) {
+          BM = ov.BM; BN = ov.BN; BK = ov.BK; TM = ov.TM; TN = ov.TN;
+        }
+
         if (auto dictAttr =
                 gemmOp->getAttrOfType<DictionaryAttr>("tiling_params")) {
           if (auto attr =
@@ -972,6 +1016,10 @@ struct LowerTrscdMatMulPass
         int64_t BK = 8;
         int64_t TM = 8;
         int64_t TN = 8;
+
+        if (TileOverride ov = readTileOverride(); ov.valid) {
+          BM = ov.BM; BN = ov.BN; BK = ov.BK; TM = ov.TM; TN = ov.TN;
+        }
 
         if (auto dictAttr =
                 gemmOp->getAttrOfType<DictionaryAttr>("tiling_params")) {
@@ -1299,6 +1347,10 @@ struct LowerTrscdMatMulPass
         int64_t BK = 8;
         int64_t TM = 8;
         int64_t TN = 8;
+
+        if (TileOverride ov = readTileOverride(); ov.valid) {
+          BM = ov.BM; BN = ov.BN; BK = ov.BK; TM = ov.TM; TN = ov.TN;
+        }
 
         if (auto dictAttr =
                 gemmOp->getAttrOfType<DictionaryAttr>("tiling_params")) {
@@ -1758,14 +1810,24 @@ struct LowerTrscdMatMulPass
         Value zero = arith::ConstantIndexOp::create(builder, loc, 0);
         Value one = arith::ConstantIndexOp::create(builder, loc, 1);
 
-        int64_t BM = 128;
+        // Defaults autotuned on GTX 1650 (sm_75): best of a 16-config sweep
+        // at N=512/1024/2048 (see bench/README.md). 128-thread blocks, 32
+        // accumulators per thread, 16KB double-buffered SMEM.
+        int64_t BM = 64;
         int64_t BN = 64;
-        int64_t BK = 8;
-        int64_t TM = 8;
+        int64_t BK = 16;
+        int64_t TM = 4;
         int64_t TN = 4;
-        int64_t WM = 64;
+        int64_t WM = 32;
         int64_t WN = 32;
         int64_t WNITER = 2;
+
+        if (TileOverride ov = readTileOverride(); ov.valid) {
+          BM = ov.BM; BN = ov.BN; BK = ov.BK; TM = ov.TM; TN = ov.TN;
+          if (ov.hasWarp) {
+            WM = ov.WM; WN = ov.WN; WNITER = ov.WNITER;
+          }
+        }
 
         if (auto dictAttr =
                 gemmOp->getAttrOfType<DictionaryAttr>("tiling_params")) {
@@ -1798,7 +1860,7 @@ struct LowerTrscdMatMulPass
         // Derive the warp-internal layout; fall back to the defaults if the
         // requested shape doesn't decompose cleanly into 32-lane warps.
         auto deriveOk = [&]() {
-          if (BM % WM || BN % WN || WN % WNITER)
+          if (BK % 4 || BN % 4 || BM % WM || BN % WN || WN % WNITER)
             return false;
           int64_t wsubN = WN / WNITER;
           if (wsubN % TN)
@@ -1813,7 +1875,7 @@ struct LowerTrscdMatMulPass
           return true;
         };
         if (!deriveOk()) {
-          BM = 128; BN = 64; BK = 8; TM = 8; TN = 4; WM = 64; WN = 32;
+          BM = 64; BN = 64; BK = 16; TM = 4; TN = 4; WM = 32; WN = 32;
           WNITER = 2;
         }
         int64_t WSUBN = WN / WNITER;
