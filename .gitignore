@@ -43,6 +43,7 @@ perf.data.old
 # Benchmarks
 bench/generated/
 bench/work/
+*.csv
 !bench/README.md
 !bench/results/results_table.md
 __pycache__/
