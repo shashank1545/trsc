@@ -1,5 +1,7 @@
 # trsc: A Tiny Rust Compiler
 
+[![CI](https://github.com/shashank1545/trsc/actions/workflows/ci.yml/badge.svg)](https://github.com/shashank1545/trsc/actions/workflows/ci.yml)
+
 `trsc` is a compiler for a subset of Rust, built with C++17, LLVM, and MLIR. It demonstrates modern compiler architecture: a custom AST, semantic analysis (type and borrow checking), and MLIR-based code generation.
 
 ## Features

@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  format:
+    name: clang-format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Pinned to match the local toolchain (clang-format 22.x).
+      - name: Install clang-format
+        run: pipx install clang-format==22.1.5
+      - name: Check formatting
+        run: git ls-files '*.cpp' '*.h' | xargs clang-format --dry-run --Werror
+
+  tidy:
+    name: clang-tidy (frontend)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clang-tidy
+        run: pipx install clang-tidy==22.1.7
+      # Scope: the LLVM-free frontend (Lex/Parse/Sema/AST/Basic) only.
+      # The MLIR mid-end compiles against a local LLVM 23 (git) tree that
+      # CI cannot install from packages; it is checked in local builds.
+      # Check selection and WarningsAsErrors come from .clang-tidy.
+      - name: Run clang-tidy
+        run: |
+          git ls-files 'lib/Lex/*.cpp' 'lib/Parse/*.cpp' 'lib/Sema/*.cpp' \
+                       'lib/AST/*.cpp' 'lib/Basic/*.cpp' \
+            | xargs -n1 -P2 -I{} clang-tidy --quiet {} -- -std=c++17 -Iinclude
