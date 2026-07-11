@@ -23,41 +23,46 @@ bool SourceManager::loadFile(const std::string &FilePath) {
   return true;
 }
 
-  const char* SourceManager::getBufferStart() const {
-    return Buffer.data();
-  }
+void SourceManager::loadBuffer(const std::string &Source,
+                               const std::string &BufferName) {
+  MainFilePath = BufferName;
+  Buffer.assign(Source.begin(), Source.end());
+  buildLineStartCache();
+}
 
-  const char* SourceManager::getBufferEnd() const {
-    return Buffer.data() + Buffer.size();
-  }
+const char *SourceManager::getBufferStart() const { return Buffer.data(); }
 
-  void SourceManager::buildLineStartCache() {
+const char *SourceManager::getBufferEnd() const {
+  return Buffer.data() + Buffer.size();
+}
 
-    LineStartCache.clear();
+void SourceManager::buildLineStartCache() {
 
-    LineStartCache.push_back(getBufferStart());
+  LineStartCache.clear();
 
-    const char* Ptr = getBufferStart();
-    const char* End = getBufferEnd();
+  LineStartCache.push_back(getBufferStart());
 
-    while (Ptr < End) {
-      if (*Ptr == '\n') {
-        LineStartCache.push_back(Ptr+1);
-      }
-      Ptr++;
+  const char *Ptr = getBufferStart();
+  const char *End = getBufferEnd();
+
+  while (Ptr < End) {
+    if (*Ptr == '\n') {
+      LineStartCache.push_back(Ptr + 1);
     }
-  }
-
-  SourceLocation SourceManager::getLocation(const char* Ptr) const {
-    auto it = std::lower_bound(LineStartCache.begin(), LineStartCache.end(), Ptr);
-
-    if (it != LineStartCache.begin() && *it > Ptr) {
-      --it;
-    }
-
-    unsigned Line = std::distance(LineStartCache.begin(), it) + 1;
-    unsigned Column = (Ptr - *it) + 1;
-
-    return SourceLocation(MainFilePath.c_str(), Line, Column);
+    Ptr++;
   }
 }
+
+SourceLocation SourceManager::getLocation(const char *Ptr) const {
+  auto it = std::lower_bound(LineStartCache.begin(), LineStartCache.end(), Ptr);
+
+  if (it != LineStartCache.begin() && *it > Ptr) {
+    --it;
+  }
+
+  unsigned Line = std::distance(LineStartCache.begin(), it) + 1;
+  unsigned Column = (Ptr - *it) + 1;
+
+  return SourceLocation(MainFilePath.c_str(), Line, Column);
+}
+} // namespace trsc

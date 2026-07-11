@@ -9,25 +9,29 @@ namespace trsc {
 class DiagnosticsEngine;
 
 class SourceManager {
-  public:
-    SourceManager(DiagnosticsEngine &Diag);
+public:
+  SourceManager(DiagnosticsEngine &Diag);
 
-    bool loadFile(const std::string &FilePath);
+  bool loadFile(const std::string &FilePath);
 
-    const char *getBufferStart() const;
+  // Load source text directly (tests, REPL-style input).
+  void loadBuffer(const std::string &Source,
+                  const std::string &BufferName = "<buffer>");
 
-    const char *getBufferEnd() const;
+  const char *getBufferStart() const;
 
-    SourceLocation getLocation(const char *Ptr) const;
+  const char *getBufferEnd() const;
 
-  private:
-    DiagnosticsEngine &Diag;
-    std::string MainFilePath;
-    std::vector<char> Buffer;
+  SourceLocation getLocation(const char *Ptr) const;
 
-    std::vector<const char *> LineStartCache;
-    void buildLineStartCache();
+private:
+  DiagnosticsEngine &Diag;
+  std::string MainFilePath;
+  std::vector<char> Buffer;
+
+  std::vector<const char *> LineStartCache;
+  void buildLineStartCache();
 };
-}
+} // namespace trsc
 
 #endif
