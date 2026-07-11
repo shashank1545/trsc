@@ -7,10 +7,10 @@
 #include <memory>
 
 namespace mlir {
-  namespace trscd {
+namespace trscd {
 #define GEN_PASS_DEF_TRSCLOOPTILE
 #include "TrscPasses.h.inc"
-  } // namespace trscd
+} // namespace trscd
 } // namespace mlir
 
 using namespace mlir;
@@ -46,8 +46,8 @@ struct TrscLoopTilePass
         continue;
 
       OpBuilder builder(root);
-      Value size = arith::ConstantIndexOp::create(builder, root.getLoc(),
-                                                  tileSize);
+      Value size =
+          arith::ConstantIndexOp::create(builder, root.getLoc(), tileSize);
       SmallVector<Value> sizes(band.size(), size);
       tilePerfectlyNested(root, sizes);
     }

@@ -5,91 +5,91 @@
 
 namespace trsc {
 
-template <typename Derived> 
-class ASTVisitor {
+template <typename Derived> class ASTVisitor {
 public:
   void visit(ASTNode *Node) {
     if (!Node)
       return;
 
-    switch(Node->getASTNodeKind()) {
-      case ASTNodeKind::ASTK_PROGRAM:
-        getDerived().visitProgram(static_cast<Program*>(Node));
-        break;
-      case ASTNodeKind::ASTK_TYPENAME:
-        getDerived().visitTypeName(static_cast<TypeName*>(Node));
-        break;
-      case ASTNodeKind::ASTK_POINTERTYPENAME:
-        getDerived().visitPointerTypeName(static_cast<PointerTypeName*>(Node));
-        break;
-      case ASTNodeKind::ASTK_REFERTYPENAME:
-        getDerived().visitReferenceTypeName(static_cast<ReferenceTypeName*>(Node));
-        break;
-      case ASTNodeKind::ASTK_ARRAYTYPENAME:
-        getDerived().visitArrayTypeName(static_cast<ArrayTypeName*>(Node));
-        break;
-      case ASTNodeKind::ASTK_ASEXPR:
-        getDerived().visitASExpr(static_cast<ASExpr*>(Node));
-        break;
-      case ASTNodeKind::ASTK_BOOLEXPR:
-        getDerived().visitBoolExpr(static_cast<BoolExpr*>(Node));
-        break;
-      case ASTNodeKind::ASTK_VAREXPR:
-        getDerived().visitVarExpr(static_cast<VarExpr*>(Node));
-        break;
-      case ASTNodeKind::ASTK_REFREXPR:
-        getDerived().visitRefrExpr(static_cast<RefrExpr*>(Node));
-        break;
-      case ASTNodeKind::ASTK_INTEXPR:
-        getDerived().visitIntExpr(static_cast<IntExpr*>(Node));
-        break;
-      case ASTNodeKind::ASTK_FLOATEXPR:
-        getDerived().visitFloatExpr(static_cast<FloatExpr*>(Node));
-        break;
-      case ASTNodeKind::ASTK_BINEXPR:
-        getDerived().visitBinExpr(static_cast<BinExpr*>(Node));
-        break;
-      case ASTNodeKind::ASTK_RANGEEXPR:
-        getDerived().visitRangeExpr(static_cast<RangeExpr*>(Node));
-        break;
-      case ASTNodeKind::ASTK_ARRAYEXPR:
-        getDerived().visitArrayExpr(static_cast<ArrayExpr*>(Node));
-        break;
-      case ASTNodeKind::ASTK_ARRAYACCESSEXPR:
-        getDerived().visitArrayAccessExpr(static_cast<ArrayAccessExpr*>(Node));
-        break;
-      case ASTNodeKind::ASTK_LETSTMT:
-        getDerived().visitLetStmt(static_cast<LetStmt*>(Node));
-        break;
-      case ASTNodeKind::ASTK_IFSTMT:
-        getDerived().visitIfStmt(static_cast<IfStmt*>(Node));
-        break;
-      case ASTNodeKind::ASTK_FORSTMT:
-        getDerived().visitForStmt(static_cast<ForStmt*>(Node));
-        break;
-      case ASTNodeKind::ASTK_WHILESTMT:
-        getDerived().visitWhileStmt(static_cast<WhileStmt*>(Node));
-        break;
-      case ASTNodeKind::ASTK_EXPRSTMT:
-        getDerived().visitExprStmt(static_cast<ExprStmt*>(Node));
-        break;
-      case ASTNodeKind::ASTK_BLOCKSTMT:
-        getDerived().visitBlockStmt(static_cast<BlockStmt*>(Node));
-        break;
-      case ASTNodeKind::ASTK_RETURNSTMT:
-        getDerived().visitReturnStmt(static_cast<ReturnStmt*>(Node));
-        break;
-      case ASTNodeKind::ASTK_FUNCALL:
-        getDerived().visitFunCall(static_cast<FunCall*>(Node));
-        break;
-      case ASTNodeKind::ASTK_FUNCDECL:
-        getDerived().visitFuncDecl(static_cast<FuncDecl*>(Node));
-        break;
-      case ASTNodeKind::ASTK_TYPE:
-      case ASTNodeKind::ASTK_EXPR:
-      case ASTNodeKind::ASTK_NUMEXPR:
-      case ASTNodeKind::ASTK_STMT:
-        break;
+    switch (Node->getASTNodeKind()) {
+    case ASTNodeKind::ASTK_PROGRAM:
+      getDerived().visitProgram(static_cast<Program *>(Node));
+      break;
+    case ASTNodeKind::ASTK_TYPENAME:
+      getDerived().visitTypeName(static_cast<TypeName *>(Node));
+      break;
+    case ASTNodeKind::ASTK_POINTERTYPENAME:
+      getDerived().visitPointerTypeName(static_cast<PointerTypeName *>(Node));
+      break;
+    case ASTNodeKind::ASTK_REFERTYPENAME:
+      getDerived().visitReferenceTypeName(
+          static_cast<ReferenceTypeName *>(Node));
+      break;
+    case ASTNodeKind::ASTK_ARRAYTYPENAME:
+      getDerived().visitArrayTypeName(static_cast<ArrayTypeName *>(Node));
+      break;
+    case ASTNodeKind::ASTK_ASEXPR:
+      getDerived().visitASExpr(static_cast<ASExpr *>(Node));
+      break;
+    case ASTNodeKind::ASTK_BOOLEXPR:
+      getDerived().visitBoolExpr(static_cast<BoolExpr *>(Node));
+      break;
+    case ASTNodeKind::ASTK_VAREXPR:
+      getDerived().visitVarExpr(static_cast<VarExpr *>(Node));
+      break;
+    case ASTNodeKind::ASTK_REFREXPR:
+      getDerived().visitRefrExpr(static_cast<RefrExpr *>(Node));
+      break;
+    case ASTNodeKind::ASTK_INTEXPR:
+      getDerived().visitIntExpr(static_cast<IntExpr *>(Node));
+      break;
+    case ASTNodeKind::ASTK_FLOATEXPR:
+      getDerived().visitFloatExpr(static_cast<FloatExpr *>(Node));
+      break;
+    case ASTNodeKind::ASTK_BINEXPR:
+      getDerived().visitBinExpr(static_cast<BinExpr *>(Node));
+      break;
+    case ASTNodeKind::ASTK_RANGEEXPR:
+      getDerived().visitRangeExpr(static_cast<RangeExpr *>(Node));
+      break;
+    case ASTNodeKind::ASTK_ARRAYEXPR:
+      getDerived().visitArrayExpr(static_cast<ArrayExpr *>(Node));
+      break;
+    case ASTNodeKind::ASTK_ARRAYACCESSEXPR:
+      getDerived().visitArrayAccessExpr(static_cast<ArrayAccessExpr *>(Node));
+      break;
+    case ASTNodeKind::ASTK_LETSTMT:
+      getDerived().visitLetStmt(static_cast<LetStmt *>(Node));
+      break;
+    case ASTNodeKind::ASTK_IFSTMT:
+      getDerived().visitIfStmt(static_cast<IfStmt *>(Node));
+      break;
+    case ASTNodeKind::ASTK_FORSTMT:
+      getDerived().visitForStmt(static_cast<ForStmt *>(Node));
+      break;
+    case ASTNodeKind::ASTK_WHILESTMT:
+      getDerived().visitWhileStmt(static_cast<WhileStmt *>(Node));
+      break;
+    case ASTNodeKind::ASTK_EXPRSTMT:
+      getDerived().visitExprStmt(static_cast<ExprStmt *>(Node));
+      break;
+    case ASTNodeKind::ASTK_BLOCKSTMT:
+      getDerived().visitBlockStmt(static_cast<BlockStmt *>(Node));
+      break;
+    case ASTNodeKind::ASTK_RETURNSTMT:
+      getDerived().visitReturnStmt(static_cast<ReturnStmt *>(Node));
+      break;
+    case ASTNodeKind::ASTK_FUNCALL:
+      getDerived().visitFunCall(static_cast<FunCall *>(Node));
+      break;
+    case ASTNodeKind::ASTK_FUNCDECL:
+      getDerived().visitFuncDecl(static_cast<FuncDecl *>(Node));
+      break;
+    case ASTNodeKind::ASTK_TYPE:
+    case ASTNodeKind::ASTK_EXPR:
+    case ASTNodeKind::ASTK_NUMEXPR:
+    case ASTNodeKind::ASTK_STMT:
+      break;
     }
   }
 
@@ -142,13 +142,11 @@ public:
     getDerived().visit(S->getBody());
   }
 
-  void visitExprStmt(ExprStmt *S) { 
-    getDerived().visit(S->getExpression()); 
-  }
+  void visitExprStmt(ExprStmt *S) { getDerived().visit(S->getExpression()); }
 
-  void visitFuncDecl(FuncDecl *D) { 
+  void visitFuncDecl(FuncDecl *D) {
     getDerived().visit(D->getFuncName());
-    for (const auto& Param: D->getParams()) {
+    for (const auto &Param : D->getParams()) {
       getDerived().visit(Param.ParamName.get());
       getDerived().visit(Param.ParamType.get());
     }
@@ -172,7 +170,7 @@ public:
   }
 
   void visitArrayExpr(ArrayExpr *E) {
-    for(const auto &ChildElem: E->getChildElemExprVec()) {
+    for (const auto &ChildElem : E->getChildElemExprVec()) {
       getDerived().visit(ChildElem.get());
     }
     getDerived().visit(E->getTrailingDim());
@@ -180,11 +178,11 @@ public:
 
   void visitArrayAccessExpr(ArrayAccessExpr *E) {
     getDerived().visit(E->getArrayNameExpr());
-    for(const auto& Index: E->getIndexVector()) {
+    for (const auto &Index : E->getIndexVector()) {
       getDerived().visit(Index.get());
     }
   }
- 
+
   void visitFunCall(FunCall *E) {
     getDerived().visit(E->getFuncName());
     for (const auto &Param : E->getParams()) {
@@ -192,13 +190,11 @@ public:
     }
   }
 
-  void visitRefrExpr(RefrExpr *E) {
-    getDerived().visit(E->getReferent());
-  }
+  void visitRefrExpr(RefrExpr *E) { getDerived().visit(E->getReferent()); }
 
   void visitPointerTypeName(PointerTypeName *T) {
     getDerived().visit(T->getPointee());
-  } 
+  }
 
   void visitReferenceTypeName(ReferenceTypeName *T) {
     getDerived().visit(T->getReferent());

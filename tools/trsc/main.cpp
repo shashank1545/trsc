@@ -5,9 +5,9 @@
 #include "mlir/Target/LLVMIR/Dialect/All.h"
 #include "mlir/Target/LLVMIR/Export.h"
 
-#include "llvm/IR/Module.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/LegacyPassManager.h"
+#include "llvm/IR/Module.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/Path.h"
@@ -17,17 +17,17 @@
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/TargetParser/Host.h"
 
-#include "trsc/Lex/Lexer.h"
-#include "trsc/Parse/Parser.h"
+#include "trsc/AST/ASTContext.h"
 #include "trsc/AST/ASTPrinter.h"
 #include "trsc/AST/TypedASTPrinter.h"
-#include "trsc/AST/ASTContext.h"
 #include "trsc/Basic/CommandLine.h"
-#include "trsc/Sema/Sema.h" 
-#include "trsc/Sema/SymbolTablePrinter.h"
-#include "trsc/MLIR/TrscMLIRGen.h"
-#include "trsc/MLIR/Transforms/PassPipeline.h"
+#include "trsc/Lex/Lexer.h"
 #include "trsc/MLIR/MatMulOpts/MatMulOptPasses.h"
+#include "trsc/MLIR/Transforms/PassPipeline.h"
+#include "trsc/MLIR/TrscMLIRGen.h"
+#include "trsc/Parse/Parser.h"
+#include "trsc/Sema/Sema.h"
+#include "trsc/Sema/SymbolTablePrinter.h"
 
 #include "llvm/Support/FileSystem.h"
 
@@ -58,25 +58,27 @@ int main(int argc, char **argv) {
     Tok = Lex.Lex();
     if (options.DumpLexerTokens) {
       std::cout << "Token: " << trsc::Lex::getTokenName(Tok.getKind())
-        << " Text: '" << Tok.getText() << "'"
-        << " Location: " << Tok.getLocation().Line << ":"
-        << Tok.getLocation().Column << "\n";
+                << " Text: '" << Tok.getText() << "'"
+                << " Location: " << Tok.getLocation().Line << ":"
+                << Tok.getLocation().Column << "\n";
     }
     Tokens.push_back(Tok);
   } while (Tok.getKind() != trsc::Lex::TokenKind::ENDOFFILE);
 
   if (Diag.getNumErrors() > 0) {
     std::cerr << "Lexing failed with " << Diag.getNumErrors() << " errors."
-      << "\n";
+              << "\n";
     return 1;
   }
   if (options.Verbose) {
-    std::cerr << "Lexical Analysis complete. " << Tokens.size() << " tokens found." << "\n";
+    std::cerr << "Lexical Analysis complete. " << Tokens.size()
+              << " tokens found." << "\n";
   }
 
   if (options.DumpLexerTokens) {
     if (options.Verbose) {
-      std::cerr << "Exiting after Lexical Analysis (dump-tokens requested)." << "\n";
+      std::cerr << "Exiting after Lexical Analysis (dump-tokens requested)."
+                << "\n";
     }
     return 0;
   }
@@ -90,7 +92,7 @@ int main(int argc, char **argv) {
 
   if (Diag.getNumErrors() > 0) {
     std::cerr << "Parsing failed with " << Diag.getNumErrors() << " errors."
-      << "\n";
+              << "\n";
     return 1;
   }
   if (options.Verbose) {
@@ -98,11 +100,12 @@ int main(int argc, char **argv) {
   }
 
   if (options.DumpAST) {
-    if (AST) { 
+    if (AST) {
       if (!options.OutputFile.empty()) {
         std::ofstream outfile(options.OutputFile);
         if (!outfile) {
-          std::cerr << "Error: Could not open output file: " << options.OutputFile << "\n";
+          std::cerr << "Error: Could not open output file: "
+                    << options.OutputFile << "\n";
           return 1;
         }
         trsc::ASTPrinter printer(outfile);
@@ -128,18 +131,20 @@ int main(int argc, char **argv) {
   Sema.analyze(AST.get());
 
   if (Diag.getNumErrors() > 0) {
-    std::cerr << "Semantic analysis failed with " << Diag.getNumErrors() << " errors."
-      << "\n";
+    std::cerr << "Semantic analysis failed with " << Diag.getNumErrors()
+              << " errors."
+              << "\n";
     return 1;
   }
   if (options.Verbose) {
     std::cerr << "Semantic Analysis complete." << "\n";
   }
-  if(options.DumpSymbol) {
+  if (options.DumpSymbol) {
     if (!options.OutputFile.empty()) {
       std::ofstream outfile(options.OutputFile);
       if (!outfile) {
-        std::cerr << "Error: Could not open output file: " << options.OutputFile << "\n";
+        std::cerr << "Error: Could not open output file: " << options.OutputFile
+                  << "\n";
         return 1;
       }
       trsc::SymbolTablePrinter STPrinter(outfile, ST);
@@ -148,34 +153,39 @@ int main(int argc, char **argv) {
       trsc::SymbolTablePrinter STPrinter(std::cout, ST);
       STPrinter.print();
     }
-    if(options.Verbose) {
-        std::cerr << "Exiting after Semantic Analysis (dump-symbol requested)." << "\n";
-      }
-      return 0;
-  }
-  if(options.DumpSymbolTable) {
-    if (!options.OutputFile.empty()) {
-      std::ofstream outfile(options.OutputFile);
-      if (!outfile) {
-        std::cerr << "Error: Could not open output file: " << options.OutputFile << "\n";
-        return 1;
-      }
-      trsc::SymbolTablePrinter STPrinter(outfile, ST);
-      STPrinter.printTree();
-    } else {
-      trsc::SymbolTablePrinter STPrinter(std::cout, ST);
-      STPrinter.printTree();
-    }
-    if(options.Verbose) {
-      std::cerr << "Exiting after Semantic Analysis (dump-symboltable requested)." << "\n";
+    if (options.Verbose) {
+      std::cerr << "Exiting after Semantic Analysis (dump-symbol requested)."
+                << "\n";
     }
     return 0;
   }
-  if(options.DumpTypedAST) {
+  if (options.DumpSymbolTable) {
     if (!options.OutputFile.empty()) {
       std::ofstream outfile(options.OutputFile);
       if (!outfile) {
-        std::cerr << "Error: Could not open output file: " << options.OutputFile << "\n";
+        std::cerr << "Error: Could not open output file: " << options.OutputFile
+                  << "\n";
+        return 1;
+      }
+      trsc::SymbolTablePrinter STPrinter(outfile, ST);
+      STPrinter.printTree();
+    } else {
+      trsc::SymbolTablePrinter STPrinter(std::cout, ST);
+      STPrinter.printTree();
+    }
+    if (options.Verbose) {
+      std::cerr
+          << "Exiting after Semantic Analysis (dump-symboltable requested)."
+          << "\n";
+    }
+    return 0;
+  }
+  if (options.DumpTypedAST) {
+    if (!options.OutputFile.empty()) {
+      std::ofstream outfile(options.OutputFile);
+      if (!outfile) {
+        std::cerr << "Error: Could not open output file: " << options.OutputFile
+                  << "\n";
         return 1;
       }
       trsc::TypedASTPrinter Printer(outfile);
@@ -184,8 +194,9 @@ int main(int argc, char **argv) {
       trsc::TypedASTPrinter Printer(std::cout);
       Printer.visit(AST.get());
     }
-    if(options.Verbose) {
-      std::cerr << "Exiting after Semantic Analysis (dump-typedast requested)." << "\n";
+    if (options.Verbose) {
+      std::cerr << "Exiting after Semantic Analysis (dump-typedast requested)."
+                << "\n";
     }
     return 0;
   }
@@ -201,7 +212,7 @@ int main(int argc, char **argv) {
   }
 
   {
-    if(options.Verbose) {
+    if (options.Verbose) {
       std::cerr << "Running optimization passes.\n";
     }
     mlir::PassManager PM(&MLIRCtx);
@@ -237,25 +248,27 @@ int main(int argc, char **argv) {
       mlir::trscd::buildLoweringPipeline(PM);
     }
 
-    if(mlir::failed(PM.run(*Module))) {
+    if (mlir::failed(PM.run(*Module))) {
       std::cerr << "Error: Optimization pipeline failed.\n";
       return 1;
     }
   }
 
-  if(options.EmitMLIR) {
-    if(!options.OutputFile.empty()) {
+  if (options.EmitMLIR) {
+    if (!options.OutputFile.empty()) {
       std::error_code ec;
-      llvm::raw_fd_ostream outfile(options.OutputFile, ec, llvm::sys::fs::OF_None);
-      if(ec) {
-        llvm::errs() << "Error: Could not open output file: " << ec.message() << "\n";
+      llvm::raw_fd_ostream outfile(options.OutputFile, ec,
+                                   llvm::sys::fs::OF_None);
+      if (ec) {
+        llvm::errs() << "Error: Could not open output file: " << ec.message()
+                     << "\n";
         return 1;
       }
       Module->print(outfile);
     } else {
       Module->print(llvm::outs());
     }
-    if(options.Verbose) {
+    if (options.Verbose) {
       std::cerr << "Exiting after Emitting MLIR (emit-mlir requested)." << "\n";
     }
     return 0;
@@ -309,8 +322,8 @@ int main(int argc, char **argv) {
 
   llvm::TargetOptions TargetOpts;
   std::unique_ptr<llvm::TargetMachine> TM(
-      TheTarget->createTargetMachine(TheTriple, llvm::sys::getHostCPUName(),
-                                     "", TargetOpts, llvm::Reloc::PIC_));
+      TheTarget->createTargetMachine(TheTriple, llvm::sys::getHostCPUName(), "",
+                                     TargetOpts, llvm::Reloc::PIC_));
   LLVMModule->setTargetTriple(TheTriple);
   LLVMModule->setDataLayout(TM->createDataLayout());
 
@@ -378,13 +391,19 @@ int main(int argc, char **argv) {
   // libcuda dependency for CPU-only binaries.
   std::string Output =
       options.OutputFile.empty() ? "a.out" : options.OutputFile;
-  std::vector<llvm::StringRef> LinkArgs = {
-      Linker, ObjPath, "-o", Output, TRSC_CUDA_RUNTIME_LIB,
-      "-Wl,--as-needed", "-lcuda", "-lstdc++", "-lm"};
+  std::vector<llvm::StringRef> LinkArgs = {Linker,
+                                           ObjPath,
+                                           "-o",
+                                           Output,
+                                           TRSC_CUDA_RUNTIME_LIB,
+                                           "-Wl,--as-needed",
+                                           "-lcuda",
+                                           "-lstdc++",
+                                           "-lm"};
 
   std::string LinkError;
-  int LinkResult = llvm::sys::ExecuteAndWait(Linker, LinkArgs, std::nullopt,
-                                             {}, 0, 0, &LinkError);
+  int LinkResult = llvm::sys::ExecuteAndWait(Linker, LinkArgs, std::nullopt, {},
+                                             0, 0, &LinkError);
   llvm::sys::fs::remove(ObjPath);
   if (LinkResult != 0) {
     std::cerr << "Error: Linking failed";

@@ -3,75 +3,69 @@
 
 namespace trsc {
 
-  bool QualType::isIntegerType() const {
-    return TypePtr ? TypePtr->isInteger() : false;
-  }
+bool QualType::isIntegerType() const {
+  return TypePtr ? TypePtr->isInteger() : false;
+}
 
-  bool QualType::isFloatingType() const {
-    return TypePtr ? TypePtr->isFloating() : false;
-  }
-  
-  bool QualType::isSignedIntegerType() const {
-    return TypePtr ? TypePtr->isSigned() : false;
-  }
+bool QualType::isFloatingType() const {
+  return TypePtr ? TypePtr->isFloating() : false;
+}
 
-  bool QualType::isUnsignedTypeIntegerType() const {
-    return isIntegerType() && !isSignedIntegerType();
-  }
+bool QualType::isSignedIntegerType() const {
+  return TypePtr ? TypePtr->isSigned() : false;
+}
 
-  bool QualType::isBooleanType() const {
-    return TypePtr ? TypePtr->isBoolean() : false;
-  }
+bool QualType::isUnsignedTypeIntegerType() const {
+  return isIntegerType() && !isSignedIntegerType();
+}
 
-  bool QualType::isNumericType() const {
-    return isIntegerType() || isFloatingType();
-  }
+bool QualType::isBooleanType() const {
+  return TypePtr ? TypePtr->isBoolean() : false;
+}
 
-  bool QualType::isPointerType() const {
-    return TypePtr ? TypePtr->isPointer() : false;
-  }
+bool QualType::isNumericType() const {
+  return isIntegerType() || isFloatingType();
+}
 
-  bool QualType::isReferenceType() const {
-    return TypePtr ? TypePtr->isReference() : false;
-  }
+bool QualType::isPointerType() const {
+  return TypePtr ? TypePtr->isPointer() : false;
+}
 
-  bool QualType::isUnitType() const {
-    return TypePtr ? TypePtr->isUnit() : false;
-  }
+bool QualType::isReferenceType() const {
+  return TypePtr ? TypePtr->isReference() : false;
+}
 
-  bool QualType::isArrayType() const {
-    return TypePtr ? TypePtr->isArray() : false;
-  }
+bool QualType::isUnitType() const {
+  return TypePtr ? TypePtr->isUnit() : false;
+}
 
-  bool QualType::isFunctionType() const {
-    return TypePtr ? TypePtr->isFunction() : false;
-  }
+bool QualType::isArrayType() const {
+  return TypePtr ? TypePtr->isArray() : false;
+}
 
-  std::string QualType::getAsString() const {
-    return TypePtr ? TypePtr->getName() : "Unresolved Type";
-  }
+bool QualType::isFunctionType() const {
+  return TypePtr ? TypePtr->isFunction() : false;
+}
 
-  std::size_t QualType::getSizeInBytes() const {
-    return TypePtr ? TypePtr->getSize() : 0;
-  }
+std::string QualType::getAsString() const {
+  return TypePtr ? TypePtr->getName() : "Unresolved Type";
+}
 
-  std::size_t QualType::getAlignment() const {
-    return TypePtr ? TypePtr->getAlignment() : 0;
-  }
+std::size_t QualType::getSizeInBytes() const {
+  return TypePtr ? TypePtr->getSize() : 0;
+}
 
-  TypeKind QualType::getKind() const {
-    return TypePtr->getKind();
-  }
+std::size_t QualType::getAlignment() const {
+  return TypePtr ? TypePtr->getAlignment() : 0;
+}
 
-  QualType QualType::getReturnType() const {
-    return TypePtr->getReturn();
-  }
+TypeKind QualType::getKind() const { return TypePtr->getKind(); }
 
-  QualType QualType::getBaseType() const {
-    return TypePtr->getBase();
-  }
+QualType QualType::getReturnType() const { return TypePtr->getReturn(); }
 
-  const std::vector<QualType>& QualType::getParamsType() const {
-    return TypePtr->getParams();
-  }
+QualType QualType::getBaseType() const { return TypePtr->getBase(); }
+
+const std::vector<QualType> &QualType::getParamsType() const {
+  return TypePtr->getParams();
+}
 } // namespace trsc

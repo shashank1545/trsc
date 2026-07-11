@@ -89,8 +89,8 @@ QualType ASTContext::getReferenceType(QualType ReferentType, bool IsMutable) {
   return QualType(RefTy[Key].get());
 }
 
-QualType ASTContext::getFunctionType(QualType ReturnType, 
-    const std::vector<QualType>& ParamsType) {
+QualType ASTContext::getFunctionType(QualType ReturnType,
+                                     const std::vector<QualType> &ParamsType) {
   FunctionTypeKey Key = {ReturnType, ParamsType};
   auto It = FuncTy.find(Key);
   if (It != FuncTy.end()) {
@@ -103,7 +103,7 @@ QualType ASTContext::getFunctionType(QualType ReturnType,
 QualType ASTContext::getArrayType(QualType ElementType, size_t Size) {
   ArrayTypeKey Key = {ElementType, Size};
   auto It = ArrayTy.find(Key);
-  if(It != ArrayTy.end()) {
+  if (It != ArrayTy.end()) {
     return QualType(It->second.get());
   }
   ArrayTy[Key] = std::make_unique<ArrayType>(ElementType, Size);
@@ -111,46 +111,56 @@ QualType ASTContext::getArrayType(QualType ElementType, size_t Size) {
 }
 
 bool ASTContext::areTypesCompatible(QualType T1, QualType T2) const {
-    if (T1.isNull() || T2.isNull()) {
-        return false;
-    }
-    return T1.getTypePtr() == T2.getTypePtr();
+  if (T1.isNull() || T2.isNull()) {
+    return false;
+  }
+  return T1.getTypePtr() == T2.getTypePtr();
 }
 
 bool ASTContext::canImplicitlyConvert(QualType From, QualType To) const {
-    if (areTypesCompatible(From, To)) {
-        return true;
-    } if (From.isIntegerType() && To.isIntegerType()) {
-        return true;
-    } if (From.isFloatingType() && To.isFloatingType()) {
-        return true;
-    } if (From.isIntegerType() && To.isFloatingType()) {
-        return true;
-    } if (From.isBooleanType() && To.isBooleanType()) {
-        return true;
-    } if (From.isArrayType() && To.isArrayType()) {
-        if(canImplicitlyConvert(From.getBaseType(), To.getBaseType())) {
-          return true;
-        }
-    } return false;
+  if (areTypesCompatible(From, To)) {
+    return true;
+  }
+  if (From.isIntegerType() && To.isIntegerType()) {
+    return true;
+  }
+  if (From.isFloatingType() && To.isFloatingType()) {
+    return true;
+  }
+  if (From.isIntegerType() && To.isFloatingType()) {
+    return true;
+  }
+  if (From.isBooleanType() && To.isBooleanType()) {
+    return true;
+  }
+  if (From.isArrayType() && To.isArrayType()) {
+    if (canImplicitlyConvert(From.getBaseType(), To.getBaseType())) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool ASTContext::canExplicitlyConvert(QualType From, QualType To) const {
-    if (areTypesCompatible(From, To)) {
-        return true;
-    } if (From.isIntegerType() && To.isIntegerType()) {
-        return true;
-    } if (From.isFloatingType() && To.isFloatingType()) {
-        return true;
-    } if (From.isIntegerType() && To.isFloatingType()) {
-        return true;
-    } if (From.isFloatingType() && To.isIntegerType()) {
-      return true;
-    } if (From.isBooleanType() && To.isBooleanType()) {
-        return true;
-    } return false;
+  if (areTypesCompatible(From, To)) {
+    return true;
+  }
+  if (From.isIntegerType() && To.isIntegerType()) {
+    return true;
+  }
+  if (From.isFloatingType() && To.isFloatingType()) {
+    return true;
+  }
+  if (From.isIntegerType() && To.isFloatingType()) {
+    return true;
+  }
+  if (From.isFloatingType() && To.isIntegerType()) {
+    return true;
+  }
+  if (From.isBooleanType() && To.isBooleanType()) {
+    return true;
+  }
+  return false;
 }
 
-
 } // namespace trsc
-

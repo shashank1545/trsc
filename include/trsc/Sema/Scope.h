@@ -6,80 +6,80 @@
 #include <map>
 
 namespace trsc {
-  
-  enum class SymbolKind {
-    SYMBOL_VARIABLE,
-    SYMBOL_PARAMETER,
-    SYMBOL_FUNCTION,
-    SYMBOL_CONST,
-  };
 
-  enum class ScopeKind {
-    SCOPE_GLOBAL,
-    SCOPE_FORSTMT,
-    SCOPE_BLOCKSTMT,
-    SCOPE_WHILESTMT,
-    SCOPE_FUNCTION,
-  };
+enum class SymbolKind {
+  SYMBOL_VARIABLE,
+  SYMBOL_PARAMETER,
+  SYMBOL_FUNCTION,
+  SYMBOL_CONST,
+};
 
-  const char* getSymbolKindName(SymbolKind Kind);
-  const char* getScopeKindName(ScopeKind Kind);
-  
-  class Scope;
+enum class ScopeKind {
+  SCOPE_GLOBAL,
+  SCOPE_FORSTMT,
+  SCOPE_BLOCKSTMT,
+  SCOPE_WHILESTMT,
+  SCOPE_FUNCTION,
+};
 
-  struct Symbol {
-    void* Op = nullptr;
-    Scope* Scp = nullptr;
-    QualType Ty;
-    SymbolKind Kind;
-    bool IsMutable;
-    bool IsInitialized;
+const char *getSymbolKindName(SymbolKind Kind);
+const char *getScopeKindName(ScopeKind Kind);
 
-    Symbol(): Ty(), Kind(SymbolKind::SYMBOL_VARIABLE), 
-    IsMutable(false), IsInitialized(true) {} 
+class Scope;
 
-    Symbol(SymbolKind Kind): Ty(), Kind(Kind), 
-    IsMutable(false), IsInitialized(true) {}
+struct Symbol {
+  void *Op = nullptr;
+  Scope *Scp = nullptr;
+  QualType Ty;
+  SymbolKind Kind;
+  bool IsMutable;
+  bool IsInitialized;
 
-    Symbol(SymbolKind Kind, bool IsInitialized): Ty(), 
-     Kind(Kind), IsMutable(false), IsInitialized(IsInitialized) {}
+  Symbol()
+      : Ty(), Kind(SymbolKind::SYMBOL_VARIABLE), IsMutable(false),
+        IsInitialized(true) {}
 
-    Symbol(QualType Ty,  SymbolKind Kind, bool IsMutable, 
-     bool IsInitialized) : Ty(Ty), Kind(Kind), 
-     IsMutable(IsMutable), IsInitialized(IsInitialized) {}
+  Symbol(SymbolKind Kind)
+      : Ty(), Kind(Kind), IsMutable(false), IsInitialized(true) {}
 
-    void setOp(void* OpPtr) {this->Op = OpPtr; }
-    void setScope(Scope* S) {this->Scp = S; }
-    Scope* getScope() { return this->Scp; }
+  Symbol(SymbolKind Kind, bool IsInitialized)
+      : Ty(), Kind(Kind), IsMutable(false), IsInitialized(IsInitialized) {}
 
-    template <typename T>
-    T getOpAs() const {return reinterpret_cast<T>(Op); }
-  };
+  Symbol(QualType Ty, SymbolKind Kind, bool IsMutable, bool IsInitialized)
+      : Ty(Ty), Kind(Kind), IsMutable(IsMutable), IsInitialized(IsInitialized) {
+  }
 
-  class Scope {
-    private:
-      ScopeKind Kind;
-      std::map<std::string, Symbol> Symbols;
-      Scope* Parent;
-      uint32_t Depth;
-      std::vector<Scope*> Children;
+  void setOp(void *OpPtr) { this->Op = OpPtr; }
+  void setScope(Scope *S) { this->Scp = S; }
+  Scope *getScope() { return this->Scp; }
 
-    public:
-      Scope(ScopeKind Kind, Scope* Parent, uint32_t Depth) : Kind(Kind), 
-      Parent(Parent), Depth(Depth) {}
+  template <typename T> T getOpAs() const { return reinterpret_cast<T>(Op); }
+};
 
-    ScopeKind getKind() const {return Kind;}
-    Scope* getParent() const {return Parent;}
-    uint32_t getDepth() const {return Depth;}
-    const std::vector<Scope*>& getChildren() const {return Children;}
-    const std::map<std::string, Symbol>& getSymbols() const {return Symbols;}
+class Scope {
+private:
+  ScopeKind Kind;
+  std::map<std::string, Symbol> Symbols;
+  Scope *Parent;
+  uint32_t Depth;
+  std::vector<Scope *> Children;
 
-    bool canReturn() const {return Kind==ScopeKind::SCOPE_FUNCTION;}
+public:
+  Scope(ScopeKind Kind, Scope *Parent, uint32_t Depth)
+      : Kind(Kind), Parent(Parent), Depth(Depth) {}
 
-    // Symbol Operation local to the current scope
-    bool addSymbol(const std::string& Name, Symbol Sym);
-    Symbol* lookupSymbolLocal(const std::string& Name);
-  };
+  ScopeKind getKind() const { return Kind; }
+  Scope *getParent() const { return Parent; }
+  uint32_t getDepth() const { return Depth; }
+  const std::vector<Scope *> &getChildren() const { return Children; }
+  const std::map<std::string, Symbol> &getSymbols() const { return Symbols; }
+
+  bool canReturn() const { return Kind == ScopeKind::SCOPE_FUNCTION; }
+
+  // Symbol Operation local to the current scope
+  bool addSymbol(const std::string &Name, Symbol Sym);
+  Symbol *lookupSymbolLocal(const std::string &Name);
+};
 
 } // namespace trsc
 

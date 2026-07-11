@@ -5,26 +5,26 @@
 
 namespace trsc {
 
-  // This is the first pass into Semaa.
-  // For now it just collects all the function delecaration and adds that 
-  // to the SymbolTable for name resolution. It could be done in the 
-  // NameResolver class but if i have to add two passes i want them to be 
-  // seperate and want them to have different jobs.
+// This is the first pass into Semaa.
+// For now it just collects all the function delecaration and adds that
+// to the SymbolTable for name resolution. It could be done in the
+// NameResolver class but if i have to add two passes i want them to be
+// seperate and want them to have different jobs.
 
-  class DiagnosticsEngine;
-  class SymbolTable;
+class DiagnosticsEngine;
+class SymbolTable;
 
-  class DeclarationCollector: public ASTVisitor<DeclarationCollector> {
-    protected:
-      SymbolTable &ST;
-      DiagnosticsEngine &Diags;
-    public:
-      DeclarationCollector(DiagnosticsEngine &Diags, SymbolTable &ST): ST(ST),
-      Diags(Diags) {}
-      
-    void visitProgram(Program *P);
-    void visitFuncDecl(FuncDecl* D);
+class DeclarationCollector : public ASTVisitor<DeclarationCollector> {
+protected:
+  SymbolTable &ST;
+  DiagnosticsEngine &Diags;
 
-  };
-}
+public:
+  DeclarationCollector(DiagnosticsEngine &Diags, SymbolTable &ST)
+      : ST(ST), Diags(Diags) {}
+
+  void visitProgram(Program *P);
+  void visitFuncDecl(FuncDecl *D);
+};
+} // namespace trsc
 #endif // TRSC_SEMA_DECLARATIONCOLLECTER_H

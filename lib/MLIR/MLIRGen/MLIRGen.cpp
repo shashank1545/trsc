@@ -1,159 +1,167 @@
-#include "mlir/IR/Verifier.h"
-#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/IR/Verifier.h"
 
-#include "trsc/AST/ASTContext.h"
-#include "trsc/MLIR/TrscMLIRGen.h"
-#include "trsc/MLIR/TrscDialect.h"
-#include "trsc/Sema/SymbolTable.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "mlir/Dialect/LLVMIR/NVVMDialect.h"
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "mlir/InitAllExtensions.h"
 #include "mlir/Target/LLVM/NVVM/Target.h"
 #include "mlir/Target/LLVMIR/Dialect/All.h"
+#include "trsc/AST/ASTContext.h"
+#include "trsc/MLIR/TrscDialect.h"
+#include "trsc/MLIR/TrscMLIRGen.h"
+#include "trsc/Sema/SymbolTable.h"
 
-using namespace trsc; 
+using namespace trsc;
 
-MLIRGen::MLIRGen(mlir::MLIRContext &MLIRCtx, trsc::ASTContext &ASTCtx, 
-    trsc::SymbolTable &ST) : MLIRCtx(MLIRCtx), ASTCtx(ASTCtx), ST(ST), 
-  Builder(&MLIRCtx) {
-    mlir::DialectRegistry Registry;
-    Registry.insert<mlir::func::FuncDialect>();
-    Registry.insert<mlir::memref::MemRefDialect>();
-    Registry.insert<mlir::arith::ArithDialect>();
-    Registry.insert<mlir::scf::SCFDialect>();
-    Registry.insert<mlir::linalg::LinalgDialect>();
-    Registry.insert<mlir::gpu::GPUDialect>();
-    Registry.insert<mlir::NVVM::NVVMDialect>();
-    Registry.insert<mlir::vector::VectorDialect>();
-    Registry.insert<mlir::trscd::TrscDialect>();
-    mlir::registerAllExtensions(Registry);
-    mlir::NVVM::registerNVVMTargetInterfaceExternalModels(Registry);
-    // gpu-module-to-binary serializes device modules to LLVM IR mid-pipeline,
-    // so translation interfaces must be registered up front.
-    mlir::registerAllToLLVMIRTranslations(Registry);
-    MLIRCtx.appendDialectRegistry(Registry);
-    MLIRCtx.loadAllAvailableDialects();
-  }
+MLIRGen::MLIRGen(mlir::MLIRContext &MLIRCtx, trsc::ASTContext &ASTCtx,
+                 trsc::SymbolTable &ST)
+    : MLIRCtx(MLIRCtx), ASTCtx(ASTCtx), ST(ST), Builder(&MLIRCtx) {
+  mlir::DialectRegistry Registry;
+  Registry.insert<mlir::func::FuncDialect>();
+  Registry.insert<mlir::memref::MemRefDialect>();
+  Registry.insert<mlir::arith::ArithDialect>();
+  Registry.insert<mlir::scf::SCFDialect>();
+  Registry.insert<mlir::linalg::LinalgDialect>();
+  Registry.insert<mlir::gpu::GPUDialect>();
+  Registry.insert<mlir::NVVM::NVVMDialect>();
+  Registry.insert<mlir::vector::VectorDialect>();
+  Registry.insert<mlir::trscd::TrscDialect>();
+  mlir::registerAllExtensions(Registry);
+  mlir::NVVM::registerNVVMTargetInterfaceExternalModels(Registry);
+  // gpu-module-to-binary serializes device modules to LLVM IR mid-pipeline,
+  // so translation interfaces must be registered up front.
+  mlir::registerAllToLLVMIRTranslations(Registry);
+  MLIRCtx.appendDialectRegistry(Registry);
+  MLIRCtx.loadAllAvailableDialects();
+}
 
 namespace {
 
-  enum class NumKind { SignedInt = 0, UnsignedInt = 1, Float = 2 };
+enum class NumKind { SignedInt = 0, UnsignedInt = 1, Float = 2 };
 
-  NumKind getNumKind(mlir::Type T) {
-    if (T.isF16() || T.isF32() || T.isF64() || T.isBF16())
-      return NumKind::Float;
-    if (auto IT = llvm::dyn_cast<mlir::IntegerType>(T)) {
-      if (IT.isSigned() || IT.isSignless()) 
-        return NumKind::SignedInt;
-      return NumKind::UnsignedInt;
-    }
-    llvm_unreachable("Unknown numeric type");
+NumKind getNumKind(mlir::Type T) {
+  if (T.isF16() || T.isF32() || T.isF64() || T.isBF16())
+    return NumKind::Float;
+  if (auto IT = llvm::dyn_cast<mlir::IntegerType>(T)) {
+    if (IT.isSigned() || IT.isSignless())
+      return NumKind::SignedInt;
+    return NumKind::UnsignedInt;
   }
-
-  // SS: Signed -> Signed
-  mlir::Value conv_SS(mlir::Value From, mlir::Type F, mlir::Type T,
-      mlir::OpBuilder &Builder) {
-    auto Loc = Builder.getUnknownLoc();
-    unsigned FW = F.getIntOrFloatBitWidth();
-    unsigned TW = T.getIntOrFloatBitWidth();
-    if (FW == TW) return From;
-    if (FW < TW)  return mlir::arith::ExtSIOp::create(Builder, Loc, T, From);
-    return mlir::arith::TruncIOp::create(Builder, Loc, T, From);
-  }
-
-  // UU: Unsigned -> Unsigned
-  mlir::Value conv_UU(mlir::Value From, mlir::Type F, mlir::Type T,
-      mlir::OpBuilder &Builder) {
-    auto Loc = Builder.getUnknownLoc();
-    unsigned FW = F.getIntOrFloatBitWidth();
-    unsigned TW = T.getIntOrFloatBitWidth();
-    if (FW == TW) return From;
-    if (FW < TW)  return mlir::arith::ExtUIOp::create(Builder, Loc, T, From);
-    return mlir::arith::TruncIOp::create(Builder, Loc, T, From);
-  }
-
-  // FF: Float -> Float
-  mlir::Value conv_FF(mlir::Value From, mlir::Type F, mlir::Type T,
-      mlir::OpBuilder &Builder) {
-    auto Loc = Builder.getUnknownLoc();
-    unsigned FW = F.getIntOrFloatBitWidth();
-    unsigned TW = T.getIntOrFloatBitWidth();
-    if (FW == TW) return From;
-    if (FW < TW)  return mlir::arith::ExtFOp::create(Builder, Loc, T, From);
-    return mlir::arith::TruncFOp::create(Builder, Loc, T, From);
-  }
-
-  // SU: Signed -> Unsigned
-  mlir::Value conv_SU(mlir::Value From, mlir::Type F, mlir::Type T,
-      mlir::OpBuilder &Builder) {
-    auto Loc = Builder.getUnknownLoc();
-    unsigned FW = F.getIntOrFloatBitWidth();
-    unsigned TW = T.getIntOrFloatBitWidth();
-    mlir::Value Widened = From;
-    if (FW < TW) Widened = mlir::arith::ExtSIOp::create(Builder, Loc, T, From);
-    else if (FW > TW) {
-      Widened = mlir::arith::TruncIOp::create(Builder, Loc, T, From);
-    }
-    return Widened; 
-  }
-
-  // US: Unsigned -> Signed
-  mlir::Value conv_US(mlir::Value From, mlir::Type F, mlir::Type T,
-      mlir::OpBuilder &Builder) {
-    auto Loc = Builder.getUnknownLoc();
-    unsigned FW = F.getIntOrFloatBitWidth();
-    unsigned TW = T.getIntOrFloatBitWidth();
-    mlir::Value Widened = From;
-    if (FW < TW) Widened = mlir::arith::ExtUIOp::create(Builder, Loc, T, From);
-    else if (FW > TW) {
-      Widened = mlir::arith::TruncIOp::create(Builder, Loc, T, From);
-    }
-    return Widened;
-  }
-
-  // SF: Signed Int -> Float
-  mlir::Value conv_SF(mlir::Value From, mlir::Type F, mlir::Type T,
-      mlir::OpBuilder &Builder) {
-    auto Loc = Builder.getUnknownLoc();
-    return mlir::arith::SIToFPOp::create(Builder, Loc, T, From);
-  }
-
-  // UF: Unsigned Int -> Float
-  mlir::Value conv_UF(mlir::Value From, mlir::Type F, mlir::Type T,
-      mlir::OpBuilder &Builder) {
-    auto Loc = Builder.getUnknownLoc();
-    return mlir::arith::UIToFPOp::create(Builder, Loc, T, From);
-  }
-
-  // FS: Float -> Signed Int
-  mlir::Value conv_FS(mlir::Value From, mlir::Type F, mlir::Type T,
-      mlir::OpBuilder &Builder) {
-    auto Loc = Builder.getUnknownLoc();
-    return mlir::arith::FPToSIOp::create(Builder, Loc, T, From);
-  }
-
-  // FU: Float -> Unsigned Int
-  mlir::Value conv_FU(mlir::Value From, mlir::Type F, mlir::Type T,
-      mlir::OpBuilder &Builder) {
-    auto Loc = Builder.getUnknownLoc();
-    return mlir::arith::FPToUIOp::create(Builder, Loc, T, From);
-  }
-
-  using ConvHandler = mlir::Value(*)(mlir::Value, mlir::Type, mlir::Type, 
-      mlir::OpBuilder&);
-
-  const ConvHandler ConversionTable[3][3] = {
-    //  To: Signed    To: Unsigned   To: Float
-    {   conv_SS,      conv_SU,       conv_SF  },  // From: Signed
-    {   conv_US,      conv_UU,       conv_UF  },  // From: Unsigned
-    {   conv_FS,      conv_FU,       conv_FF  },  // From: Float
-  };
+  llvm_unreachable("Unknown numeric type");
 }
+
+// SS: Signed -> Signed
+mlir::Value conv_SS(mlir::Value From, mlir::Type F, mlir::Type T,
+                    mlir::OpBuilder &Builder) {
+  auto Loc = Builder.getUnknownLoc();
+  unsigned FW = F.getIntOrFloatBitWidth();
+  unsigned TW = T.getIntOrFloatBitWidth();
+  if (FW == TW)
+    return From;
+  if (FW < TW)
+    return mlir::arith::ExtSIOp::create(Builder, Loc, T, From);
+  return mlir::arith::TruncIOp::create(Builder, Loc, T, From);
+}
+
+// UU: Unsigned -> Unsigned
+mlir::Value conv_UU(mlir::Value From, mlir::Type F, mlir::Type T,
+                    mlir::OpBuilder &Builder) {
+  auto Loc = Builder.getUnknownLoc();
+  unsigned FW = F.getIntOrFloatBitWidth();
+  unsigned TW = T.getIntOrFloatBitWidth();
+  if (FW == TW)
+    return From;
+  if (FW < TW)
+    return mlir::arith::ExtUIOp::create(Builder, Loc, T, From);
+  return mlir::arith::TruncIOp::create(Builder, Loc, T, From);
+}
+
+// FF: Float -> Float
+mlir::Value conv_FF(mlir::Value From, mlir::Type F, mlir::Type T,
+                    mlir::OpBuilder &Builder) {
+  auto Loc = Builder.getUnknownLoc();
+  unsigned FW = F.getIntOrFloatBitWidth();
+  unsigned TW = T.getIntOrFloatBitWidth();
+  if (FW == TW)
+    return From;
+  if (FW < TW)
+    return mlir::arith::ExtFOp::create(Builder, Loc, T, From);
+  return mlir::arith::TruncFOp::create(Builder, Loc, T, From);
+}
+
+// SU: Signed -> Unsigned
+mlir::Value conv_SU(mlir::Value From, mlir::Type F, mlir::Type T,
+                    mlir::OpBuilder &Builder) {
+  auto Loc = Builder.getUnknownLoc();
+  unsigned FW = F.getIntOrFloatBitWidth();
+  unsigned TW = T.getIntOrFloatBitWidth();
+  mlir::Value Widened = From;
+  if (FW < TW)
+    Widened = mlir::arith::ExtSIOp::create(Builder, Loc, T, From);
+  else if (FW > TW) {
+    Widened = mlir::arith::TruncIOp::create(Builder, Loc, T, From);
+  }
+  return Widened;
+}
+
+// US: Unsigned -> Signed
+mlir::Value conv_US(mlir::Value From, mlir::Type F, mlir::Type T,
+                    mlir::OpBuilder &Builder) {
+  auto Loc = Builder.getUnknownLoc();
+  unsigned FW = F.getIntOrFloatBitWidth();
+  unsigned TW = T.getIntOrFloatBitWidth();
+  mlir::Value Widened = From;
+  if (FW < TW)
+    Widened = mlir::arith::ExtUIOp::create(Builder, Loc, T, From);
+  else if (FW > TW) {
+    Widened = mlir::arith::TruncIOp::create(Builder, Loc, T, From);
+  }
+  return Widened;
+}
+
+// SF: Signed Int -> Float
+mlir::Value conv_SF(mlir::Value From, mlir::Type F, mlir::Type T,
+                    mlir::OpBuilder &Builder) {
+  auto Loc = Builder.getUnknownLoc();
+  return mlir::arith::SIToFPOp::create(Builder, Loc, T, From);
+}
+
+// UF: Unsigned Int -> Float
+mlir::Value conv_UF(mlir::Value From, mlir::Type F, mlir::Type T,
+                    mlir::OpBuilder &Builder) {
+  auto Loc = Builder.getUnknownLoc();
+  return mlir::arith::UIToFPOp::create(Builder, Loc, T, From);
+}
+
+// FS: Float -> Signed Int
+mlir::Value conv_FS(mlir::Value From, mlir::Type F, mlir::Type T,
+                    mlir::OpBuilder &Builder) {
+  auto Loc = Builder.getUnknownLoc();
+  return mlir::arith::FPToSIOp::create(Builder, Loc, T, From);
+}
+
+// FU: Float -> Unsigned Int
+mlir::Value conv_FU(mlir::Value From, mlir::Type F, mlir::Type T,
+                    mlir::OpBuilder &Builder) {
+  auto Loc = Builder.getUnknownLoc();
+  return mlir::arith::FPToUIOp::create(Builder, Loc, T, From);
+}
+
+using ConvHandler = mlir::Value (*)(mlir::Value, mlir::Type, mlir::Type,
+                                    mlir::OpBuilder &);
+
+const ConvHandler ConversionTable[3][3] = {
+    //  To: Signed    To: Unsigned   To: Float
+    {conv_SS, conv_SU, conv_SF}, // From: Signed
+    {conv_US, conv_UU, conv_UF}, // From: Unsigned
+    {conv_FS, conv_FU, conv_FF}, // From: Float
+};
+} // namespace
 
 mlir::Type MLIRGen::toMLIRType(QualType T) {
   if (T.isNull() || T.isUnitType()) {
@@ -169,9 +177,12 @@ mlir::Type MLIRGen::toMLIRType(QualType T) {
   if (T.isFloatingType()) {
     size_t Width = T.getSizeInBytes() * 8;
     switch (Width) {
-      case 32: return Builder.getF32Type();
-      case 64: return Builder.getF64Type();
-      default: return Builder.getF64Type();
+    case 32:
+      return Builder.getF32Type();
+    case 64:
+      return Builder.getF64Type();
+    default:
+      return Builder.getF64Type();
     }
   }
   if (T.isPointerType()) {
@@ -186,11 +197,12 @@ mlir::Type MLIRGen::toMLIRType(QualType T) {
     llvm::SmallVector<int64_t> Shape;
     QualType Current = T;
     while (Current.isArrayType()) {
-      const ArrayType *AT = static_cast<const ArrayType*>(Current.getTypePtr());
+      const ArrayType *AT =
+          static_cast<const ArrayType *>(Current.getTypePtr());
       Shape.push_back(static_cast<int64_t>(AT->getArraySize()));
       Current = AT->getElementType();
     }
-    mlir::Type Element = toMLIRType(Current); 
+    mlir::Type Element = toMLIRType(Current);
     return mlir::VectorType::get(Shape, Element);
   }
   return Builder.getNoneType();
@@ -204,17 +216,19 @@ mlir::MemRefType MLIRGen::toMemRefType(QualType T) {
   return mlir::MemRefType::get({}, toMLIRType(T));
 }
 
-const llvm::APFloat MLIRGen::toAPFloat(double D, QualType& Type) {
-  if(Type.getSizeInBytes() == 4) return llvm::APFloat(static_cast<float>(D));
-  else return llvm::APFloat(D);
+const llvm::APFloat MLIRGen::toAPFloat(double D, QualType &Type) {
+  if (Type.getSizeInBytes() == 4)
+    return llvm::APFloat(static_cast<float>(D));
+  else
+    return llvm::APFloat(D);
 }
 
 bool MLIRGen::isLValue(Expr *E) {
   return E->isVar() || E->getASTNodeKind() == ASTNodeKind::ASTK_ARRAYACCESSEXPR;
 }
 
-mlir::Value MLIRGen::getOpMemRef(mlir::Operation* Op) {
-  if(auto AllocaOp = mlir::dyn_cast<mlir::memref::AllocaOp>(Op)) {
+mlir::Value MLIRGen::getOpMemRef(mlir::Operation *Op) {
+  if (auto AllocaOp = mlir::dyn_cast<mlir::memref::AllocaOp>(Op)) {
     return AllocaOp.getMemref();
   } else if (auto AllocOp = mlir::dyn_cast<mlir::memref::AllocOp>(Op)) {
     return AllocOp.getMemref();
@@ -227,15 +241,15 @@ mlir::Value MLIRGen::getOpMemRef(mlir::Operation* Op) {
 mlir::Value MLIRGen::getLValueMemRef(Expr *E) {
   if (auto *VE = llvm::dyn_cast<VarExpr>(E)) {
     Symbol *Sym = ST.lookupSymbol(VE->getName(), VE->getScope());
-    
-    mlir::Operation* RawOp = static_cast<mlir::Operation*>(Sym->Op);
+
+    mlir::Operation *RawOp = static_cast<mlir::Operation *>(Sym->Op);
     auto MemRef = getOpMemRef(RawOp);
     return MemRef;
   } else if (auto *AE = llvm::dyn_cast<ArrayAccessExpr>(E)) {
     Symbol *Sym = ST.lookupSymbol(AE->getArrayNameExpr()->getName(),
-        AE->getArrayNameExpr()->getScope());
+                                  AE->getArrayNameExpr()->getScope());
 
-    mlir::Operation* RawOp = static_cast<mlir::Operation*>(Sym->Op);
+    mlir::Operation *RawOp = static_cast<mlir::Operation *>(Sym->Op);
     auto MemRef = getOpMemRef(RawOp);
     return MemRef;
   }
@@ -245,14 +259,14 @@ mlir::Value MLIRGen::getLValueMemRef(Expr *E) {
 mlir::Value MLIRGen::convertValueToType(mlir::Value From, mlir::Type ToType) {
   mlir::Type FromType = From.getType();
 
-  if (FromType == ToType) return From; 
+  if (FromType == ToType)
+    return From;
 
   NumKind FromKind = getNumKind(FromType);
-  NumKind ToKind   = getNumKind(ToType);
+  NumKind ToKind = getNumKind(ToType);
 
-  return ConversionTable[static_cast<int>(FromKind)]
-    [static_cast<int>(ToKind)]
-    (From, FromType, ToType, Builder);
+  return ConversionTable[static_cast<int>(FromKind)][static_cast<int>(ToKind)](
+      From, FromType, ToType, Builder);
 }
 
 void MLIRGen::genStmt(Stmt *S) {
@@ -260,37 +274,37 @@ void MLIRGen::genStmt(Stmt *S) {
     return;
 
   switch (S->getASTNodeKind()) {
-    case ASTNodeKind::ASTK_FUNCDECL:
-      genFuncDecl(static_cast<FuncDecl*>(S));
-      break;
-    case ASTNodeKind::ASTK_LETSTMT:
-      genLetStmt(static_cast<LetStmt*>(S));
-      break;
-    case ASTNodeKind::ASTK_IFSTMT:
-      genIfStmt(static_cast<IfStmt*>(S));
-      break;
-    case ASTNodeKind::ASTK_RETURNSTMT:
-      genReturnStmt(static_cast<ReturnStmt*>(S));
-      break;
-    case ASTNodeKind::ASTK_BLOCKSTMT:
-      genBlockStmt(static_cast<BlockStmt*>(S));
-      break;
-    case ASTNodeKind::ASTK_EXPRSTMT:
-      genExprStmt(static_cast<ExprStmt*>(S));
-      break;
-    case ASTNodeKind::ASTK_FORSTMT:
-      genForStmt(static_cast<ForStmt*>(S));
-      break;
-    case ASTNodeKind::ASTK_WHILESTMT:
-      genWhileStmt(static_cast<WhileStmt*>(S));
-      break;
-    default:
-      llvm_unreachable("Unhandled statement type");
+  case ASTNodeKind::ASTK_FUNCDECL:
+    genFuncDecl(static_cast<FuncDecl *>(S));
+    break;
+  case ASTNodeKind::ASTK_LETSTMT:
+    genLetStmt(static_cast<LetStmt *>(S));
+    break;
+  case ASTNodeKind::ASTK_IFSTMT:
+    genIfStmt(static_cast<IfStmt *>(S));
+    break;
+  case ASTNodeKind::ASTK_RETURNSTMT:
+    genReturnStmt(static_cast<ReturnStmt *>(S));
+    break;
+  case ASTNodeKind::ASTK_BLOCKSTMT:
+    genBlockStmt(static_cast<BlockStmt *>(S));
+    break;
+  case ASTNodeKind::ASTK_EXPRSTMT:
+    genExprStmt(static_cast<ExprStmt *>(S));
+    break;
+  case ASTNodeKind::ASTK_FORSTMT:
+    genForStmt(static_cast<ForStmt *>(S));
+    break;
+  case ASTNodeKind::ASTK_WHILESTMT:
+    genWhileStmt(static_cast<WhileStmt *>(S));
+    break;
+  default:
+    llvm_unreachable("Unhandled statement type");
   }
 }
 
 void MLIRGen::genProgram(Program *Node) {
-  for(auto& S: Node->getStatements()) {
+  for (auto &S : Node->getStatements()) {
     genStmt(S.get());
   }
 }
@@ -304,39 +318,40 @@ void MLIRGen::genBlockStmt(BlockStmt *Node) {
 void MLIRGen::genLetStmt(LetStmt *Node) {
   mlir::Location Loc = Builder.getUnknownLoc();
   mlir::Value InitValue;
-  Symbol* Sym = ST.lookupSymbol(Node->getDeclaredVar()->getName(), 
-      Node->getScope());
-  QualType VarTy = Sym->Ty; 
+  Symbol *Sym =
+      ST.lookupSymbol(Node->getDeclaredVar()->getName(), Node->getScope());
+  QualType VarTy = Sym->Ty;
 
   static constexpr size_t StackThreshold = 1024; // 1 KB
   size_t SizeInByte = VarTy.getSizeInBytes();
-  
+
   mlir::Operation *StorageOp = nullptr;
   mlir::Value MemRef;
-  if(SizeInByte > StackThreshold) {
+  if (SizeInByte > StackThreshold) {
     mlir::OpBuilder::InsertionGuard Guard(Builder);
     Builder.setInsertionPointToStart(this->CurrentEntryBlock);
-    auto HeapAlloc = mlir::memref::AllocOp::create(Builder, Loc, 
-        toMemRefType(VarTy));
+    auto HeapAlloc =
+        mlir::memref::AllocOp::create(Builder, Loc, toMemRefType(VarTy));
     StorageOp = HeapAlloc.getOperation();
     MemRef = HeapAlloc.getMemref();
   } else {
     mlir::OpBuilder::InsertionGuard Guard(Builder);
     Builder.setInsertionPointToStart(this->CurrentEntryBlock);
-    auto StackAlloc = mlir::memref::AllocaOp::create(Builder, 
-        Loc, toMemRefType(VarTy));  
+    auto StackAlloc =
+        mlir::memref::AllocaOp::create(Builder, Loc, toMemRefType(VarTy));
     StorageOp = StackAlloc.getOperation();
     MemRef = StackAlloc.getMemref();
   }
-  Sym->setOp(static_cast<void*>(StorageOp));
+  Sym->setOp(static_cast<void *>(StorageOp));
 
-  Expr* Init = Node->getInitializer();
-  if(!Init) return;
-  if(Init->getASTNodeKind() == ASTNodeKind::ASTK_ARRAYEXPR) {
-    genArrayInit(static_cast<ArrayExpr*>(Init), MemRef, VarTy);
+  Expr *Init = Node->getInitializer();
+  if (!Init)
+    return;
+  if (Init->getASTNodeKind() == ASTNodeKind::ASTK_ARRAYEXPR) {
+    genArrayInit(static_cast<ArrayExpr *>(Init), MemRef, VarTy);
   } else {
     InitValue = visit(Init);
-    if(InitValue) {
+    if (InitValue) {
       mlir::memref::StoreOp::create(Builder, Loc, InitValue, MemRef);
     }
   }
@@ -358,8 +373,8 @@ void MLIRGen::genArrayInitImpl(ArrayExpr *Node, mlir::Value DestMemRef,
     if (Elem->getASTNodeKind() == ASTNodeKind::ASTK_ARRAYEXPR) {
       genArrayInitImpl(static_cast<ArrayExpr *>(Elem), DestMemRef, Indices);
     } else if (Elem->isVar()) {
-      Symbol* Sym = ST.lookupSymbol(static_cast<VarExpr*>(Elem)->getName(), 
-          Elem->getScope());
+      Symbol *Sym = ST.lookupSymbol(static_cast<VarExpr *>(Elem)->getName(),
+                                    Elem->getScope());
       if (Sym && Sym->Ty.isArrayType()) {
         mlir::Operation *RawOp = static_cast<mlir::Operation *>(Sym->Op);
         auto SrcMemRef = getOpMemRef(RawOp);
@@ -382,37 +397,38 @@ void MLIRGen::genArrayInitImpl(ArrayExpr *Node, mlir::Value DestMemRef,
         auto SubViewTy = mlir::memref::SubViewOp::inferRankReducedResultType(
             SrcType.getShape(), DestType, Offsets, Sizes, Strides);
 
-        mlir::Value SubView = mlir::memref::SubViewOp::create(
-            Builder, Loc,
-            llvm::cast<mlir::MemRefType>(SubViewTy),
-            DestMemRef, Offsets, Sizes, Strides).getResult();
+        mlir::Value SubView =
+            mlir::memref::SubViewOp::create(
+                Builder, Loc, llvm::cast<mlir::MemRefType>(SubViewTy),
+                DestMemRef, Offsets, Sizes, Strides)
+                .getResult();
 
         mlir::memref::CopyOp::create(Builder, Loc, SrcMemRef, SubView);
-      } else { 
-        mlir::Value Val = visit(Elem); 
+      } else {
+        mlir::Value Val = visit(Elem);
         if (Val)
           mlir::memref::StoreOp::create(Builder, Loc, Val, DestMemRef,
-              mlir::ValueRange(Indices));
+                                        mlir::ValueRange(Indices));
         else
           llvm::errs() << "Error: failed to generate array element at index "
-            << I << "\n";
+                       << I << "\n";
       }
-    } else { 
-      mlir::Value Val = visit(Elem); 
+    } else {
+      mlir::Value Val = visit(Elem);
       if (Val)
         mlir::memref::StoreOp::create(Builder, Loc, Val, DestMemRef,
-            mlir::ValueRange(Indices));
+                                      mlir::ValueRange(Indices));
       else
-        llvm::errs() << "Error: failed to generate array element at index "
-          << I << "\n";
+        llvm::errs() << "Error: failed to generate array element at index " << I
+                     << "\n";
     }
     Indices.pop_back();
   }
 }
 
-Expr* getUniformRepeatChild(ArrayExpr *Node) {
+Expr *getUniformRepeatChild(ArrayExpr *Node) {
   const auto &Elems = Node->getChildElemExprVec();
-  if (Elems.size() != 1)               
+  if (Elems.size() != 1)
     return nullptr;
 
   Expr *Elem = Elems[0].get();
@@ -423,23 +439,24 @@ Expr* getUniformRepeatChild(ArrayExpr *Node) {
   if (!Elem->getType().isNull() && Elem->getType().isArrayType())
     return nullptr;
 
-  return Elem; 
+  return Elem;
 }
 
 void MLIRGen::genArrayInit(ArrayExpr *Node, mlir::Value DestMemRef,
                            QualType ArrayTy) {
-  //FIXME:: When initializing array of size greater than StackThreshold(1KB),
-  //linalg.fill will only be used for array with one element all other cases
-  //will go to AllocOp.
-  //Example: [[1,2,3,4];167], this mlirgen for this will be repeated alloc 167 
-  //times.
+  // FIXME:: When initializing array of size greater than StackThreshold(1KB),
+  // linalg.fill will only be used for array with one element all other cases
+  // will go to AllocOp.
+  // Example: [[1,2,3,4];167], this mlirgen for this will be repeated alloc 167
+  // times.
   size_t SizeInByte = Node->getType().getSizeInBytes();
-  if(SizeInByte > 1024) {
-    if(Expr *Child = getUniformRepeatChild(Node)) {
+  if (SizeInByte > 1024) {
+    if (Expr *Child = getUniformRepeatChild(Node)) {
       mlir::Value FillValue = visit(Child);
-      if(FillValue) {
-        mlir::linalg::FillOp::create(Builder, Builder.getUnknownLoc(), 
-            mlir::ValueRange{FillValue}, mlir::ValueRange{DestMemRef});
+      if (FillValue) {
+        mlir::linalg::FillOp::create(Builder, Builder.getUnknownLoc(),
+                                     mlir::ValueRange{FillValue},
+                                     mlir::ValueRange{DestMemRef});
         return;
       }
     }
@@ -449,19 +466,17 @@ void MLIRGen::genArrayInit(ArrayExpr *Node, mlir::Value DestMemRef,
 }
 
 mlir::Value MLIRGen::visitIntExpr(IntExpr *Node) {
-  auto IntOp = mlir::arith::ConstantIntOp::create(Builder, 
-      Builder.getUnknownLoc(), 
-      toMLIRType(Node->getType()), 
+  auto IntOp = mlir::arith::ConstantIntOp::create(
+      Builder, Builder.getUnknownLoc(), toMLIRType(Node->getType()),
       Node->getValue());
   return IntOp.getResult();
 }
 
 mlir::Value MLIRGen::visitFloatExpr(FloatExpr *Node) {
   const llvm::APFloat FloatValue = toAPFloat(Node->getValue(), Node->getType());
-  auto FloatOp = mlir::arith::ConstantFloatOp::create(Builder,
-      Builder.getUnknownLoc(),
-      llvm::dyn_cast<mlir::FloatType>(toMLIRType(Node->getType())),
-      FloatValue);
+  auto FloatOp = mlir::arith::ConstantFloatOp::create(
+      Builder, Builder.getUnknownLoc(),
+      llvm::dyn_cast<mlir::FloatType>(toMLIRType(Node->getType())), FloatValue);
   return FloatOp.getResult();
 }
 
@@ -473,41 +488,42 @@ mlir::Value MLIRGen::visitRefrExpr(RefrExpr *Node) {
     return getLValueMemRef(Referent);
   }
 
-  mlir::Value Val = visit(Referent);  
-  auto TempAlloca = mlir::memref::AllocaOp::create(Builder, Loc,
-      toMemRefType(Referent->getType()));
+  mlir::Value Val = visit(Referent);
+  auto TempAlloca = mlir::memref::AllocaOp::create(
+      Builder, Loc, toMemRefType(Referent->getType()));
   mlir::memref::StoreOp::create(Builder, Loc, Val, TempAlloca.getResult());
   return TempAlloca.getResult();
 }
 
 mlir::Value MLIRGen::visitArrayAccessExpr(ArrayAccessExpr *Node) {
   auto Loc = Builder.getUnknownLoc();
-  Symbol* Sym = ST.lookupSymbol(Node->getArrayNameExpr()->getName(),
-      Node->getArrayNameExpr()->getScope());
-  mlir::Operation* RawPtr = static_cast<mlir::Operation*>(Sym->Op);
+  Symbol *Sym = ST.lookupSymbol(Node->getArrayNameExpr()->getName(),
+                                Node->getArrayNameExpr()->getScope());
+  mlir::Operation *RawPtr = static_cast<mlir::Operation *>(Sym->Op);
   auto memref = getOpMemRef(RawPtr);
   llvm::SmallVector<mlir::Value, 4> IndexValueVec;
-  for(const auto& Index: Node->getIndexVector()) {
+  for (const auto &Index : Node->getIndexVector()) {
     mlir::Value IndexValue;
-    if(Index->isNum()) {
-      IndexValue = visitIntExpr(static_cast<IntExpr*>(Index.get()));
-    } else if(Index->isVar()) {
-      IndexValue = visitVarExpr(static_cast<VarExpr*>(Index.get()));
-    } else llvm_unreachable("Index can only be integer or variable.");
-    mlir::Value IV = mlir::arith::IndexCastOp::create(Builder, Loc, 
-        Builder.getIndexType(), IndexValue);
+    if (Index->isNum()) {
+      IndexValue = visitIntExpr(static_cast<IntExpr *>(Index.get()));
+    } else if (Index->isVar()) {
+      IndexValue = visitVarExpr(static_cast<VarExpr *>(Index.get()));
+    } else
+      llvm_unreachable("Index can only be integer or variable.");
+    mlir::Value IV = mlir::arith::IndexCastOp::create(
+        Builder, Loc, Builder.getIndexType(), IndexValue);
     IndexValueVec.push_back(IV);
   }
   mlir::ValueRange Indices(IndexValueVec);
-  mlir::memref::LoadOp loadOp = mlir::memref::LoadOp::create(Builder,
-      Loc, memref, Indices); 
+  mlir::memref::LoadOp loadOp =
+      mlir::memref::LoadOp::create(Builder, Loc, memref, Indices);
   return loadOp.getResult();
 }
 
 mlir::Value MLIRGen::visitASExpr(ASExpr *Node) {
   mlir::Value FromExpr = visit(Node->getFromExpr());
-  QualType ToType = Node->getType(); 
-  return convertValueToType(FromExpr, toMLIRType(ToType)); 
+  QualType ToType = Node->getType();
+  return convertValueToType(FromExpr, toMLIRType(ToType));
 }
 
 mlir::Value MLIRGen::visitBinExpr(BinExpr *Node) {
@@ -516,177 +532,175 @@ mlir::Value MLIRGen::visitBinExpr(BinExpr *Node) {
   mlir::Value RHS = visit(Node->getRHS());
 
   if (!LHS || !RHS) {
-    llvm::errs() << "Error: Failed to generate operands for binary expression\n";
+    llvm::errs()
+        << "Error: Failed to generate operands for binary expression\n";
     return mlir::Value();
   }
 
   auto Loc = Builder.getUnknownLoc();
   Lex::TokenKind Op = Node->getOp();
 
-  // Get the result type from the typed AST (semantic analysis already determined this)
+  // Get the result type from the typed AST (semantic analysis already
+  // determined this)
   QualType ResultTy = Node->getType();
 
   // Determine if we're working with integers or floats
   bool IsFloat = ResultTy.isFloatingType();
   // bool IsBool = ResultTy.isBooleanType();
   bool IsSigned = ResultTy.isSignedIntegerType();
-  
+
   // For comparisons, we need to know if the operands are signed or floating
   mlir::Type LHSTy = LHS.getType();
   bool OpIsFloat = LHSTy.isFloat();
   bool OpIsSigned = Node->getLHS()->getType().isSignedIntegerType();
 
   switch (Op) {
-    // ========================================================================
-    // Arithmetic Operators
-    // ========================================================================
-    case Lex::TokenKind::OP_PLUS:
-      if (IsFloat) {
-        return mlir::arith::AddFOp::create(Builder, Loc, LHS, RHS);
-      } else {
-        return mlir::arith::AddIOp::create(Builder, Loc, LHS, RHS);
-      }
+  // ========================================================================
+  // Arithmetic Operators
+  // ========================================================================
+  case Lex::TokenKind::OP_PLUS:
+    if (IsFloat) {
+      return mlir::arith::AddFOp::create(Builder, Loc, LHS, RHS);
+    } else {
+      return mlir::arith::AddIOp::create(Builder, Loc, LHS, RHS);
+    }
 
-    case Lex::TokenKind::OP_MINUS:
-      if (IsFloat) {
-        return mlir::arith::SubFOp::create(Builder, Loc, LHS, RHS);
-      } else {
-        return mlir::arith::SubIOp::create(Builder, Loc, LHS, RHS);
-      }
+  case Lex::TokenKind::OP_MINUS:
+    if (IsFloat) {
+      return mlir::arith::SubFOp::create(Builder, Loc, LHS, RHS);
+    } else {
+      return mlir::arith::SubIOp::create(Builder, Loc, LHS, RHS);
+    }
 
-    case Lex::TokenKind::OP_STAR:
-      if (IsFloat) {
-        return mlir::arith::MulFOp::create(Builder, Loc, LHS, RHS);
-      } else {
-        return mlir::arith::MulIOp::create(Builder, Loc, LHS, RHS);
-      }
+  case Lex::TokenKind::OP_STAR:
+    if (IsFloat) {
+      return mlir::arith::MulFOp::create(Builder, Loc, LHS, RHS);
+    } else {
+      return mlir::arith::MulIOp::create(Builder, Loc, LHS, RHS);
+    }
 
-    case Lex::TokenKind::OP_SLASH:
-      if (IsFloat) {
-        return mlir::arith::DivFOp::create(Builder, Loc, LHS, RHS);
-      } else if (IsSigned){
-        return mlir::arith::DivSIOp::create(Builder, Loc, LHS, RHS);
-      } else {
-        return mlir::arith::DivUIOp::create(Builder, Loc, LHS, RHS);
-      }
+  case Lex::TokenKind::OP_SLASH:
+    if (IsFloat) {
+      return mlir::arith::DivFOp::create(Builder, Loc, LHS, RHS);
+    } else if (IsSigned) {
+      return mlir::arith::DivSIOp::create(Builder, Loc, LHS, RHS);
+    } else {
+      return mlir::arith::DivUIOp::create(Builder, Loc, LHS, RHS);
+    }
 
-    // ========================================================================
-    // Comparison Operators (return i1/bool)
-    // ========================================================================
-    case Lex::TokenKind::OP_EQUALEQUAL:
-      if (OpIsFloat) {
-        return mlir::arith::CmpFOp::create(Builder,
-            Loc, 
-            mlir::arith::CmpFPredicate::OEQ,  // Ordered equal
-            LHS, RHS);
-      } else {
-        return mlir::arith::CmpIOp::create(Builder,
-            Loc,
-            mlir::arith::CmpIPredicate::eq,
-            LHS, RHS);
-      }
+  // ========================================================================
+  // Comparison Operators (return i1/bool)
+  // ========================================================================
+  case Lex::TokenKind::OP_EQUALEQUAL:
+    if (OpIsFloat) {
+      return mlir::arith::CmpFOp::create(
+          Builder, Loc,
+          mlir::arith::CmpFPredicate::OEQ, // Ordered equal
+          LHS, RHS);
+    } else {
+      return mlir::arith::CmpIOp::create(
+          Builder, Loc, mlir::arith::CmpIPredicate::eq, LHS, RHS);
+    }
 
-    case Lex::TokenKind::OP_BANGEQUAL:
-      if (OpIsFloat) {
-        return mlir::arith::CmpFOp::create(Builder,
-            Loc,
-            mlir::arith::CmpFPredicate::ONE,  // Ordered not equal
-            LHS, RHS);
-      } else {
-        return mlir::arith::CmpIOp::create(Builder,
-            Loc,
-            mlir::arith::CmpIPredicate::ne,
-            LHS, RHS);
-      }
+  case Lex::TokenKind::OP_BANGEQUAL:
+    if (OpIsFloat) {
+      return mlir::arith::CmpFOp::create(
+          Builder, Loc,
+          mlir::arith::CmpFPredicate::ONE, // Ordered not equal
+          LHS, RHS);
+    } else {
+      return mlir::arith::CmpIOp::create(
+          Builder, Loc, mlir::arith::CmpIPredicate::ne, LHS, RHS);
+    }
 
-    case Lex::TokenKind::OP_LESS:
-      if (OpIsFloat) {
-        return mlir::arith::CmpFOp::create(Builder,
-            Loc,
-            mlir::arith::CmpFPredicate::OLT,  // Ordered less than
-            LHS, RHS);
-      } else {
-        return mlir::arith::CmpIOp::create(Builder,
-            Loc,
-            OpIsSigned ? mlir::arith::CmpIPredicate::slt : 
-            mlir::arith::CmpIPredicate::ult, LHS, RHS);
-      }
+  case Lex::TokenKind::OP_LESS:
+    if (OpIsFloat) {
+      return mlir::arith::CmpFOp::create(
+          Builder, Loc,
+          mlir::arith::CmpFPredicate::OLT, // Ordered less than
+          LHS, RHS);
+    } else {
+      return mlir::arith::CmpIOp::create(Builder, Loc,
+                                         OpIsSigned
+                                             ? mlir::arith::CmpIPredicate::slt
+                                             : mlir::arith::CmpIPredicate::ult,
+                                         LHS, RHS);
+    }
 
-    case Lex::TokenKind::OP_LESSEQUAL:
-      if (OpIsFloat) {
-        return mlir::arith::CmpFOp::create(Builder,
-            Loc,
-            mlir::arith::CmpFPredicate::OLE,  // Ordered less or equal
-            LHS, RHS);
-      } else {
-        return mlir::arith::CmpIOp::create(Builder,
-            Loc,
-            OpIsSigned ? mlir::arith::CmpIPredicate::sle : 
-            mlir::arith::CmpIPredicate::ule, LHS, RHS);
-      }
+  case Lex::TokenKind::OP_LESSEQUAL:
+    if (OpIsFloat) {
+      return mlir::arith::CmpFOp::create(
+          Builder, Loc,
+          mlir::arith::CmpFPredicate::OLE, // Ordered less or equal
+          LHS, RHS);
+    } else {
+      return mlir::arith::CmpIOp::create(Builder, Loc,
+                                         OpIsSigned
+                                             ? mlir::arith::CmpIPredicate::sle
+                                             : mlir::arith::CmpIPredicate::ule,
+                                         LHS, RHS);
+    }
 
-    case Lex::TokenKind::OP_GREATER:
-      if (OpIsFloat) {
-        return mlir::arith::CmpFOp::create(Builder,
-            Loc,
-            mlir::arith::CmpFPredicate::OGT,  // Ordered greater than
-            LHS, RHS);
-      } else {
-        return mlir::arith::CmpIOp::create(Builder,
-            Loc,
-            OpIsSigned ? mlir::arith::CmpIPredicate::sgt : 
-            mlir::arith::CmpIPredicate::ugt,
-            LHS, RHS);
-      }
+  case Lex::TokenKind::OP_GREATER:
+    if (OpIsFloat) {
+      return mlir::arith::CmpFOp::create(
+          Builder, Loc,
+          mlir::arith::CmpFPredicate::OGT, // Ordered greater than
+          LHS, RHS);
+    } else {
+      return mlir::arith::CmpIOp::create(Builder, Loc,
+                                         OpIsSigned
+                                             ? mlir::arith::CmpIPredicate::sgt
+                                             : mlir::arith::CmpIPredicate::ugt,
+                                         LHS, RHS);
+    }
 
-    case Lex::TokenKind::OP_GREATEREQUAL:
-      if (OpIsFloat) {
-        return mlir::arith::CmpFOp::create(Builder,
-            Loc,
-            mlir::arith::CmpFPredicate::OGE,  // Ordered greater or equal
-            LHS, RHS);
-      } else {
-        return mlir::arith::CmpIOp::create(Builder,
-            Loc,
-            OpIsSigned ? mlir::arith::CmpIPredicate::sge : 
-            mlir::arith::CmpIPredicate::uge,
-            LHS, RHS);
-      }
+  case Lex::TokenKind::OP_GREATEREQUAL:
+    if (OpIsFloat) {
+      return mlir::arith::CmpFOp::create(
+          Builder, Loc,
+          mlir::arith::CmpFPredicate::OGE, // Ordered greater or equal
+          LHS, RHS);
+    } else {
+      return mlir::arith::CmpIOp::create(Builder, Loc,
+                                         OpIsSigned
+                                             ? mlir::arith::CmpIPredicate::sge
+                                             : mlir::arith::CmpIPredicate::uge,
+                                         LHS, RHS);
+    }
 
-    // ========================================================================
-    // Logical Operators (boolean operations)
-    // ========================================================================
-    case Lex::TokenKind::OP_AMPAMP:  // &&
-                                     // LHS && RHS
-      return mlir::arith::AndIOp::create(Builder, Loc, LHS, RHS);
+  // ========================================================================
+  // Logical Operators (boolean operations)
+  // ========================================================================
+  case Lex::TokenKind::OP_AMPAMP: // &&
+                                  // LHS && RHS
+    return mlir::arith::AndIOp::create(Builder, Loc, LHS, RHS);
 
-    case Lex::TokenKind::OP_PIPEPIPE:  // ||
-                                       // LHS || RHS
-      return mlir::arith::OrIOp::create(Builder, Loc, LHS, RHS);
+  case Lex::TokenKind::OP_PIPEPIPE: // ||
+                                    // LHS || RHS
+    return mlir::arith::OrIOp::create(Builder, Loc, LHS, RHS);
 
-    default:
-      llvm::errs() << "Error: Unhandled binary operator: " 
-        << Lex::getTokenName(Op) << "\n";
-      return mlir::Value();
+  default:
+    llvm::errs() << "Error: Unhandled binary operator: "
+                 << Lex::getTokenName(Op) << "\n";
+    return mlir::Value();
   }
 }
 
 mlir::Value MLIRGen::visitBoolExpr(BoolExpr *Node) {
-  auto BoolOp = mlir::arith::ConstantIntOp::create(Builder, 
-      Builder.getUnknownLoc(),
-      toMLIRType(Node->getType()),
+  auto BoolOp = mlir::arith::ConstantIntOp::create(
+      Builder, Builder.getUnknownLoc(), toMLIRType(Node->getType()),
       Node->getValue());
   return BoolOp;
 }
 
 mlir::Value MLIRGen::visitVarExpr(VarExpr *Node) {
   Symbol *Sym = ST.lookupSymbol(Node->getName(), Node->getScope());
-  mlir::Operation* RawPtr = static_cast<mlir::Operation*>(Sym->Op);
+  mlir::Operation *RawPtr = static_cast<mlir::Operation *>(Sym->Op);
   auto allocaOp = llvm::dyn_cast<mlir::memref::AllocaOp>(RawPtr);
 
-  mlir::memref::LoadOp loadOp = mlir::memref::LoadOp::create(Builder,
-      Builder.getUnknownLoc(),
-      allocaOp.getMemref()); 
+  mlir::memref::LoadOp loadOp = mlir::memref::LoadOp::create(
+      Builder, Builder.getUnknownLoc(), allocaOp.getMemref());
   return loadOp.getResult();
 }
 
@@ -697,12 +711,12 @@ mlir::Value MLIRGen::visitFunCall(FunCall *Node) {
 
   Symbol *FuncSym = ST.lookupSymbol(FuncName);
   if (!FuncSym) {
-    llvm::errs() << "Error: Function '" << FuncName 
-      << "' not found in symbol table\n";
+    llvm::errs() << "Error: Function '" << FuncName
+                 << "' not found in symbol table\n";
     return mlir::Value();
   }
 
-  mlir::Operation* RawPtr = static_cast<mlir::Operation*>(FuncSym->Op);
+  mlir::Operation *RawPtr = static_cast<mlir::Operation *>(FuncSym->Op);
   mlir::func::FuncOp funcOp = llvm::dyn_cast<mlir::func::FuncOp>(RawPtr);
 
   llvm::ArrayRef<mlir::Type> ResultTypes = funcOp.getResultTypes();
@@ -724,7 +738,7 @@ mlir::Value MLIRGen::visitFunCall(FunCall *Node) {
   }
 
   auto CallOp = mlir::func::CallOp::create(Builder, Loc, funcOp, Args);
-  
+
   // If the function returns a value, return it
   // Otherwise, return an empty mlir::Value (for void functions)
   if (ResultTypes.empty()) {
@@ -734,54 +748,53 @@ mlir::Value MLIRGen::visitFunCall(FunCall *Node) {
   }
 }
 
-void MLIRGen::genParams(const std::vector<FuncDecl::Param>& Params) { 
+void MLIRGen::genParams(const std::vector<FuncDecl::Param> &Params) {
   auto Loc = Builder.getUnknownLoc();
 
   for (size_t i = 0; i < Params.size(); ++i) {
-    const auto& Param = Params[i];
+    const auto &Param = Params[i];
 
-    Symbol* ParamSym = ST.lookupSymbol(Param.ParamName->getName(), 
-        Param.ParamName->getScope());
+    Symbol *ParamSym = ST.lookupSymbol(Param.ParamName->getName(),
+                                       Param.ParamName->getScope());
 
     if (!ParamSym) {
-      llvm::errs() << "Error: Parameter '" << Param.ParamName->getName() 
-        << "' not found in symbol table\n";
+      llvm::errs() << "Error: Parameter '" << Param.ParamName->getName()
+                   << "' not found in symbol table\n";
       continue;
     }
 
     QualType ParamType = ParamSym->Ty;
 
-    auto ParamAlloca = mlir::memref::AllocaOp::create(Builder, 
-        Loc, toMemRefType(ParamType));
+    auto ParamAlloca =
+        mlir::memref::AllocaOp::create(Builder, Loc, toMemRefType(ParamType));
 
     // Get the corresponding block argument (function parameter value)
     mlir::Value BlockArg = CurrentEntryBlock->getArgument(i);
 
     // Store the block argument into the alloca
-    mlir::memref::StoreOp::create(
-        Builder, 
-        Loc, 
-        BlockArg, 
-        ParamAlloca.getResult());
+    mlir::memref::StoreOp::create(Builder, Loc, BlockArg,
+                                  ParamAlloca.getResult());
 
     // Update symbol table to point to this alloca
-    ParamSym->setOp(static_cast<void*>(ParamAlloca.getOperation())); 
+    ParamSym->setOp(static_cast<void *>(ParamAlloca.getOperation()));
   }
 }
 
 void MLIRGen::genFuncDecl(FuncDecl *Node) {
-  auto Loc = Builder.getUnknownLoc(); 
-  Symbol* Sym = ST.lookupSymbol(Node->getFuncName()->getName());
-  if (!Sym) return;
+  auto Loc = Builder.getUnknownLoc();
+  Symbol *Sym = ST.lookupSymbol(Node->getFuncName()->getName());
+  if (!Sym)
+    return;
 
   QualType FuncTy = Sym->Ty;
-  if (!FuncTy.isFunctionType()) return;
+  if (!FuncTy.isFunctionType())
+    return;
 
   std::vector<mlir::Type> ArgTypes;
-  for (const auto& ParamTy : FuncTy.getParamsType()) {
+  for (const auto &ParamTy : FuncTy.getParamsType()) {
     ArgTypes.push_back(toMLIRType(ParamTy));
   }
-  
+
   QualType RetT = FuncTy.getReturnType();
   std::vector<mlir::Type> ResultTypes;
   if (!RetT.isUnitType()) {
@@ -792,7 +805,7 @@ void MLIRGen::genFuncDecl(FuncDecl *Node) {
 
   auto funcOp = mlir::func::FuncOp::create(
       Builder, Loc, Node->getFuncName()->getName(), FuncType);
-  Sym->setOp(static_cast<void*>(funcOp.getOperation()));
+  Sym->setOp(static_cast<void *>(funcOp.getOperation()));
 
   auto *EntryBlock = funcOp.addEntryBlock();
   this->CurrentEntryBlock = EntryBlock;
@@ -800,14 +813,16 @@ void MLIRGen::genFuncDecl(FuncDecl *Node) {
   mlir::OpBuilder::InsertionGuard Guard(Builder);
   Builder.setInsertionPointToStart(CurrentEntryBlock);
 
-  if(!Node->getParams().empty()) { genParams(Node->getParams()); }
+  if (!Node->getParams().empty()) {
+    genParams(Node->getParams());
+  }
 
-  if(Node->getBody()) {
+  if (Node->getBody()) {
     genStmt(Node->getBody());
   }
 
   if (ResultTypes.empty()) {
-    if (EntryBlock->empty() || 
+    if (EntryBlock->empty() ||
         !EntryBlock->back().hasTrait<mlir::OpTrait::IsTerminator>()) {
       mlir::func::ReturnOp::create(Builder, Builder.getUnknownLoc());
     }
@@ -850,14 +865,13 @@ void MLIRGen::genIfStmt(IfStmt *Node) {
   // Verify condition is i1 type
   if (!Condition.getType().isInteger(1)) {
     llvm::errs() << "Error: If condition must be of type i1 (bool), got: "
-      << Condition.getType() << "\n";
+                 << Condition.getType() << "\n";
     return;
   }
 
   // Create scf.if operation
-  auto IfOp = mlir::scf::IfOp::create(Builder,
-      Loc,
-      Condition,
+  auto IfOp = mlir::scf::IfOp::create(
+      Builder, Loc, Condition,
       /*withElseRegion=*/Node->getElseBranch() != nullptr);
 
   // Generate "then" region
@@ -869,7 +883,7 @@ void MLIRGen::genIfStmt(IfStmt *Node) {
 
     // Add scf.yield if no terminator exists
     mlir::Block *ThenBlock = &IfOp.getThenRegion().front();
-    if (ThenBlock->empty() || 
+    if (ThenBlock->empty() ||
         !ThenBlock->back().hasTrait<mlir::OpTrait::IsTerminator>()) {
       mlir::scf::YieldOp::create(Builder, Loc);
     }
@@ -884,7 +898,7 @@ void MLIRGen::genIfStmt(IfStmt *Node) {
 
     // Add scf.yield if no terminator exists
     mlir::Block *ElseBlock = &IfOp.getElseRegion().front();
-    if (ElseBlock->empty() || 
+    if (ElseBlock->empty() ||
         !ElseBlock->back().hasTrait<mlir::OpTrait::IsTerminator>()) {
       mlir::scf::YieldOp::create(Builder, Loc);
     }
@@ -902,24 +916,25 @@ void MLIRGen::genAssignment(BinExpr *Node) {
 
   // 2. Get the memref for the variable
   mlir::Value LHSMemRef = getLValueMemRef(Node->getLHS());
-  
-  if(Node->getRHS()->getASTNodeKind() == ASTNodeKind::ASTK_ARRAYEXPR) {
-    genArrayInit(static_cast<ArrayExpr*>(Node->getRHS()), 
-        LHSMemRef, Node->getRHS()->getType());
+
+  if (Node->getRHS()->getASTNodeKind() == ASTNodeKind::ASTK_ARRAYEXPR) {
+    genArrayInit(static_cast<ArrayExpr *>(Node->getRHS()), LHSMemRef,
+                 Node->getRHS()->getType());
     return;
   }
-  if(auto *AAE = llvm::dyn_cast<ArrayAccessExpr>(Node->getLHS())) {
+  if (auto *AAE = llvm::dyn_cast<ArrayAccessExpr>(Node->getLHS())) {
     mlir::Value BaseMemRef = getLValueMemRef(Node->getLHS());
     llvm::SmallVector<mlir::Value, 4> IndexValueVec;
-    for(const auto& Index: AAE->getIndexVector()) {
+    for (const auto &Index : AAE->getIndexVector()) {
       mlir::Value IndexValue;
-      if(Index->isNum()) {
-        IndexValue = visitIntExpr(static_cast<IntExpr*>(Index.get()));
-      } else if(Index->isVar()) {
-        IndexValue = visitVarExpr(static_cast<VarExpr*>(Index.get()));
-      } else llvm_unreachable("Index can only be integer or variable.");
-      mlir::Value IV = mlir::arith::IndexCastOp::create(Builder, Loc, 
-          Builder.getIndexType(), IndexValue);
+      if (Index->isNum()) {
+        IndexValue = visitIntExpr(static_cast<IntExpr *>(Index.get()));
+      } else if (Index->isVar()) {
+        IndexValue = visitVarExpr(static_cast<VarExpr *>(Index.get()));
+      } else
+        llvm_unreachable("Index can only be integer or variable.");
+      mlir::Value IV = mlir::arith::IndexCastOp::create(
+          Builder, Loc, Builder.getIndexType(), IndexValue);
       IndexValueVec.push_back(IV);
     }
     mlir::Value ValueToStore;
@@ -927,26 +942,29 @@ void MLIRGen::genAssignment(BinExpr *Node) {
     if (Op == Lex::TokenKind::OP_EQUAL) {
       ValueToStore = visit(Node->getRHS());
     } else {
-      mlir::Value Current = mlir::memref::LoadOp::create(Builder, Loc,
-          BaseMemRef, mlir::ValueRange(IndexValueVec));
+      mlir::Value Current = mlir::memref::LoadOp::create(
+          Builder, Loc, BaseMemRef, mlir::ValueRange(IndexValueVec));
       mlir::Value RHS = visit(Node->getRHS());
       bool IsFloat = Node->getType().isFloatingType();
       if (Op == Lex::TokenKind::OP_PLUSEQUAL) {
-        ValueToStore = IsFloat
-          ? mlir::arith::AddFOp::create(Builder, Loc, Current, RHS).getResult()
-          : mlir::arith::AddIOp::create(Builder, Loc, Current, RHS).getResult();
+        ValueToStore =
+            IsFloat ? mlir::arith::AddFOp::create(Builder, Loc, Current, RHS)
+                          .getResult()
+                    : mlir::arith::AddIOp::create(Builder, Loc, Current, RHS)
+                          .getResult();
       } else if (Op == Lex::TokenKind::OP_MINUSEQUAL) {
-        ValueToStore = IsFloat
-          ? mlir::arith::SubFOp::create(Builder, Loc, Current, RHS).getResult()
-          : mlir::arith::SubIOp::create(Builder, Loc, Current, RHS).getResult();
+        ValueToStore =
+            IsFloat ? mlir::arith::SubFOp::create(Builder, Loc, Current, RHS)
+                          .getResult()
+                    : mlir::arith::SubIOp::create(Builder, Loc, Current, RHS)
+                          .getResult();
       }
     }
 
     if (ValueToStore)
       mlir::memref::StoreOp::create(Builder, Loc, ValueToStore, BaseMemRef,
-          mlir::ValueRange(IndexValueVec));
+                                    mlir::ValueRange(IndexValueVec));
     return;
-
   }
 
   mlir::Value ValueToStore;
@@ -956,8 +974,8 @@ void MLIRGen::genAssignment(BinExpr *Node) {
     ValueToStore = visit(Node->getRHS());
   } else {
     // Compound: a += b or a -= b
-    mlir::Value CurrentValue = mlir::memref::LoadOp::create(Builder,
-        Loc, LHSMemRef);
+    mlir::Value CurrentValue =
+        mlir::memref::LoadOp::create(Builder, Loc, LHSMemRef);
     // Evaluate RHS
     mlir::Value RHSValue = visit(Node->getRHS());
     // Perform operation
@@ -965,18 +983,22 @@ void MLIRGen::genAssignment(BinExpr *Node) {
     bool IsFloat = ResultTy.isFloatingType();
 
     if (Op == Lex::TokenKind::OP_PLUSEQUAL) {
-      ValueToStore = IsFloat 
-        ? mlir::arith::AddFOp::create(
-            Builder, Loc, CurrentValue, RHSValue).getResult()
-        : mlir::arith::AddIOp::create(
-            Builder, Loc, CurrentValue, RHSValue).getResult();
+      ValueToStore = IsFloat
+                         ? mlir::arith::AddFOp::create(Builder, Loc,
+                                                       CurrentValue, RHSValue)
+                               .getResult()
+                         : mlir::arith::AddIOp::create(Builder, Loc,
+                                                       CurrentValue, RHSValue)
+                               .getResult();
 
     } else if (Op == Lex::TokenKind::OP_MINUSEQUAL) {
       ValueToStore = IsFloat
-        ? mlir::arith::SubFOp::create(
-            Builder, Loc, CurrentValue, RHSValue).getResult()
-        : mlir::arith::SubIOp::create(
-            Builder, Loc, CurrentValue, RHSValue).getResult();
+                         ? mlir::arith::SubFOp::create(Builder, Loc,
+                                                       CurrentValue, RHSValue)
+                               .getResult()
+                         : mlir::arith::SubIOp::create(Builder, Loc,
+                                                       CurrentValue, RHSValue)
+                               .getResult();
     }
   }
 
@@ -987,14 +1009,14 @@ void MLIRGen::genAssignment(BinExpr *Node) {
 void MLIRGen::genExprStmt(ExprStmt *Node) {
   Expr *E = Node->getExpression();
 
-  if (!E) return;
+  if (!E)
+    return;
 
   // Special handling for assignment operators
-  if (auto *BE = static_cast<BinExpr*>(E)) {
+  if (auto *BE = static_cast<BinExpr *>(E)) {
     Lex::TokenKind Op = BE->getOp();
 
-    if (Op == Lex::TokenKind::OP_EQUAL ||
-        Op == Lex::TokenKind::OP_PLUSEQUAL ||
+    if (Op == Lex::TokenKind::OP_EQUAL || Op == Lex::TokenKind::OP_PLUSEQUAL ||
         Op == Lex::TokenKind::OP_MINUSEQUAL) {
       genAssignment(BE);
       return;
@@ -1007,20 +1029,20 @@ void MLIRGen::genExprStmt(ExprStmt *Node) {
 
 void MLIRGen::genForStmt(ForStmt *Node) {
   auto loc = Builder.getUnknownLoc();
-  VarExpr* Init = Node->getInit();
-  if(Init) {
-    Symbol* Sym = ST.lookupSymbol(Init->getName(), Init->getScope());
+  VarExpr *Init = Node->getInit();
+  if (Init) {
+    Symbol *Sym = ST.lookupSymbol(Init->getName(), Init->getScope());
     auto InitTy = toMemRefType(Sym->Ty);
     auto AllocaOp = mlir::memref::AllocaOp::create(Builder, loc, InitTy);
-    Sym->setOp(static_cast<void*>(AllocaOp));
+    Sym->setOp(static_cast<void *>(AllocaOp));
   }
   // 1. Generate loop bounds and step
   mlir::Value lbValue = visit(Node->getRange()->getStart());
   mlir::Value ubValue = visit(Node->getRange()->getEnd());
-  mlir::Value lb = mlir::arith::IndexCastOp::create(Builder,
-      loc, Builder.getIndexType(), lbValue);
-  mlir::Value ub = mlir::arith::IndexCastOp::create(Builder,
-      loc, Builder.getIndexType(), ubValue);
+  mlir::Value lb = mlir::arith::IndexCastOp::create(
+      Builder, loc, Builder.getIndexType(), lbValue);
+  mlir::Value ub = mlir::arith::IndexCastOp::create(
+      Builder, loc, Builder.getIndexType(), ubValue);
   mlir::Value step = mlir::arith::ConstantIndexOp::create(Builder, loc, 1);
 
   auto forOp = mlir::scf::ForOp::create(Builder, loc, lb, ub, step);
@@ -1028,13 +1050,13 @@ void MLIRGen::genForStmt(ForStmt *Node) {
   mlir::OpBuilder::InsertionGuard guard(Builder);
   Builder.setInsertionPointToStart(forOp.getBody());
 
-  if(Init) {
-    Symbol* Sym = ST.lookupSymbol(Init->getName(), Init->getScope());
-    mlir::Value iv = forOp.getInductionVar();  
+  if (Init) {
+    Symbol *Sym = ST.lookupSymbol(Init->getName(), Init->getScope());
+    mlir::Value iv = forOp.getInductionVar();
     mlir::Type elemTy = toMLIRType(Sym->Ty);
-    mlir::Value ivCast = mlir::arith::IndexCastOp::create(
-        Builder, loc, elemTy, iv);
-    mlir::Operation* RawOp = static_cast<mlir::Operation*>(Sym->Op);
+    mlir::Value ivCast =
+        mlir::arith::IndexCastOp::create(Builder, loc, elemTy, iv);
+    mlir::Operation *RawOp = static_cast<mlir::Operation *>(Sym->Op);
     mlir::Value memref = getOpMemRef(RawOp);
     mlir::memref::StoreOp::create(Builder, loc, ivCast, memref);
   }
@@ -1042,18 +1064,18 @@ void MLIRGen::genForStmt(ForStmt *Node) {
   genStmt(Node->getBody());
 
   mlir::Block *bodyBlock = forOp.getBody();
-    if (bodyBlock->empty() || 
-        !bodyBlock->back().hasTrait<mlir::OpTrait::IsTerminator>()) {
-      mlir::scf::YieldOp::create(Builder, loc);
-    }
+  if (bodyBlock->empty() ||
+      !bodyBlock->back().hasTrait<mlir::OpTrait::IsTerminator>()) {
+    mlir::scf::YieldOp::create(Builder, loc);
+  }
 }
 
 void MLIRGen::genWhileStmt(WhileStmt *Node) {
   auto loc = Builder.getUnknownLoc();
 
   // 1. Create WhileOp. 'operands' are initial loop-carried values (often empty)
-  auto whileOp = mlir::scf::WhileOp::create(Builder, loc, mlir::TypeRange{}, 
-      mlir::ValueRange{});
+  auto whileOp = mlir::scf::WhileOp::create(Builder, loc, mlir::TypeRange{},
+                                            mlir::ValueRange{});
   {
     mlir::OpBuilder::InsertionGuard guard(Builder);
     mlir::Region &beforeRegion = whileOp.getBefore();
@@ -1066,8 +1088,8 @@ void MLIRGen::genWhileStmt(WhileStmt *Node) {
       llvm::errs() << "Error: Failed to generate while loop condition\n";
       return;
     }
-    mlir::scf::ConditionOp::create(Builder, loc, condition, 
-        beforeBlock->getArguments());
+    mlir::scf::ConditionOp::create(Builder, loc, condition,
+                                   beforeBlock->getArguments());
   }
 
   {
@@ -1079,7 +1101,7 @@ void MLIRGen::genWhileStmt(WhileStmt *Node) {
     genStmt(Node->getBody());
 
     // 4. Add scf.yield if no terminator exists
-    if (afterBlock->empty() || 
+    if (afterBlock->empty() ||
         !afterBlock->back().hasTrait<mlir::OpTrait::IsTerminator>()) {
       mlir::scf::YieldOp::create(Builder, loc);
     }
@@ -1089,7 +1111,7 @@ void MLIRGen::genWhileStmt(WhileStmt *Node) {
 mlir::OwningOpRef<mlir::ModuleOp> MLIRGen::genModule(trsc::Program &Prog) {
   Module = mlir::ModuleOp::create(mlir::UnknownLoc::get(&MLIRCtx));
   Builder.setInsertionPointToEnd(Module.getBody());
-  
+
   genProgram(&Prog);
 
   if (failed(mlir::verify(Module))) {

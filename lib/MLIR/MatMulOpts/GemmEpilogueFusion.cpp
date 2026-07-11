@@ -58,8 +58,7 @@ static bool isZero(Value value) {
 /// lowering pass then emits this work next to the GEMM accumulator store,
 /// avoiding an additional full traversal of C.
 struct GemmEpilogueFusionPass
-    : public PassWrapper<GemmEpilogueFusionPass,
-                         OperationPass<func::FuncOp>> {
+    : public PassWrapper<GemmEpilogueFusionPass, OperationPass<func::FuncOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(GemmEpilogueFusionPass)
 
   StringRef getArgument() const final { return "gemm-epilogue-fusion"; }
@@ -122,10 +121,11 @@ struct GemmEpilogueFusionPass
             (relu.getRhs() == add.getResult() && isZero(relu.getLhs()))))
         continue;
 
-      if (store.getMemRef() != gemm.getC() ||
-          store.getIndices().size() != 2 ||
-          rootIndex(store.getIndices()[0]) != rootIndex(loopI.getInductionVar()) ||
-          rootIndex(store.getIndices()[1]) != rootIndex(loopJ.getInductionVar()))
+      if (store.getMemRef() != gemm.getC() || store.getIndices().size() != 2 ||
+          rootIndex(store.getIndices()[0]) !=
+              rootIndex(loopI.getInductionVar()) ||
+          rootIndex(store.getIndices()[1]) !=
+              rootIndex(loopJ.getInductionVar()))
         continue;
 
       memref::LoadOp loadC, loadBias;
@@ -133,7 +133,8 @@ struct GemmEpilogueFusionPass
         if (hasIndices(load, loopI.getInductionVar(), loopJ.getInductionVar()))
           loadC = load;
         else if (load.getIndices().size() == 1 &&
-                 rootIndex(load.getIndices()[0]) == rootIndex(loopJ.getInductionVar()))
+                 rootIndex(load.getIndices()[0]) ==
+                     rootIndex(loopJ.getInductionVar()))
           loadBias = load;
       }
       if (!loadC || !loadBias || loadC.getMemRef() != gemm.getC() ||
@@ -145,8 +146,8 @@ struct GemmEpilogueFusionPass
 
       OpBuilder builder(gemm);
       OperationState state(gemm.getLoc(), trscd::GemmOp::getOperationName());
-      state.addOperands({gemm.getA(), gemm.getB(), gemm.getC(),
-                         loadBias.getMemRef()});
+      state.addOperands(
+          {gemm.getA(), gemm.getB(), gemm.getC(), loadBias.getMemRef()});
       for (NamedAttribute attr : gemm->getAttrs())
         if (attr.getName().getValue() != "relu")
           state.addAttribute(attr.getName(), attr.getValue());
@@ -155,7 +156,6 @@ struct GemmEpilogueFusionPass
       (void)fused;
       loopI.erase();
       gemm.erase();
-
     }
   }
 };
@@ -168,8 +168,6 @@ std::unique_ptr<mlir::Pass> createGemmEpilogueFusionPass() {
   return std::make_unique<GemmEpilogueFusionPass>();
 }
 
-void registerMatMulOptPasses() {
-  PassRegistration<GemmEpilogueFusionPass>();
-}
+void registerMatMulOptPasses() { PassRegistration<GemmEpilogueFusionPass>(); }
 
 } // namespace mlir::trscd

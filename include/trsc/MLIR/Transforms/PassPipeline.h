@@ -1,24 +1,23 @@
-#ifndef TRSC_MLIR_PASSPIPELINE_H 
-#define TRSC_MLIR_PASSPIPELINE_H 
+#ifndef TRSC_MLIR_PASSPIPELINE_H
+#define TRSC_MLIR_PASSPIPELINE_H
 
 #include "mlir/Pass/PassManager.h"
 
 namespace mlir {
-  class OpPassManager; 
+class OpPassManager;
 } // namespace mlir
 
 namespace mlir {
-  namespace trscd {
+namespace trscd {
 
-    void buildCleanupPipeline(mlir::OpPassManager &pm);
-    void buildMem2RegPipeline(mlir::OpPassManager &pm);
-    void buildLoopOptPipeline(mlir::OpPassManager &pm);
-    void buildLateLoopOptPipeline(mlir::OpPassManager &pm);
-    void buildLoweringPipeline(mlir::OpPassManager &pm);
-
-  } // namespace  mlir
+void buildCleanupPipeline(mlir::OpPassManager &pm);
+void buildMem2RegPipeline(mlir::OpPassManager &pm);
+void buildLoopOptPipeline(mlir::OpPassManager &pm);
+void buildLateLoopOptPipeline(mlir::OpPassManager &pm);
+void buildLoweringPipeline(mlir::OpPassManager &pm);
 
 } // namespace trscd
 
-#endif // TRSC_MLIR_PASSPIPELINE_H
+} // namespace mlir
 
+#endif // TRSC_MLIR_PASSPIPELINE_H

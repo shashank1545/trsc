@@ -123,8 +123,8 @@ static bool cusparseLt_initiated = false;
 #endif // MLIR_ENABLE_CUDA_CUSPARSELT
 #endif // MLIR_ENABLE_CUDA_CUSPARSE
 
-extern "C" MLIR_CUDA_WRAPPERS_EXPORT CUmodule
-mgpuModuleLoad(void *data, size_t /*gpuBlobSize*/) {
+extern "C" MLIR_CUDA_WRAPPERS_EXPORT
+    CUmodule mgpuModuleLoad(void *data, size_t /*gpuBlobSize*/) {
   ScopedContext scopedContext;
   CUmodule module = nullptr;
   CUDA_REPORT_IF_ERROR(cuModuleLoadData(&module, data));

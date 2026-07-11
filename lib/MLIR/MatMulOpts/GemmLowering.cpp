@@ -44,11 +44,16 @@ static TileOverride readTileOverride() {
   if (vals.size() != 5 && vals.size() != 8)
     return t;
   t.valid = true;
-  t.BM = vals[0]; t.BN = vals[1]; t.BK = vals[2];
-  t.TM = vals[3]; t.TN = vals[4];
+  t.BM = vals[0];
+  t.BN = vals[1];
+  t.BK = vals[2];
+  t.TM = vals[3];
+  t.TN = vals[4];
   if (vals.size() == 8) {
     t.hasWarp = true;
-    t.WM = vals[5]; t.WN = vals[6]; t.WNITER = vals[7];
+    t.WM = vals[5];
+    t.WN = vals[6];
+    t.WNITER = vals[7];
   }
   return t;
 }
@@ -87,8 +92,8 @@ struct LowerTrscdMatMulPass
           value = arith::AddFOp::create(builder, loc, value, biasValue);
         }
         if (relu) {
-          Value zero = arith::ConstantOp::create(
-              builder, loc, builder.getF32FloatAttr(0.0f));
+          Value zero = arith::ConstantOp::create(builder, loc,
+                                                 builder.getF32FloatAttr(0.0f));
           value = arith::MaximumFOp::create(builder, loc, value, zero);
         }
         return value;
@@ -103,23 +108,21 @@ struct LowerTrscdMatMulPass
       Type tokenType = gpu::AsyncTokenType::get(builder.getContext());
       Value hostC;
       if (useDevice) {
-        Value token =
-            gpu::WaitOp::create(builder, loc, tokenType, ValueRange{})
-                .getAsyncToken();
+        Value token = gpu::WaitOp::create(builder, loc, tokenType, ValueRange{})
+                          .getAsyncToken();
         auto stageOnDevice = [&](Value host) -> Value {
           auto type = cast<MemRefType>(host.getType());
           SmallVector<Value> dynSizes;
           for (int64_t i = 0, e = type.getRank(); i < e; ++i)
             if (type.isDynamicDim(i))
               dynSizes.push_back(memref::DimOp::create(builder, loc, host, i));
-          auto allocOp =
-              gpu::AllocOp::create(builder, loc, type, tokenType,
-                                   ValueRange{token}, dynSizes,
-                                   /*symbolOperands=*/ValueRange{});
+          auto allocOp = gpu::AllocOp::create(builder, loc, type, tokenType,
+                                              ValueRange{token}, dynSizes,
+                                              /*symbolOperands=*/ValueRange{});
           token = allocOp.getAsyncToken();
-          auto cpyOp = gpu::MemcpyOp::create(builder, loc, tokenType,
-                                             ValueRange{token},
-                                             allocOp.getMemref(), host);
+          auto cpyOp =
+              gpu::MemcpyOp::create(builder, loc, tokenType, ValueRange{token},
+                                    allocOp.getMemref(), host);
           token = cpyOp.getAsyncToken();
           return allocOp.getMemref();
         };
@@ -139,9 +142,8 @@ struct LowerTrscdMatMulPass
       auto finishDevice = [&]() {
         if (!useDevice)
           return;
-        Value token =
-            gpu::WaitOp::create(builder, loc, tokenType, ValueRange{})
-                .getAsyncToken();
+        Value token = gpu::WaitOp::create(builder, loc, tokenType, ValueRange{})
+                          .getAsyncToken();
         token = gpu::MemcpyOp::create(builder, loc, tokenType,
                                       ValueRange{token}, hostC, C)
                     .getAsyncToken();
@@ -246,8 +248,7 @@ struct LowerTrscdMatMulPass
 
         auto launchOp = gpu::LaunchOp::create(builder, loc, gridDimX, gridDimY,
                                               one, blockDimX, blockDimY, one);
-        launchOp->setAttr(trscd::kGemmGeneratedMarker,
-                          builder.getUnitAttr());
+        launchOp->setAttr(trscd::kGemmGeneratedMarker, builder.getUnitAttr());
 
         builder.setInsertionPointToStart(&launchOp.getBody().front());
 
@@ -339,8 +340,7 @@ struct LowerTrscdMatMulPass
 
         auto launchOp = gpu::LaunchOp::create(builder, loc, gridDimX, gridDimY,
                                               one, blockDimX, blockDimY, one);
-        launchOp->setAttr(trscd::kGemmGeneratedMarker,
-                          builder.getUnitAttr());
+        launchOp->setAttr(trscd::kGemmGeneratedMarker, builder.getUnitAttr());
 
         builder.setInsertionPointToStart(&launchOp.getBody().front());
 
@@ -523,8 +523,7 @@ struct LowerTrscdMatMulPass
 
         auto launchOp = gpu::LaunchOp::create(builder, loc, gridDimX, gridDimY,
                                               one, blockDimX, blockDimY, one);
-        launchOp->setAttr(trscd::kGemmGeneratedMarker,
-                          builder.getUnitAttr());
+        launchOp->setAttr(trscd::kGemmGeneratedMarker, builder.getUnitAttr());
 
         builder.setInsertionPointToStart(&launchOp.getBody().front());
 
@@ -738,7 +737,11 @@ struct LowerTrscdMatMulPass
         int64_t TN = 8;
 
         if (TileOverride ov = readTileOverride(); ov.valid) {
-          BM = ov.BM; BN = ov.BN; BK = ov.BK; TM = ov.TM; TN = ov.TN;
+          BM = ov.BM;
+          BN = ov.BN;
+          BK = ov.BK;
+          TM = ov.TM;
+          TN = ov.TN;
         }
 
         if (auto dictAttr =
@@ -781,8 +784,7 @@ struct LowerTrscdMatMulPass
 
         auto launchOp = gpu::LaunchOp::create(builder, loc, gridDimX, gridDimY,
                                               one, blockDimX, blockDimY, one);
-        launchOp->setAttr(trscd::kGemmGeneratedMarker,
-                          builder.getUnitAttr());
+        launchOp->setAttr(trscd::kGemmGeneratedMarker, builder.getUnitAttr());
 
         builder.setInsertionPointToStart(&launchOp.getBody().front());
 
@@ -841,9 +843,9 @@ struct LowerTrscdMatMulPass
                 builder, loc, arith::CmpIPredicate::ult, colInit, N);
             Value inBoundsInit =
                 arith::AndIOp::create(builder, loc, rowCondInit, colCondInit);
-            auto loadCIf = scf::IfOp::create(builder, loc, f32Type,
-                                             inBoundsInit,
-                                             /*withElseRegion=*/true);
+            auto loadCIf =
+                scf::IfOp::create(builder, loc, f32Type, inBoundsInit,
+                                  /*withElseRegion=*/true);
             builder.setInsertionPointToStart(&loadCIf.getThenRegion().front());
             Value cVal = memref::LoadOp::create(builder, loc, C,
                                                 ValueRange{rowInit, colInit});
@@ -987,11 +989,10 @@ struct LowerTrscdMatMulPass
                 arith::AndIOp::create(builder, loc, sRowCond, sColCond);
             auto storeCIf = scf::IfOp::create(builder, loc, sInBounds,
                                               /*withElseRegion=*/false);
-            builder.setInsertionPointToStart(
-                &storeCIf.getThenRegion().front());
+            builder.setInsertionPointToStart(&storeCIf.getThenRegion().front());
             memref::StoreOp::create(
                 builder, loc, applyEpilogue(loopK.getResult(i * TN + j), sCol),
-                                    C, ValueRange{sRow, sCol});
+                C, ValueRange{sRow, sCol});
             builder.setInsertionPointAfter(storeCIf);
           }
         }
@@ -1018,7 +1019,11 @@ struct LowerTrscdMatMulPass
         int64_t TN = 8;
 
         if (TileOverride ov = readTileOverride(); ov.valid) {
-          BM = ov.BM; BN = ov.BN; BK = ov.BK; TM = ov.TM; TN = ov.TN;
+          BM = ov.BM;
+          BN = ov.BN;
+          BK = ov.BK;
+          TM = ov.TM;
+          TN = ov.TN;
         }
 
         if (auto dictAttr =
@@ -1061,8 +1066,7 @@ struct LowerTrscdMatMulPass
 
         auto launchOp = gpu::LaunchOp::create(builder, loc, gridDimX, gridDimY,
                                               one, blockDimX, blockDimY, one);
-        launchOp->setAttr(trscd::kGemmGeneratedMarker,
-                          builder.getUnitAttr());
+        launchOp->setAttr(trscd::kGemmGeneratedMarker, builder.getUnitAttr());
 
         builder.setInsertionPointToStart(&launchOp.getBody().front());
 
@@ -1126,9 +1130,9 @@ struct LowerTrscdMatMulPass
                 builder, loc, arith::CmpIPredicate::ult, colInit, N);
             Value inBoundsInit =
                 arith::AndIOp::create(builder, loc, rowCondInit, colCondInit);
-            auto loadCIf = scf::IfOp::create(builder, loc, f32Type,
-                                             inBoundsInit,
-                                             /*withElseRegion=*/true);
+            auto loadCIf =
+                scf::IfOp::create(builder, loc, f32Type, inBoundsInit,
+                                  /*withElseRegion=*/true);
             builder.setInsertionPointToStart(&loadCIf.getThenRegion().front());
             Value cVal = memref::LoadOp::create(builder, loc, C,
                                                 ValueRange{rowInit, colInit});
@@ -1316,11 +1320,10 @@ struct LowerTrscdMatMulPass
                 arith::AndIOp::create(builder, loc, sRowCond, sColCond);
             auto storeCIf = scf::IfOp::create(builder, loc, sInBounds,
                                               /*withElseRegion=*/false);
-            builder.setInsertionPointToStart(
-                &storeCIf.getThenRegion().front());
+            builder.setInsertionPointToStart(&storeCIf.getThenRegion().front());
             memref::StoreOp::create(
                 builder, loc, applyEpilogue(loopK.getResult(i * TN + j), sCol),
-                                    C, ValueRange{sRow, sCol});
+                C, ValueRange{sRow, sCol});
             builder.setInsertionPointAfter(storeCIf);
           }
         }
@@ -1349,7 +1352,11 @@ struct LowerTrscdMatMulPass
         int64_t TN = 8;
 
         if (TileOverride ov = readTileOverride(); ov.valid) {
-          BM = ov.BM; BN = ov.BN; BK = ov.BK; TM = ov.TM; TN = ov.TN;
+          BM = ov.BM;
+          BN = ov.BN;
+          BK = ov.BK;
+          TM = ov.TM;
+          TN = ov.TN;
         }
 
         if (auto dictAttr =
@@ -1390,8 +1397,7 @@ struct LowerTrscdMatMulPass
 
         auto launchOp = gpu::LaunchOp::create(builder, loc, gridDimX, gridDimY,
                                               one, blockDimX, blockDimY, one);
-        launchOp->setAttr(trscd::kGemmGeneratedMarker,
-                          builder.getUnitAttr());
+        launchOp->setAttr(trscd::kGemmGeneratedMarker, builder.getUnitAttr());
 
         builder.setInsertionPointToStart(&launchOp.getBody().front());
 
@@ -1447,9 +1453,9 @@ struct LowerTrscdMatMulPass
                 builder, loc, arith::CmpIPredicate::ult, colInit, N);
             Value inBoundsInit =
                 arith::AndIOp::create(builder, loc, rowCondInit, colCondInit);
-            auto loadCIf = scf::IfOp::create(builder, loc, f32Type,
-                                             inBoundsInit,
-                                             /*withElseRegion=*/true);
+            auto loadCIf =
+                scf::IfOp::create(builder, loc, f32Type, inBoundsInit,
+                                  /*withElseRegion=*/true);
             builder.setInsertionPointToStart(&loadCIf.getThenRegion().front());
             Value cVal = memref::LoadOp::create(builder, loc, C,
                                                 ValueRange{rowInit, colInit});
@@ -1586,12 +1592,11 @@ struct LowerTrscdMatMulPass
 
         SmallVector<Value> aPreVec, aPreCond, aPreCol, aPreRow;
         for (int64_t s = 0; s < slotsA; ++s) {
-          Value linear =
-              s == 0 ? tid
-                     : arith::AddIOp::create(
-                           builder, loc, tid,
-                           arith::ConstantIndexOp::create(
-                               builder, loc, s * threadsPerBlock));
+          Value linear = s == 0 ? tid
+                                : arith::AddIOp::create(
+                                      builder, loc, tid,
+                                      arith::ConstantIndexOp::create(
+                                          builder, loc, s * threadsPerBlock));
           Value aRow = arith::DivUIOp::create(builder, loc, linear, valBKDiv4);
           Value aColDiv4 =
               arith::RemUIOp::create(builder, loc, linear, valBKDiv4);
@@ -1604,12 +1609,10 @@ struct LowerTrscdMatMulPass
               builder, loc, hasNext,
               arith::AndIOp::create(
                   builder, loc,
-                  arith::CmpIOp::create(builder, loc,
-                                        arith::CmpIPredicate::ult, globalARow,
-                                        M),
-                  arith::CmpIOp::create(builder, loc,
-                                        arith::CmpIPredicate::ult, globalACol,
-                                        K)));
+                  arith::CmpIOp::create(builder, loc, arith::CmpIPredicate::ult,
+                                        globalARow, M),
+                  arith::CmpIOp::create(builder, loc, arith::CmpIPredicate::ult,
+                                        globalACol, K)));
           if ((s + 1) * threadsPerBlock > vecsA)
             cond = arith::AndIOp::create(
                 builder, loc, cond,
@@ -1633,12 +1636,11 @@ struct LowerTrscdMatMulPass
 
         SmallVector<Value> bPreVec, bPreCond, bPreCol, bPreRow;
         for (int64_t s = 0; s < slotsB; ++s) {
-          Value linear =
-              s == 0 ? tid
-                     : arith::AddIOp::create(
-                           builder, loc, tid,
-                           arith::ConstantIndexOp::create(
-                               builder, loc, s * threadsPerBlock));
+          Value linear = s == 0 ? tid
+                                : arith::AddIOp::create(
+                                      builder, loc, tid,
+                                      arith::ConstantIndexOp::create(
+                                          builder, loc, s * threadsPerBlock));
           Value bRow = arith::DivUIOp::create(builder, loc, linear, valBNDiv4);
           Value bColDiv4 =
               arith::RemUIOp::create(builder, loc, linear, valBNDiv4);
@@ -1651,12 +1653,10 @@ struct LowerTrscdMatMulPass
               builder, loc, hasNext,
               arith::AndIOp::create(
                   builder, loc,
-                  arith::CmpIOp::create(builder, loc,
-                                        arith::CmpIPredicate::ult, globalBRow,
-                                        K),
-                  arith::CmpIOp::create(builder, loc,
-                                        arith::CmpIPredicate::ult, globalBCol,
-                                        N)));
+                  arith::CmpIOp::create(builder, loc, arith::CmpIPredicate::ult,
+                                        globalBRow, K),
+                  arith::CmpIOp::create(builder, loc, arith::CmpIPredicate::ult,
+                                        globalBCol, N)));
           if ((s + 1) * threadsPerBlock > vecsB)
             cond = arith::AndIOp::create(
                 builder, loc, cond,
@@ -1741,8 +1741,7 @@ struct LowerTrscdMatMulPass
                                         /*withElseRegion=*/false);
           builder.setInsertionPointToStart(&stIf.getThenRegion().front());
           for (int64_t q = 0; q < 4; ++q) {
-            Value elem =
-                vector::ExtractOp::create(builder, loc, aPreVec[s], q);
+            Value elem = vector::ExtractOp::create(builder, loc, aPreVec[s], q);
             Value smRow =
                 arith::AddIOp::create(builder, loc, aPreCol[s], cIdx[q]);
             memref::StoreOp::create(builder, loc, elem, smemA,
@@ -1754,9 +1753,8 @@ struct LowerTrscdMatMulPass
           auto stIf = scf::IfOp::create(builder, loc, bPreCond[s],
                                         /*withElseRegion=*/false);
           builder.setInsertionPointToStart(&stIf.getThenRegion().front());
-          vector::StoreOp::create(
-              builder, loc, bPreVec[s], smemB,
-              ValueRange{otherBuf, bPreRow[s], bPreCol[s]});
+          vector::StoreOp::create(builder, loc, bPreVec[s], smemB,
+                                  ValueRange{otherBuf, bPreRow[s], bPreCol[s]});
           builder.setInsertionPointAfter(stIf);
         }
 
@@ -1782,8 +1780,7 @@ struct LowerTrscdMatMulPass
                 arith::AndIOp::create(builder, loc, sRowCond, sColCond);
             auto storeCIf = scf::IfOp::create(builder, loc, sInBounds,
                                               /*withElseRegion=*/false);
-            builder.setInsertionPointToStart(
-                &storeCIf.getThenRegion().front());
+            builder.setInsertionPointToStart(&storeCIf.getThenRegion().front());
             memref::StoreOp::create(
                 builder, loc, applyEpilogue(loopK.getResult(i * TN + j), sCol),
                 C, ValueRange{sRow, sCol});
@@ -1823,9 +1820,15 @@ struct LowerTrscdMatMulPass
         int64_t WNITER = 2;
 
         if (TileOverride ov = readTileOverride(); ov.valid) {
-          BM = ov.BM; BN = ov.BN; BK = ov.BK; TM = ov.TM; TN = ov.TN;
+          BM = ov.BM;
+          BN = ov.BN;
+          BK = ov.BK;
+          TM = ov.TM;
+          TN = ov.TN;
           if (ov.hasWarp) {
-            WM = ov.WM; WN = ov.WN; WNITER = ov.WNITER;
+            WM = ov.WM;
+            WN = ov.WN;
+            WNITER = ov.WNITER;
           }
         }
 
@@ -1875,7 +1878,13 @@ struct LowerTrscdMatMulPass
           return true;
         };
         if (!deriveOk()) {
-          BM = 64; BN = 64; BK = 16; TM = 4; TN = 4; WM = 32; WN = 32;
+          BM = 64;
+          BN = 64;
+          BK = 16;
+          TM = 4;
+          TN = 4;
+          WM = 32;
+          WN = 32;
           WNITER = 2;
         }
         int64_t WSUBN = WN / WNITER;
@@ -1905,8 +1914,7 @@ struct LowerTrscdMatMulPass
 
         auto launchOp = gpu::LaunchOp::create(builder, loc, gridDimX, gridDimY,
                                               one, valThreads, one, one);
-        launchOp->setAttr(trscd::kGemmGeneratedMarker,
-                          builder.getUnitAttr());
+        launchOp->setAttr(trscd::kGemmGeneratedMarker, builder.getUnitAttr());
 
         builder.setInsertionPointToStart(&launchOp.getBody().front());
 
@@ -1936,15 +1944,15 @@ struct LowerTrscdMatMulPass
         Value warpId = arith::DivUIOp::create(builder, loc, tid, val32);
         Value laneId = arith::RemUIOp::create(builder, loc, tid, val32);
         Value warpsPerRow = cst(BN / WN);
-        Value warpRow = arith::DivUIOp::create(builder, loc, warpId,
-                                               warpsPerRow);
-        Value warpCol = arith::RemUIOp::create(builder, loc, warpId,
-                                               warpsPerRow);
+        Value warpRow =
+            arith::DivUIOp::create(builder, loc, warpId, warpsPerRow);
+        Value warpCol =
+            arith::RemUIOp::create(builder, loc, warpId, warpsPerRow);
         Value valLaneCols = cst(laneCols);
-        Value laneRow = arith::DivUIOp::create(builder, loc, laneId,
-                                               valLaneCols);
-        Value laneCol = arith::RemUIOp::create(builder, loc, laneId,
-                                               valLaneCols);
+        Value laneRow =
+            arith::DivUIOp::create(builder, loc, laneId, valLaneCols);
+        Value laneCol =
+            arith::RemUIOp::create(builder, loc, laneId, valLaneCols);
 
         // Per-thread row/col starts inside the block tile, one per warp
         // subtile: rowInBlock(wm) = warpRow*WM + wm*WSUBM + laneRow*TM,
@@ -1963,16 +1971,14 @@ struct LowerTrscdMatMulPass
         SmallVector<Value> rowInBlock(WMITER), colInBlock(WNITER);
         SmallVector<Value> rowStart(WMITER), colStart(WNITER);
         for (int64_t wm = 0; wm < WMITER; ++wm) {
-          Value r = arith::AddIOp::create(builder, loc, warpRowOff,
-                                          laneRowOff);
+          Value r = arith::AddIOp::create(builder, loc, warpRowOff, laneRowOff);
           if (wm > 0)
             r = arith::AddIOp::create(builder, loc, r, cst(wm * WSUBM));
           rowInBlock[wm] = r;
           rowStart[wm] = arith::AddIOp::create(builder, loc, blockRow, r);
         }
         for (int64_t wn = 0; wn < WNITER; ++wn) {
-          Value c = arith::AddIOp::create(builder, loc, warpColOff,
-                                          laneColOff);
+          Value c = arith::AddIOp::create(builder, loc, warpColOff, laneColOff);
           if (wn > 0)
             c = arith::AddIOp::create(builder, loc, c, cst(wn * WSUBN));
           colInBlock[wn] = c;
@@ -1999,15 +2005,15 @@ struct LowerTrscdMatMulPass
                 builder, loc, arith::CmpIPredicate::ult, rowInit, M);
             for (int64_t wn = 0; wn < WNITER; ++wn) {
               for (int64_t j = 0; j < TN; ++j) {
-                Value colInit = arith::AddIOp::create(builder, loc,
-                                                      colStart[wn], cIdx[j]);
+                Value colInit =
+                    arith::AddIOp::create(builder, loc, colStart[wn], cIdx[j]);
                 Value colCondInit = arith::CmpIOp::create(
                     builder, loc, arith::CmpIPredicate::ult, colInit, N);
                 Value inBoundsInit = arith::AndIOp::create(
                     builder, loc, rowCondInit, colCondInit);
-                auto loadCIf = scf::IfOp::create(builder, loc, f32Type,
-                                                 inBoundsInit,
-                                                 /*withElseRegion=*/true);
+                auto loadCIf =
+                    scf::IfOp::create(builder, loc, f32Type, inBoundsInit,
+                                      /*withElseRegion=*/true);
                 builder.setInsertionPointToStart(
                     &loadCIf.getThenRegion().front());
                 Value cVal = memref::LoadOp::create(
@@ -2128,10 +2134,10 @@ struct LowerTrscdMatMulPass
 
         SmallVector<Value> aPreVec, aPreCond, aPreCol, aPreRow;
         for (int64_t s = 0; s < slotsA; ++s) {
-          Value linear =
-              s == 0 ? tid
-                     : arith::AddIOp::create(builder, loc, tid,
-                                             cst(s * threadsPerBlock));
+          Value linear = s == 0
+                             ? tid
+                             : arith::AddIOp::create(builder, loc, tid,
+                                                     cst(s * threadsPerBlock));
           Value aRow = arith::DivUIOp::create(builder, loc, linear, valBKDiv4);
           Value aColDiv4 =
               arith::RemUIOp::create(builder, loc, linear, valBKDiv4);
@@ -2143,18 +2149,15 @@ struct LowerTrscdMatMulPass
               builder, loc, hasNext,
               arith::AndIOp::create(
                   builder, loc,
-                  arith::CmpIOp::create(builder, loc,
-                                        arith::CmpIPredicate::ult, globalARow,
-                                        M),
-                  arith::CmpIOp::create(builder, loc,
-                                        arith::CmpIPredicate::ult, globalACol,
-                                        K)));
+                  arith::CmpIOp::create(builder, loc, arith::CmpIPredicate::ult,
+                                        globalARow, M),
+                  arith::CmpIOp::create(builder, loc, arith::CmpIPredicate::ult,
+                                        globalACol, K)));
           if ((s + 1) * threadsPerBlock > vecsA)
             cond = arith::AndIOp::create(
                 builder, loc, cond,
-                arith::CmpIOp::create(builder, loc,
-                                      arith::CmpIPredicate::ult, linear,
-                                      cst(vecsA)));
+                arith::CmpIOp::create(builder, loc, arith::CmpIPredicate::ult,
+                                      linear, cst(vecsA)));
           auto ldIf = scf::IfOp::create(builder, loc, vec4Type, cond,
                                         /*withElseRegion=*/true);
           builder.setInsertionPointToStart(&ldIf.getThenRegion().front());
@@ -2172,10 +2175,10 @@ struct LowerTrscdMatMulPass
 
         SmallVector<Value> bPreVec, bPreCond, bPreCol, bPreRow;
         for (int64_t s = 0; s < slotsB; ++s) {
-          Value linear =
-              s == 0 ? tid
-                     : arith::AddIOp::create(builder, loc, tid,
-                                             cst(s * threadsPerBlock));
+          Value linear = s == 0
+                             ? tid
+                             : arith::AddIOp::create(builder, loc, tid,
+                                                     cst(s * threadsPerBlock));
           Value bRow = arith::DivUIOp::create(builder, loc, linear, valBNDiv4);
           Value bColDiv4 =
               arith::RemUIOp::create(builder, loc, linear, valBNDiv4);
@@ -2187,18 +2190,15 @@ struct LowerTrscdMatMulPass
               builder, loc, hasNext,
               arith::AndIOp::create(
                   builder, loc,
-                  arith::CmpIOp::create(builder, loc,
-                                        arith::CmpIPredicate::ult, globalBRow,
-                                        K),
-                  arith::CmpIOp::create(builder, loc,
-                                        arith::CmpIPredicate::ult, globalBCol,
-                                        N)));
+                  arith::CmpIOp::create(builder, loc, arith::CmpIPredicate::ult,
+                                        globalBRow, K),
+                  arith::CmpIOp::create(builder, loc, arith::CmpIPredicate::ult,
+                                        globalBCol, N)));
           if ((s + 1) * threadsPerBlock > vecsB)
             cond = arith::AndIOp::create(
                 builder, loc, cond,
-                arith::CmpIOp::create(builder, loc,
-                                      arith::CmpIPredicate::ult, linear,
-                                      cst(vecsB)));
+                arith::CmpIOp::create(builder, loc, arith::CmpIPredicate::ult,
+                                      linear, cst(vecsB)));
           auto ldIf = scf::IfOp::create(builder, loc, vec4Type, cond,
                                         /*withElseRegion=*/true);
           builder.setInsertionPointToStart(&ldIf.getThenRegion().front());
@@ -2228,19 +2228,18 @@ struct LowerTrscdMatMulPass
         for (int64_t wm = 0; wm < WMITER; ++wm) {
           if (TM % 4 == 0) {
             for (int64_t i = 0; i < TM; i += 4) {
-              Value off = arith::AddIOp::create(builder, loc, rowInBlock[wm],
-                                                cIdx[i]);
-              Value v = vector::LoadOp::create(
-                  builder, loc, vec4Type, smemA,
-                  ValueRange{bufIdx, kInner, off});
+              Value off =
+                  arith::AddIOp::create(builder, loc, rowInBlock[wm], cIdx[i]);
+              Value v = vector::LoadOp::create(builder, loc, vec4Type, smemA,
+                                               ValueRange{bufIdx, kInner, off});
               for (int64_t q = 0; q < 4; ++q)
                 regA[wm * TM + i + q] =
                     vector::ExtractOp::create(builder, loc, v, q);
             }
           } else {
             for (int64_t i = 0; i < TM; ++i) {
-              Value off = arith::AddIOp::create(builder, loc, rowInBlock[wm],
-                                                cIdx[i]);
+              Value off =
+                  arith::AddIOp::create(builder, loc, rowInBlock[wm], cIdx[i]);
               regA[wm * TM + i] = memref::LoadOp::create(
                   builder, loc, smemA, ValueRange{bufIdx, kInner, off});
             }
@@ -2249,19 +2248,18 @@ struct LowerTrscdMatMulPass
         for (int64_t wn = 0; wn < WNITER; ++wn) {
           if (TN % 4 == 0) {
             for (int64_t j = 0; j < TN; j += 4) {
-              Value off = arith::AddIOp::create(builder, loc, colInBlock[wn],
-                                                cIdx[j]);
-              Value v = vector::LoadOp::create(
-                  builder, loc, vec4Type, smemB,
-                  ValueRange{bufIdx, kInner, off});
+              Value off =
+                  arith::AddIOp::create(builder, loc, colInBlock[wn], cIdx[j]);
+              Value v = vector::LoadOp::create(builder, loc, vec4Type, smemB,
+                                               ValueRange{bufIdx, kInner, off});
               for (int64_t q = 0; q < 4; ++q)
                 regB[wn * TN + j + q] =
                     vector::ExtractOp::create(builder, loc, v, q);
             }
           } else {
             for (int64_t j = 0; j < TN; ++j) {
-              Value off = arith::AddIOp::create(builder, loc, colInBlock[wn],
-                                                cIdx[j]);
+              Value off =
+                  arith::AddIOp::create(builder, loc, colInBlock[wn], cIdx[j]);
               regB[wn * TN + j] = memref::LoadOp::create(
                   builder, loc, smemB, ValueRange{bufIdx, kInner, off});
             }
@@ -2289,8 +2287,7 @@ struct LowerTrscdMatMulPass
                                         /*withElseRegion=*/false);
           builder.setInsertionPointToStart(&stIf.getThenRegion().front());
           for (int64_t q = 0; q < 4; ++q) {
-            Value elem =
-                vector::ExtractOp::create(builder, loc, aPreVec[s], q);
+            Value elem = vector::ExtractOp::create(builder, loc, aPreVec[s], q);
             Value smRow =
                 arith::AddIOp::create(builder, loc, aPreCol[s], cIdx[q]);
             memref::StoreOp::create(builder, loc, elem, smemA,
@@ -2302,9 +2299,8 @@ struct LowerTrscdMatMulPass
           auto stIf = scf::IfOp::create(builder, loc, bPreCond[s],
                                         /*withElseRegion=*/false);
           builder.setInsertionPointToStart(&stIf.getThenRegion().front());
-          vector::StoreOp::create(
-              builder, loc, bPreVec[s], smemB,
-              ValueRange{otherBuf, bPreRow[s], bPreCol[s]});
+          vector::StoreOp::create(builder, loc, bPreVec[s], smemB,
+                                  ValueRange{otherBuf, bPreRow[s], bPreCol[s]});
           builder.setInsertionPointAfter(stIf);
         }
 
@@ -2322,22 +2318,20 @@ struct LowerTrscdMatMulPass
                 builder, loc, arith::CmpIPredicate::ult, sRow, M);
             for (int64_t wn = 0; wn < WNITER; ++wn) {
               for (int64_t j = 0; j < TN; ++j) {
-                Value sCol = arith::AddIOp::create(builder, loc,
-                                                   colStart[wn], cIdx[j]);
+                Value sCol =
+                    arith::AddIOp::create(builder, loc, colStart[wn], cIdx[j]);
                 Value sColCond = arith::CmpIOp::create(
                     builder, loc, arith::CmpIPredicate::ult, sCol, N);
-                Value sInBounds = arith::AndIOp::create(builder, loc,
-                                                        sRowCond, sColCond);
+                Value sInBounds =
+                    arith::AndIOp::create(builder, loc, sRowCond, sColCond);
                 auto storeCIf = scf::IfOp::create(builder, loc, sInBounds,
                                                   /*withElseRegion=*/false);
                 builder.setInsertionPointToStart(
                     &storeCIf.getThenRegion().front());
-                int64_t accIdx =
-                    (wm * TM + i) * regCols + wn * TN + j;
+                int64_t accIdx = (wm * TM + i) * regCols + wn * TN + j;
                 memref::StoreOp::create(
-                    builder, loc,
-                    applyEpilogue(loopK.getResult(accIdx), sCol), C,
-                    ValueRange{sRow, sCol});
+                    builder, loc, applyEpilogue(loopK.getResult(accIdx), sCol),
+                    C, ValueRange{sRow, sCol});
                 builder.setInsertionPointAfter(storeCIf);
               }
             }

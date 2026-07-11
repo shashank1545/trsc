@@ -7,10 +7,10 @@
 #include <memory>
 
 namespace mlir {
-  namespace trscd {
+namespace trscd {
 #define GEN_PASS_DEF_TRSCLOOPUNROLL
 #include "TrscPasses.h.inc"
-  } // namespace trscd
+} // namespace trscd
 } // namespace mlir
 
 using namespace mlir;

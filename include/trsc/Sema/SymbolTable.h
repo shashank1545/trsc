@@ -7,45 +7,45 @@
 
 namespace trsc {
 
-  class SymbolTable {
-    private:
-      std::vector<std::unique_ptr<Scope>> AllScopes;
-      Scope* CurrentScope;
-      Scope* GlobalScope;
+class SymbolTable {
+private:
+  std::vector<std::unique_ptr<Scope>> AllScopes;
+  Scope *CurrentScope;
+  Scope *GlobalScope;
 
-    public:
-      SymbolTable();
+public:
+  SymbolTable();
 
-      void enterScope(ScopeKind Kind);
-      void exitScope();
+  void enterScope(ScopeKind Kind);
+  void exitScope();
 
-      // Symbol Operation searches from local to global
-      bool addSymbol(const std::string& Name, Symbol Sym);
-      Symbol* lookupSymbol(const std::string& Name);
-      Symbol* lookupSymbol(const std::string& Name, Scope* Scope);
-      
-      Scope* getCurrentScope() const {return CurrentScope;}
-      Scope* getGlobalScope() const {return GlobalScope;}
+  // Symbol Operation searches from local to global
+  bool addSymbol(const std::string &Name, Symbol Sym);
+  Symbol *lookupSymbol(const std::string &Name);
+  Symbol *lookupSymbol(const std::string &Name, Scope *Scope);
 
-      const std::vector<std::unique_ptr<Scope>>& getAllScopes() const {
-        return AllScopes;
-      }
-  };
+  Scope *getCurrentScope() const { return CurrentScope; }
+  Scope *getGlobalScope() const { return GlobalScope; }
 
-  class ScopedRAII {
-    private:
-      SymbolTable& Table;
+  const std::vector<std::unique_ptr<Scope>> &getAllScopes() const {
+    return AllScopes;
+  }
+};
 
-    public:
-      ScopedRAII(SymbolTable& ST, ScopeKind Kind): Table(ST) {
-        Table.enterScope(Kind);
-      }
+class ScopedRAII {
+private:
+  SymbolTable &Table;
 
-      ~ScopedRAII() {Table.exitScope();}
+public:
+  ScopedRAII(SymbolTable &ST, ScopeKind Kind) : Table(ST) {
+    Table.enterScope(Kind);
+  }
 
-      ScopedRAII(const ScopedRAII&) = delete;
-      ScopedRAII& operator=(const ScopedRAII&) = delete;
-  };
+  ~ScopedRAII() { Table.exitScope(); }
+
+  ScopedRAII(const ScopedRAII &) = delete;
+  ScopedRAII &operator=(const ScopedRAII &) = delete;
+};
 
 } // namespace trsc
 

@@ -5,170 +5,169 @@
 #include <string_view>
 
 namespace trsc {
-  namespace Lex {
- 
-    enum class TokenKind { 
-      UNKNOWN,
-      ENDOFFILE,
+namespace Lex {
 
-      // KEYWORDS
-      KW_FN,
-      KW_LET,
-      KW_MUT,
-      KW_CONST,
-      KW_AS,
-      KW_IF,
-      KW_ELSE,
-      KW_RETURN,
-      KW_TRUE,
-      KW_FALSE,
-      KW_WHILE,
-      KW_FOR,
-      KW_IN,
+enum class TokenKind {
+  UNKNOWN,
+  ENDOFFILE,
 
-      //OPERATORS
-      OP_PLUS,
-      OP_MINUS,
-      OP_STAR,
-      OP_SLASH,
-      OP_PERCENT,
-      OP_EQUAL,
-      OP_EQUALEQUAL,
-      OP_BANG,
-      OP_BANGEQUAL, 
-      OP_LESS, 
-      OP_LESSEQUAL,
-      OP_GREATER,
-      OP_GREATEREQUAL,
-      OP_COLONCOLON,
-      OP_PLUSEQUAL,
-      OP_MINUSEQUAL,
-      OP_STARSTAR,
-      OP_LESSLESS,
-      OP_GREATERGREATER,
-      OP_DOTDOT,
-      OP_DOTDOTEQUAL,
-      OP_AMP,
-      OP_AMPAMP, 
-      OP_PIPE,
-      OP_PIPEPIPE, 
+  // KEYWORDS
+  KW_FN,
+  KW_LET,
+  KW_MUT,
+  KW_CONST,
+  KW_AS,
+  KW_IF,
+  KW_ELSE,
+  KW_RETURN,
+  KW_TRUE,
+  KW_FALSE,
+  KW_WHILE,
+  KW_FOR,
+  KW_IN,
 
-      //DELIMITERS
-      DE_LPAREN,
-      DE_RPAREN,
-      DE_LBRACE,
-      DE_RBRACE,
-      DE_LBRACKET,
-      DE_RBRACKET,
-      DE_COMMA,
-      DE_SEMICOLON,
-      DE_COLON,
-      DE_DOT,
-      DE_RETURNTYPE,
+  // OPERATORS
+  OP_PLUS,
+  OP_MINUS,
+  OP_STAR,
+  OP_SLASH,
+  OP_PERCENT,
+  OP_EQUAL,
+  OP_EQUALEQUAL,
+  OP_BANG,
+  OP_BANGEQUAL,
+  OP_LESS,
+  OP_LESSEQUAL,
+  OP_GREATER,
+  OP_GREATEREQUAL,
+  OP_COLONCOLON,
+  OP_PLUSEQUAL,
+  OP_MINUSEQUAL,
+  OP_STARSTAR,
+  OP_LESSLESS,
+  OP_GREATERGREATER,
+  OP_DOTDOT,
+  OP_DOTDOTEQUAL,
+  OP_AMP,
+  OP_AMPAMP,
+  OP_PIPE,
+  OP_PIPEPIPE,
 
-      //LITERALS
-      LT_INTEGER,
-      LT_FLOAT,
-      LT_STRING,
+  // DELIMITERS
+  DE_LPAREN,
+  DE_RPAREN,
+  DE_LBRACE,
+  DE_RBRACE,
+  DE_LBRACKET,
+  DE_RBRACKET,
+  DE_COMMA,
+  DE_SEMICOLON,
+  DE_COLON,
+  DE_DOT,
+  DE_RETURNTYPE,
 
-      //IDENTIFIER
-      IDENTIFIER,
-    };
+  // LITERALS
+  LT_INTEGER,
+  LT_FLOAT,
+  LT_STRING,
 
-    const char* getTokenName(TokenKind K); 
-    const char* getTokenString(TokenKind K); 
+  // IDENTIFIER
+  IDENTIFIER,
+};
 
-    class Token {
+const char *getTokenName(TokenKind K);
+const char *getTokenString(TokenKind K);
 
-      TokenKind Kind;
-      SourceLocation Loc;
-      unsigned Length;
-      std::string_view Text;
+class Token {
 
-      public:
-        Token(): Kind(TokenKind::UNKNOWN), Loc({nullptr,0,0}), Length(0), Text("") {}
+  TokenKind Kind;
+  SourceLocation Loc;
+  unsigned Length;
+  std::string_view Text;
 
-        Token(TokenKind K, SourceLocation L, unsigned Len, std::string_view T):
-          Kind(K), Loc(L), Length(Len), Text(T) {}
+public:
+  Token()
+      : Kind(TokenKind::UNKNOWN), Loc({nullptr, 0, 0}), Length(0), Text("") {}
 
-        TokenKind getKind() const { return Kind; }
-        SourceLocation getLocation() const { return Loc; }
-        unsigned getLength() const { return Length; }
-        std::string_view getText() const { return Text; }
+  Token(TokenKind K, SourceLocation L, unsigned Len, std::string_view T)
+      : Kind(K), Loc(L), Length(Len), Text(T) {}
 
-        bool is(TokenKind K) const { return Kind == K;}
-        bool isNot(TokenKind K) const { return Kind != K;}
-        bool isIdentifier() const { return Kind == TokenKind::IDENTIFIER; }
+  TokenKind getKind() const { return Kind; }
+  SourceLocation getLocation() const { return Loc; }
+  unsigned getLength() const { return Length; }
+  std::string_view getText() const { return Text; }
 
+  bool is(TokenKind K) const { return Kind == K; }
+  bool isNot(TokenKind K) const { return Kind != K; }
+  bool isIdentifier() const { return Kind == TokenKind::IDENTIFIER; }
 
-        bool isKeyword() const {
-          switch(Kind) {
-            case TokenKind::KW_FN:
-            case TokenKind::KW_LET:
-            case TokenKind::KW_MUT:
-            case TokenKind::KW_CONST:
-            case TokenKind::KW_AS:
-            case TokenKind::KW_IF:
-            case TokenKind::KW_ELSE:
-            case TokenKind::KW_RETURN:
-            case TokenKind::KW_TRUE:
-            case TokenKind::KW_FALSE:
-            case TokenKind::KW_WHILE:
-            case TokenKind::KW_FOR:
-            case TokenKind::KW_IN:
-              return true;
-            default:
-              return false;
-          }
-        }
-
-        bool isOperator() const {
-          switch (Kind) {
-            case TokenKind::OP_PLUS:
-            case TokenKind::OP_MINUS:
-            case TokenKind::OP_STAR:
-            case TokenKind::OP_SLASH:
-            case TokenKind::OP_PERCENT:
-            case TokenKind::OP_EQUAL:
-            case TokenKind::OP_EQUALEQUAL:
-            case TokenKind::OP_BANG:
-            case TokenKind::OP_BANGEQUAL:
-            case TokenKind::OP_LESS:
-            case TokenKind::OP_LESSEQUAL:
-            case TokenKind::OP_GREATER:
-            case TokenKind::OP_GREATEREQUAL:
-            case TokenKind::OP_COLONCOLON:
-            case TokenKind::OP_PLUSEQUAL:
-            case TokenKind::OP_MINUSEQUAL:
-            case TokenKind::OP_STARSTAR:
-            case TokenKind::OP_LESSLESS:
-            case TokenKind::OP_GREATERGREATER:
-            case TokenKind::OP_DOTDOT:
-            case TokenKind::OP_DOTDOTEQUAL:
-            case TokenKind::OP_PIPE:
-            case TokenKind::OP_PIPEPIPE:
-            case TokenKind::OP_AMP:
-            case TokenKind::OP_AMPAMP:
-              return true;
-            default:
-              return false;
-          }
-        }
-
-        bool isLiteral() const {
-          switch(Kind) {
-            case TokenKind::LT_INTEGER:
-            case TokenKind::LT_FLOAT:
-            case TokenKind::LT_STRING:
-              return true;
-            default:
-              return false;
-          }
-        }
-
-    };
-
+  bool isKeyword() const {
+    switch (Kind) {
+    case TokenKind::KW_FN:
+    case TokenKind::KW_LET:
+    case TokenKind::KW_MUT:
+    case TokenKind::KW_CONST:
+    case TokenKind::KW_AS:
+    case TokenKind::KW_IF:
+    case TokenKind::KW_ELSE:
+    case TokenKind::KW_RETURN:
+    case TokenKind::KW_TRUE:
+    case TokenKind::KW_FALSE:
+    case TokenKind::KW_WHILE:
+    case TokenKind::KW_FOR:
+    case TokenKind::KW_IN:
+      return true;
+    default:
+      return false;
+    }
   }
-}
+
+  bool isOperator() const {
+    switch (Kind) {
+    case TokenKind::OP_PLUS:
+    case TokenKind::OP_MINUS:
+    case TokenKind::OP_STAR:
+    case TokenKind::OP_SLASH:
+    case TokenKind::OP_PERCENT:
+    case TokenKind::OP_EQUAL:
+    case TokenKind::OP_EQUALEQUAL:
+    case TokenKind::OP_BANG:
+    case TokenKind::OP_BANGEQUAL:
+    case TokenKind::OP_LESS:
+    case TokenKind::OP_LESSEQUAL:
+    case TokenKind::OP_GREATER:
+    case TokenKind::OP_GREATEREQUAL:
+    case TokenKind::OP_COLONCOLON:
+    case TokenKind::OP_PLUSEQUAL:
+    case TokenKind::OP_MINUSEQUAL:
+    case TokenKind::OP_STARSTAR:
+    case TokenKind::OP_LESSLESS:
+    case TokenKind::OP_GREATERGREATER:
+    case TokenKind::OP_DOTDOT:
+    case TokenKind::OP_DOTDOTEQUAL:
+    case TokenKind::OP_PIPE:
+    case TokenKind::OP_PIPEPIPE:
+    case TokenKind::OP_AMP:
+    case TokenKind::OP_AMPAMP:
+      return true;
+    default:
+      return false;
+    }
+  }
+
+  bool isLiteral() const {
+    switch (Kind) {
+    case TokenKind::LT_INTEGER:
+    case TokenKind::LT_FLOAT:
+    case TokenKind::LT_STRING:
+      return true;
+    default:
+      return false;
+    }
+  }
+};
+
+} // namespace Lex
+} // namespace trsc
 
 #endif // TRSC_LEX_TOKEN_H

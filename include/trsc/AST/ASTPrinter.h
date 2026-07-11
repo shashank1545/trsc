@@ -6,50 +6,50 @@
 #include <iostream>
 
 namespace trsc {
-  class ASTPrinter : public ASTVisitor<ASTPrinter> {
-    private:
-      std::ostream &OS;
-      unsigned IndentLevel = 0;
-      void indent();
+class ASTPrinter : public ASTVisitor<ASTPrinter> {
+private:
+  std::ostream &OS;
+  unsigned IndentLevel = 0;
+  void indent();
 
-    public:
-      ASTPrinter(std::ostream &OS) : OS(OS) {}
+public:
+  ASTPrinter(std::ostream &OS) : OS(OS) {}
 
-      // Make the base class visit methods visible
-      using ASTVisitor<ASTPrinter>::visit;
+  // Make the base class visit methods visible
+  using ASTVisitor<ASTPrinter>::visit;
 
-      void visitProgram(Program *Node);
+  void visitProgram(Program *Node);
 
-      // Visitors for concrete statement nodes
-      void visitLetStmt(LetStmt *Node);
-      void visitIfStmt(IfStmt *Node);
-      void visitWhileStmt(WhileStmt *Node);
-      void visitForStmt(ForStmt *Node);
-      void visitBlockStmt(BlockStmt *Node);
-      void visitExprStmt(ExprStmt *Node);
-      void visitReturnStmt(ReturnStmt *Node);
-      void visitFuncDecl(FuncDecl *Node);
-      
-      // Visitors for concrete expression nodes
-      void visitIntExpr(IntExpr *Node);
-      void visitFloatExpr(FloatExpr *Node);
-      void visitVarExpr(VarExpr *Node);
-      void visitRefrExpr(RefrExpr *Node);
-      void visitBoolExpr(BoolExpr *Node);
-      void visitBinExpr(BinExpr *Node);
-      void visitArrayExpr(ArrayExpr *Node);
-      void visitArrayAccessExpr(ArrayAccessExpr *Node);
-      void visitASExpr(ASExpr *Node);
-      void visitRangeExpr(RangeExpr *Node);
-      void visitFunCall(FunCall * Node);
+  // Visitors for concrete statement nodes
+  void visitLetStmt(LetStmt *Node);
+  void visitIfStmt(IfStmt *Node);
+  void visitWhileStmt(WhileStmt *Node);
+  void visitForStmt(ForStmt *Node);
+  void visitBlockStmt(BlockStmt *Node);
+  void visitExprStmt(ExprStmt *Node);
+  void visitReturnStmt(ReturnStmt *Node);
+  void visitFuncDecl(FuncDecl *Node);
 
-      // Visitors for concrete type nodes
-      void visitTypeName(TypeName *Node);
-      void visitPointerTypeName(PointerTypeName *Node);
-      void visitReferenceTypeName(ReferenceTypeName *Node);
-      void visitArrayTypeName(ArrayTypeName *Node);
-  };
+  // Visitors for concrete expression nodes
+  void visitIntExpr(IntExpr *Node);
+  void visitFloatExpr(FloatExpr *Node);
+  void visitVarExpr(VarExpr *Node);
+  void visitRefrExpr(RefrExpr *Node);
+  void visitBoolExpr(BoolExpr *Node);
+  void visitBinExpr(BinExpr *Node);
+  void visitArrayExpr(ArrayExpr *Node);
+  void visitArrayAccessExpr(ArrayAccessExpr *Node);
+  void visitASExpr(ASExpr *Node);
+  void visitRangeExpr(RangeExpr *Node);
+  void visitFunCall(FunCall *Node);
 
-} //namespace  trsc 
-  
-#endif // TRSC_AST_ASTPRINTER_H 
+  // Visitors for concrete type nodes
+  void visitTypeName(TypeName *Node);
+  void visitPointerTypeName(PointerTypeName *Node);
+  void visitReferenceTypeName(ReferenceTypeName *Node);
+  void visitArrayTypeName(ArrayTypeName *Node);
+};
+
+} // namespace  trsc
+
+#endif // TRSC_AST_ASTPRINTER_H

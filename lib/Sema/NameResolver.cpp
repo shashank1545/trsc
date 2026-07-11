@@ -14,26 +14,28 @@ void NameResolver::visitLetStmt(LetStmt *S) {
   Sym.setScope(ST.getCurrentScope());
   if (!ST.addSymbol(S->getDeclaredVar()->getName(), Sym)) {
     Diags.Report(DiagKind::Error, "Redefinition of Variable",
-        S->getSourceRange().getStart());
+                 S->getSourceRange().getStart());
   }
-  if(S->getInitializer()) visit(S->getInitializer());
+  if (S->getInitializer())
+    visit(S->getInitializer());
 }
 
-void NameResolver::visitForStmt(ForStmt* S) {
-  ScopedRAII Scoped(ST, ScopeKind::SCOPE_FORSTMT); 
+void NameResolver::visitForStmt(ForStmt *S) {
+  ScopedRAII Scoped(ST, ScopeKind::SCOPE_FORSTMT);
   S->setScope(ST.getCurrentScope());
   Symbol Sym;
   Sym.setScope(ST.getCurrentScope());
-  if(!ST.addSymbol(S->getInit()->getName(), Sym)) {
+  if (!ST.addSymbol(S->getInit()->getName(), Sym)) {
     Diags.Report(DiagKind::Error, "Variable already defined",
-        S->getSourceRange().getStart());
+                 S->getSourceRange().getStart());
   }
   S->getInit()->setScope(ST.getCurrentScope());
-  if(S->getRange()) visit(S->getRange());
+  if (S->getRange())
+    visit(S->getRange());
 
   if (Stmt *Body = S->getBody()) {
     if (Body->getASTNodeKind() == ASTNodeKind::ASTK_BLOCKSTMT) {
-      ASTVisitor<NameResolver>::visitBlockStmt(static_cast<BlockStmt*>(Body));
+      ASTVisitor<NameResolver>::visitBlockStmt(static_cast<BlockStmt *>(Body));
     } else {
       visit(Body);
     }
@@ -48,7 +50,7 @@ void NameResolver::visitWhileStmt(WhileStmt *S) {
 
   if (Stmt *Body = S->getBody()) {
     if (Body->getASTNodeKind() == ASTNodeKind::ASTK_BLOCKSTMT) {
-      ASTVisitor<NameResolver>::visitBlockStmt(static_cast<BlockStmt*>(Body));
+      ASTVisitor<NameResolver>::visitBlockStmt(static_cast<BlockStmt *>(Body));
     } else {
       visit(Body);
     }
@@ -78,13 +80,13 @@ void NameResolver::visitFuncDecl(FuncDecl *D) {
     Symbol ParamInfo(SymbolKind::SYMBOL_PARAMETER, false);
     if (!ST.addSymbol(Param.ParamName->getName(), ParamInfo)) {
       Diags.Report(DiagKind::Error, "Parameter already defined",
-          D->getSourceRange().getStart());
+                   D->getSourceRange().getStart());
     }
     Param.ParamName->setScope(ST.getCurrentScope());
   }
   if (Stmt *Body = D->getBody()) {
     if (Body->getASTNodeKind() == ASTNodeKind::ASTK_BLOCKSTMT) {
-      ASTVisitor<NameResolver>::visitBlockStmt(static_cast<BlockStmt*>(Body));
+      ASTVisitor<NameResolver>::visitBlockStmt(static_cast<BlockStmt *>(Body));
     } else {
       visit(Body);
     }
@@ -95,7 +97,7 @@ void NameResolver::visitVarExpr(VarExpr *E) {
   E->setScope(ST.getCurrentScope());
   if (!ST.lookupSymbol(E->getName())) {
     Diags.Report(DiagKind::Error, "Undeclared variable",
-        E->getSourceRange().getStart());
+                 E->getSourceRange().getStart());
   }
 }
 
@@ -108,7 +110,7 @@ void NameResolver::visitFloatExpr(FloatExpr *E) {
 
 void NameResolver::visitRangeExpr(RangeExpr *E) {
   E->setScope(ST.getCurrentScope());
-  ASTVisitor<NameResolver>::visitRangeExpr(E);    
+  ASTVisitor<NameResolver>::visitRangeExpr(E);
 }
 
 void NameResolver::visitRefrExpr(RefrExpr *E) {
@@ -123,9 +125,9 @@ void NameResolver::visitArrayExpr(ArrayExpr *E) {
 
 void NameResolver::visitArrayAccessExpr(ArrayAccessExpr *E) {
   E->setScope(ST.getCurrentScope());
-  Symbol* Sym = ST.lookupSymbol(E->getArrayNameExpr()->getName());
+  Symbol *Sym = ST.lookupSymbol(E->getArrayNameExpr()->getName());
   E->getArrayNameExpr()->setScope(Sym->getScope());
-  for (const auto& Index: E->getIndexVector()) {
+  for (const auto &Index : E->getIndexVector()) {
     ASTVisitor<NameResolver>::visit(Index.get());
   }
 }
@@ -133,9 +135,9 @@ void NameResolver::visitArrayAccessExpr(ArrayAccessExpr *E) {
 void NameResolver::visitFunCall(FunCall *E) {
   if (!ST.lookupSymbol(E->getFuncName()->getName())) {
     Diags.Report(DiagKind::Error, "Undeclared function",
-        E->getSourceRange().getStart());
+                 E->getSourceRange().getStart());
   }
-  for (const auto& Param: E->getParams()) {
+  for (const auto &Param : E->getParams()) {
     visit(Param.get());
   }
 }
@@ -144,4 +146,3 @@ void NameResolver::visitReturnStmt(ReturnStmt *S) {
   S->setScope(ST.getCurrentScope());
   ASTVisitor<NameResolver>::visitReturnStmt(S);
 }
-

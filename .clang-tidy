@@ -1,0 +1,13 @@
+# Runs in CI on the LLVM-free frontend (lib/{Lex,Parse,Sema,AST,Basic}) only;
+# MLIR-dependent code needs the local LLVM 23 build and is checked locally.
+Checks: >
+  -*,
+  bugprone-*,
+  performance-*,
+  -bugprone-derived-method-shadowing-base-method,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-crtp-constructor-accessibility,
+  -performance-enum-size,
+  -performance-inefficient-string-concatenation
+WarningsAsErrors: '*'
+HeaderFilterRegex: 'include/trsc/(Lex|Parse|Sema|AST|Basic)/'

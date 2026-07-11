@@ -75,4 +75,3 @@ bool parseCommandLine(int argc, char **argv, CompilerOptions &options) {
 }
 
 } // namespace trsc
-

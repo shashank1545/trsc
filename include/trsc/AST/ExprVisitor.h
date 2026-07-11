@@ -20,42 +20,41 @@ namespace trsc {
 ///     }
 ///   };
 ///
-template <typename Derived, typename RetTy>
-class ExprVisitor {
+template <typename Derived, typename RetTy> class ExprVisitor {
 public:
   /// Visit an expression node and return the generated value.
   /// This is the main entry point for the visitor.
   RetTy visit(Expr *E) {
     if (!E)
-      return RetTy();  // Return default-constructed value for null
+      return RetTy(); // Return default-constructed value for null
 
-    switch(E->getASTNodeKind()) {
-      case ASTNodeKind::ASTK_BOOLEXPR:
-        return getDerived().visitBoolExpr(static_cast<BoolExpr*>(E));
-      case ASTNodeKind::ASTK_VAREXPR:
-        return getDerived().visitVarExpr(static_cast<VarExpr*>(E));
-      case ASTNodeKind::ASTK_ASEXPR:
-        return getDerived().visitASExpr(static_cast<ASExpr*>(E));
-      case ASTNodeKind::ASTK_ARRAYEXPR:
-        return getDerived().visitArrayExpr(static_cast<ArrayExpr*>(E));
-      case ASTNodeKind::ASTK_ARRAYACCESSEXPR:
-        return getDerived().visitArrayAccessExpr(
-            static_cast<ArrayAccessExpr*>(E));
-      case ASTNodeKind::ASTK_INTEXPR:
-        return getDerived().visitIntExpr(static_cast<IntExpr*>(E));
-      case ASTNodeKind::ASTK_FLOATEXPR:
-        return getDerived().visitFloatExpr(static_cast<FloatExpr*>(E));
-      case ASTNodeKind::ASTK_BINEXPR:
-        return getDerived().visitBinExpr(static_cast<BinExpr*>(E));
-      case ASTNodeKind::ASTK_REFREXPR:
-        return getDerived().visitRefrExpr(static_cast<RefrExpr*>(E));
-      case ASTNodeKind::ASTK_RANGEEXPR:
-        return getDerived().visitRangeExpr(static_cast<RangeExpr*>(E));
-      case ASTNodeKind::ASTK_FUNCALL:
-        return getDerived().visitFunCall(static_cast<FunCall*>(E));
-      default:
-        // For base expression types or unknown kinds, return default value
-        return RetTy();
+    switch (E->getASTNodeKind()) {
+    case ASTNodeKind::ASTK_BOOLEXPR:
+      return getDerived().visitBoolExpr(static_cast<BoolExpr *>(E));
+    case ASTNodeKind::ASTK_VAREXPR:
+      return getDerived().visitVarExpr(static_cast<VarExpr *>(E));
+    case ASTNodeKind::ASTK_ASEXPR:
+      return getDerived().visitASExpr(static_cast<ASExpr *>(E));
+    case ASTNodeKind::ASTK_ARRAYEXPR:
+      return getDerived().visitArrayExpr(static_cast<ArrayExpr *>(E));
+    case ASTNodeKind::ASTK_ARRAYACCESSEXPR:
+      return getDerived().visitArrayAccessExpr(
+          static_cast<ArrayAccessExpr *>(E));
+    case ASTNodeKind::ASTK_INTEXPR:
+      return getDerived().visitIntExpr(static_cast<IntExpr *>(E));
+    case ASTNodeKind::ASTK_FLOATEXPR:
+      return getDerived().visitFloatExpr(static_cast<FloatExpr *>(E));
+    case ASTNodeKind::ASTK_BINEXPR:
+      return getDerived().visitBinExpr(static_cast<BinExpr *>(E));
+    case ASTNodeKind::ASTK_REFREXPR:
+      return getDerived().visitRefrExpr(static_cast<RefrExpr *>(E));
+    case ASTNodeKind::ASTK_RANGEEXPR:
+      return getDerived().visitRangeExpr(static_cast<RangeExpr *>(E));
+    case ASTNodeKind::ASTK_FUNCALL:
+      return getDerived().visitFunCall(static_cast<FunCall *>(E));
+    default:
+      // For base expression types or unknown kinds, return default value
+      return RetTy();
     }
   }
 
@@ -63,7 +62,7 @@ public:
   RetTy visitVarExpr(VarExpr *E) { return RetTy(); }
   RetTy visitIntExpr(IntExpr *E) { return RetTy(); }
   RetTy visitFloatExpr(FloatExpr *E) { return RetTy(); }
-  
+
   RetTy visitBinExpr(BinExpr *E) {
     getDerived().visit(E->getLHS());
     getDerived().visit(E->getRHS());
@@ -80,13 +79,13 @@ public:
     getDerived().visit(E->getToType());
     return RetTy();
   }
-  
+
   RetTy visitRangeExpr(RangeExpr *E) {
     getDerived().visit(E->getStart());
     getDerived().visit(E->getEnd());
     return RetTy();
   }
-  
+
   RetTy visitFunCall(FunCall *E) {
     for (const auto &Arg : E->getParams()) {
       getDerived().visit(Arg.get());
@@ -95,15 +94,15 @@ public:
   }
 
   RetTy visitArrayExpr(ArrayExpr *E) {
-   for (const auto& Child: E->getChildElemExprVec()) {
-     getDerived().visit(Child.get());
-   }
-   return RetTy();
+    for (const auto &Child : E->getChildElemExprVec()) {
+      getDerived().visit(Child.get());
+    }
+    return RetTy();
   }
 
   RetTy visitArrayAccessExpr(ArrayAccessExpr *E) {
     getDerived().visit(E->getArrayNameExpr());
-    for (const auto& Index: E->getIndexVector()) {
+    for (const auto &Index : E->getIndexVector()) {
       getDerived().visit(Index.get());
     }
     return RetTy();

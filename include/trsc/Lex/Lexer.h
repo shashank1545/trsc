@@ -1,42 +1,40 @@
 #ifndef TRSC_LEX_LEXER_H
 #define TRSC_LEX_LEXER_H
 
-#include "trsc/Lex/Token.h"
 #include "trsc/Basic/Diagnostics.h"
 #include "trsc/Basic/SourceManager.h"
+#include "trsc/Lex/Token.h"
 
 namespace trsc {
-  namespace Lex {
+namespace Lex {
 
-    class Lexer {
-      public:
-        Lexer(SourceManager &SM, DiagnosticsEngine &Diag);
+class Lexer {
+public:
+  Lexer(SourceManager &SM, DiagnosticsEngine &Diag);
 
-        Token Lex();
+  Token Lex();
 
-      private:
+private:
+  SourceManager &SM;
+  DiagnosticsEngine &Diag;
 
-        SourceManager &SM;
-        DiagnosticsEngine &Diag;
+  const char *BufferStart;
+  const char *BufferEnd;
+  const char *CurPtr;
 
-        const char *BufferStart;
-        const char *BufferEnd;
-        const char *CurPtr;
+  Token FormToken(TokenKind Kind, const char *TokenStart);
 
-        Token FormToken(TokenKind Kind, const char *TokenStart);
+  void SkipWhiteSpace();
 
-        void SkipWhiteSpace();
+  void SkipLineComment();
 
-        void SkipLineComment();
+  Token LexNumber(const char *Result);
 
-        Token LexNumber(const char *Result);
+  Token LexIdentifierOrKeyword(const char *Result);
 
-        Token LexIdentifierOrKeyword(const char *Result);
-
-        Token LexStringLiteral(const char *Result);
-
-    };
-  }
-}
+  Token LexStringLiteral(const char *Result);
+};
+} // namespace Lex
+} // namespace trsc
 
 #endif

@@ -6,20 +6,20 @@
 #include "mlir/IR/ValueRange.h"
 
 namespace mlir {
-  namespace trscd {
-  
-    struct OpEffect {
-      mlir::Operation *op;
-      mlir::MemoryEffects::EffectInstance effect;
-    };
+namespace trscd {
 
-    bool hasMemoryHazards(mlir::scf::ForOp loop1, mlir::scf::ForOp loop2);
+struct OpEffect {
+  mlir::Operation *op;
+  mlir::MemoryEffects::EffectInstance effect;
+};
 
-    std::optional<mlir::OperandRange> getIndicesIfMemRefOp(mlir::Operation *op);
+bool hasMemoryHazards(mlir::scf::ForOp loop1, mlir::scf::ForOp loop2);
 
-    bool areIndicesPerfectlyAligned(mlir::Operation *op1, mlir::Operation *op2,
-        mlir::scf::ForOp loop1, mlir::scf::ForOp loop2);
-  } // namespace trscd
+std::optional<mlir::OperandRange> getIndicesIfMemRefOp(mlir::Operation *op);
+
+bool areIndicesPerfectlyAligned(mlir::Operation *op1, mlir::Operation *op2,
+                                mlir::scf::ForOp loop1, mlir::scf::ForOp loop2);
+} // namespace trscd
 } // namespace mlir
 
 #endif // TRSC_MLIR_UTILS_H

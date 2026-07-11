@@ -8,30 +8,30 @@
 
 namespace trsc {
 
-  class DiagnosticsEngine;
-  class SymbolTable;
-  class ASTContext;
+class DiagnosticsEngine;
+class SymbolTable;
+class ASTContext;
 
-  class SemanticAnalyzer {
-    public:
-      SemanticAnalyzer(DiagnosticsEngine &Diags, SymbolTable &ST, ASTContext &Ctx); 
-      ~SemanticAnalyzer(); 
+class SemanticAnalyzer {
+public:
+  SemanticAnalyzer(DiagnosticsEngine &Diags, SymbolTable &ST, ASTContext &Ctx);
+  ~SemanticAnalyzer() = default;
 
-      void analyze(ASTNode *Ast);
+  void analyze(ASTNode *Ast);
 
-      SymbolTable& getSymbolTable() { return ST; }
-      ASTContext& getASTContext() { return Ctx; }
-      DiagnosticsEngine& getDiagnostics() { return Diags; }
+  SymbolTable &getSymbolTable() { return ST; }
+  ASTContext &getASTContext() { return Ctx; }
+  DiagnosticsEngine &getDiagnostics() { return Diags; }
 
-    private:
-      DiagnosticsEngine &Diags;
-      SymbolTable &ST;
-      ASTContext &Ctx;
-      DeclarationCollector DeclarationCollector;
-      NameResolver NameResolver;
-      TypeChecker TypeChecker;
-      BorrowChecker BorrowChecker;
-  };
+private:
+  DiagnosticsEngine &Diags;
+  SymbolTable &ST;
+  ASTContext &Ctx;
+  DeclarationCollector DeclarationCollector;
+  NameResolver NameResolver;
+  TypeChecker TypeChecker;
+  BorrowChecker BorrowChecker;
+};
 
 } // namespace trsc
 
