@@ -75,61 +75,37 @@ lowers them through a CUDA optimization ladder selected with
 `--matmul-opt-level` (1 = naive CPU loops, 2 = coalesced GMEM kernel,
 3 = shared-memory tiling, 4 = 1D blocktiling, 5 = 2D blocktiling,
 6 = vectorized, 7 = double-buffered SMEM, 8 = warp tiling). Measured on a
-GTX 1650 (sm_75), f32 square matmul, against cuBLAS:
+GTX 1650 (sm_75), f32 square matmul, against cuBLAS. Kernel-only timings
+(CUDA events around each launch) are the fair trsc-vs-cuBLAS comparison —
+both operate on device-resident buffers:
 
-![GFLOP/s by optimization level](bench/results/gflops_vs_size.png)
+![Kernel-only throughput vs cuBLAS](bench/results/kernel_vs_cublas.png)
 
-![Percent of cuBLAS at N=2048](bench/results/pct_of_cublas.png)
+| N | L2 | L3 | L4 | L5 | L6 | L7 | L8 | cuBLAS |
+|---|---|---|---|---|---|---|---|---|
+| 128 | 68.76 | 113.36 | 82.24 | 31.78 | 61.68 | 67.11 | 102.3 | 182.36 |
+| 256 | 116.91 | 220.75 | 209.72 | 126.62 | 238.82 | 264.21 | 325.77 | 657.93 |
+| 512 | 81.46 | 228.16 | 347.49 | 367.22 | 505.53 | 506.48 | 612.17 | 1394.47 |
+| 1024 | 94.06 | 251.55 | 403.06 | 485.91 | 632.73 | 633.85 | 731.18 | 1333.43 |
+| 2048 | 94.68 | 309.57 | 514.37 | 681.65 | 911.64 | 904.11 | 1008.83 | 1398.27 |
 
-| N | L1 | L2 | L3 | L4 | L5 | L6 | L7 | L8 | cuBLAS e2e | cuBLAS kernel |
-|---|---|---|---|---|---|---|---|---|---|---|
-| 128 | 0.97 | 9.38 | 9.92 | 9.63 | 6.91 | 9.3 | 9.2 | 9.71 | 39.02 | 190.65 |
-| 256 | 2.37 | 27.13 | 30.63 | 30.12 | 27.67 | 30.97 | 42.88 | 47.19 | 116.71 | 651.54 |
-| 512 | 0.85 | 39.94 | 58.84 | 64.61 | 64.54 | 68.63 | 69.32 | 68.9 | 261.63 | 1451.0 |
-| 1024 | 0.29 | 61.6 | 102.12 | 122.87 | 130.83 | 140.53 | 140.29 | 152.44 | 361.16 | 1354.45 |
-| 2048 | — | 74.78 | 172.75 | 222.58 | 254.44 | 283.44 | 281.74 | 294.28 | 551.99 | 1416.37 |
+Kernel-only GFLOP/s, median of 10 reps after 2 warmup calls. The ladder
+peaks at **1009 GFLOP/s at N=2048 with L8 warp tiling — 72.2% of cuBLAS
+sgemm** (1398 GFLOP/s) on this card.
 
-GFLOP/s, median of 10 reps (3 for CPU) after 2 warmup calls; full data in
-[bench/results/](bench/results/). Kernel-only times (CUDA events around
-each launch) come from a `--profile` sweep; at N=2048 that ladder reaches
-L2 95 / L3 310 / L4 515 / L5 682 / L6 912 / L7 904 / L8 1009 GFLOP/s
-against a 1416 GFLOP/s cuBLAS sgemm — 6.7 / 21.9 / 36.3 / 48.1 / 64.4 /
-63.9 / 71.3% of cuBLAS.
+End-to-end (each rep a full program call: host alloc + init, device
+staging, launch, copy-back, sync), staging overhead dominates —
+L8 reaches 256 GFLOP/s at N=2048 vs 552 for a hoisted-allocation cuBLAS
+loop:
 
-**Methodology.** Timing is honest end-to-end: each rep is one full program
-call — host matrix allocation and initialization, device staging
-(`gpu.alloc` + H2D `gpu.memcpy`), kernel launch, D2H copy-back, and sync —
-measured with `CLOCK_MONOTONIC`; every rep verifies the numerical result
-before its time counts. trsc kernels operate on device-resident buffers,
-same as cuBLAS, which is shown both end-to-end (init + transfers + sgemm +
-sync, with buffers and handle allocated once, as a real application would)
-and kernel-only. Because trsc re-allocates host memory every rep and the
-cuBLAS end-to-end loop does not, the kernel framing is the fair
-trsc-vs-cuBLAS comparison. Kernel-only trsc times (`TRSC_PROFILE=1`, CUDA
-events around each launch) are in the full results.
-GPU clocks are not locked; medians + warmup + per-run clock snapshots
-mitigate. Reproduce with `python3 bench/run_bench.py --all --profile` — see
-[bench/README.md](bench/README.md).
+![End-to-end GFLOP/s by optimization level](bench/results/gflops_vs_size.png)
 
-**Findings.** The kernel-only ladder tracks the reference percentages from
-[Boehm's CUDA matmul worklog](https://siboehm.com/articles/22/CUDA-MMM)
-(his kernels 2–6 on an A6000: 8.5 / 12.8 / 36.5 / 68.7 / 78.4% of cuBLAS;
-trsc L2–L6 on a GTX 1650: 6.7 / 21.9 / 36.3 / 48.1 / 64.4%). Two fixes got
-it there. First, kernels originally read operands from pinned host memory
-(`gpu.host_register` zero-copy), so every access crossed PCIe (~5.6 GB/s
-observed) and capped all levels near 45 GFLOP/s; operands are now staged in
-device memory around the launch. Second, L4–L6 kept per-thread accumulators
-in `memref.alloca` arrays indexed by loop induction variables, which NVPTX
-lowers to off-chip local memory (`ld.local`/`st.local` inside the FMA
-loop) — the reason L5/L6 originally benched 3–4× *slower* than L3. The
-thread tile is now fully unrolled at IR-build time with accumulators as
-`scf.for` iter_args (registers), and L6 additionally stores the A tile
-transposed in SMEM so fragments load as `vector<4xf32>`. Levels 7 and 8
-continue the ladder: double buffering alone (L7) lands at L6 parity — the
-sm_75 kernel has no `cp.async`, so prefetches are staged through registers
-and the 64-thread blocks stay issue-bound — while warp tiling (L8) with
-tile shapes autotuned for this card (`TRSC_GEMM_TILES` override, best
-`64,64,16,4,4,32,32,2`) lifts the kernel to 71% of cuBLAS. Small sizes
-(N ≤ 256) still show inversions — grids of a few blocks can't fill the SMs
-and launch overhead dominates.
+Full data (e2e + kernel series, all levels) in
+[bench/results/](bench/results/).
+
+Reproduce with `python3 bench/run_bench.py --all --profile` — see
+[bench/README.md](bench/README.md). Measurement details are in
+[docs/benchmark-methodology.md](docs/benchmark-methodology.md); analysis
+of the results in
+[bench/results/findings.md](bench/results/findings.md).
 
