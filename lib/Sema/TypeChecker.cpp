@@ -5,9 +5,8 @@
 
 namespace trsc {
 
-TypeChecker::TypeChecker(DiagnosticsEngine &Diags, SymbolTable &ST,
-                         ASTContext &Ctx)
-    : Diags(Diags), ST(ST), Ctx(Ctx) {}
+TypeChecker::TypeChecker(DiagnosticsEngine &Diags, ASTContext &Ctx)
+    : Diags(Diags), Ctx(Ctx) {}
 
 QualType TypeChecker::resolveType(Type *T) {
   switch (T->getASTNodeKind()) {
@@ -74,7 +73,7 @@ void TypeChecker::visitRefrExpr(RefrExpr *Node) {
 }
 
 void TypeChecker::visitVarExpr(VarExpr *Node) {
-  auto Sym = ST.lookupSymbol(Node->getName(), Node->getScope());
+  auto Sym = Node->getSymbol();
   if (Sym) {
     Node->setType(Sym->Ty);
   }
@@ -149,8 +148,7 @@ void TypeChecker::visitArrayExpr(ArrayExpr *Node) {
 // }
 
 void TypeChecker::visitArrayAccessExpr(ArrayAccessExpr *Node) {
-  Symbol *Sym = ST.lookupSymbol(Node->getArrayNameExpr()->getName(),
-                                Node->getArrayNameExpr()->getScope());
+  Symbol *Sym = Node->getArrayNameExpr()->getSymbol();
   if (!Sym) {
     Diags.Report(DiagKind::Error, "Array not found in SymbolTable.",
                  Node->getSourceRange().getStart());
@@ -215,15 +213,14 @@ void TypeChecker::visitArrayAccessExpr(ArrayAccessExpr *Node) {
 }
 
 void TypeChecker::visitLetStmt(LetStmt *Node) {
-  auto Sym =
-      ST.lookupSymbol(Node->getDeclaredVar()->getName(), Node->getScope());
-  if (Node->isMut())
-    Sym->IsMutable = true;
+  auto Sym = Node->getDeclaredVar()->getSymbol();
   if (!Sym) {
     Diags.Report(DiagKind::Error, "Variable not found in SymbolTable",
                  Node->getSourceRange().getStart());
     return;
   }
+  if (Node->isMut())
+    Sym->IsMutable = true;
 
   QualType InitializerQualType;
   QualType FinalType;
@@ -476,7 +473,7 @@ void TypeChecker::visitForStmt(ForStmt *Node) {
     return;
   }
 
-  auto Sym = ST.lookupSymbol(IteratorVar->getName(), IteratorVar->getScope());
+  auto Sym = IteratorVar->getSymbol();
   if (Sym) {
     Sym->Ty = IteratorType;
   } else {
@@ -525,8 +522,7 @@ void TypeChecker::visitFuncDecl(FuncDecl *Node) {
                            Param.ParamName->getName() + "'",
                        Param.ParamType->getSourceRange().getStart());
         } else {
-          auto Sym = ST.lookupSymbol(Param.ParamName->getName(),
-                                     Param.ParamName->getScope());
+          auto Sym = Param.ParamName->getSymbol();
           if (Sym) {
             Sym->Ty = ParamQualType;
             ParamTypes.emplace_back(Sym->Ty);
@@ -560,7 +556,7 @@ void TypeChecker::visitFuncDecl(FuncDecl *Node) {
   }
 
   QualType FunctionType = Ctx.getFunctionType(FuncReturnQualType, ParamTypes);
-  auto Sym = ST.lookupSymbol(Node->getFuncName()->getName());
+  auto Sym = Node->getFuncName()->getSymbol();
   if (Sym)
     Sym->Ty = FunctionType;
   if (Node->getBody()) {
@@ -570,9 +566,8 @@ void TypeChecker::visitFuncDecl(FuncDecl *Node) {
 }
 
 void TypeChecker::visitFunCall(FunCall *Node) {
-  std::string Name = std::string(Node->getFuncName()->getName());
   QualType FuncExpType;
-  Symbol *SymbolInfo = ST.lookupSymbol(Name);
+  Symbol *SymbolInfo = Node->getFuncName()->getSymbol();
   if (SymbolInfo) {
     FuncExpType = SymbolInfo->Ty;
   } else {
@@ -594,9 +589,9 @@ void TypeChecker::visitFunCall(FunCall *Node) {
     visit(ParamCallType[I].get());
     if (ParamCallType[I]->getType() != ParamsExpType[I]) {
       Diags.Report(DiagKind::Error,
-                   "Function " + Name + " expected Type " +
-                       ParamsExpType[I].getAsString() + " but got " +
-                       ParamCallType[I]->getType().getAsString());
+                   "Function " + Node->getFuncName()->getName() +
+                       " expected Type " + ParamsExpType[I].getAsString() +
+                       " but got " + ParamCallType[I]->getType().getAsString());
       break;
     }
   }

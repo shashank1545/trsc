@@ -6,23 +6,30 @@
 #include "trsc/Lex/Token.h"
 
 namespace trsc {
+
+class IdentifierTable;
+
 namespace Lex {
 
 class Lexer {
 public:
-  Lexer(SourceManager &SM, DiagnosticsEngine &Diag);
+  // Idents must outlive the Lexer: the IdentifierInfo pointers it hands out are
+  // retained by the AST and the symbol table.
+  Lexer(SourceManager &SM, DiagnosticsEngine &Diag, IdentifierTable &Idents);
 
   Token Lex();
 
 private:
   SourceManager &SM;
   DiagnosticsEngine &Diag;
+  IdentifierTable &Idents;
 
   const char *BufferStart;
   const char *BufferEnd;
   const char *CurPtr;
 
-  Token FormToken(TokenKind Kind, const char *TokenStart);
+  Token FormToken(TokenKind Kind, const char *TokenStart,
+                  IdentifierInfo *Id = nullptr);
 
   void SkipWhiteSpace();
 

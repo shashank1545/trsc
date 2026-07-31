@@ -1,6 +1,7 @@
 #ifndef TRSC_AST_AST_H
 #define TRSC_AST_AST_H
 
+#include "trsc/Basic/IdentifierTable.h"
 #include "trsc/Lex/Token.h"
 #include "trsc/Sema/Scope.h"
 
@@ -211,12 +212,16 @@ public:
 };
 
 class VarExpr : public Expr {
-  std::string Name;
+  const IdentifierInfo *Id;
+  Symbol *ResolvedSym = nullptr;
 
 public:
-  VarExpr(const std::string &Name, SourceRange Loc = {})
-      : Expr(ASTNodeKind::ASTK_VAREXPR, Loc), Name(Name) {}
-  const std::string &getName() const { return Name; }
+  VarExpr(const IdentifierInfo *Id, SourceRange Loc = {})
+      : Expr(ASTNodeKind::ASTK_VAREXPR, Loc), Id(Id) {}
+  const std::string &getName() const { return Id->getName(); }
+  const IdentifierInfo *getIdentifierInfo() const { return Id; }
+  Symbol *getSymbol() const { return ResolvedSym; }
+  void setSymbol(Symbol *S) { ResolvedSym = S; }
   bool isVar() const override { return true; }
   static bool classof(const Expr *E) {
     return E->getASTNodeKind() == ASTNodeKind::ASTK_VAREXPR;

@@ -11,7 +11,9 @@ class SymbolTable;
 class TypeChecker : public ASTVisitor<TypeChecker> {
 public:
   using ASTVisitor<TypeChecker>::visit;
-  TypeChecker(DiagnosticsEngine &Diags, SymbolTable &ST, ASTContext &Ctx);
+  // Reads the Symbol * NameResolver cached on each VarExpr, so it needs no
+  // SymbolTable of its own.
+  TypeChecker(DiagnosticsEngine &Diags, ASTContext &Ctx);
 
   void visitIntExpr(IntExpr *Node);
   void visitFloatExpr(FloatExpr *Node);
@@ -35,7 +37,6 @@ public:
 
 private:
   DiagnosticsEngine &Diags;
-  SymbolTable &ST;
   ASTContext &Ctx;
   QualType CurrentFunctionReturnType;
   QualType ExpectedType;

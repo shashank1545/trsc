@@ -3,9 +3,14 @@
 
 #include "trsc/AST/QualType.h"
 
-#include <map>
+#include <cstddef>
+#include <memory>
+#include <unordered_map>
+#include <utility>
 
 namespace trsc {
+
+class IdentifierInfo;
 
 enum class SymbolKind {
   SYMBOL_VARIABLE,
@@ -30,6 +35,7 @@ class Scope;
 struct Symbol {
   void *Op = nullptr;
   Scope *Scp = nullptr;
+  const IdentifierInfo *Name = nullptr;
   QualType Ty;
   SymbolKind Kind;
   bool IsMutable;
@@ -57,12 +63,19 @@ struct Symbol {
 };
 
 class Scope {
+public:
+  using EntryList = std::vector<std::pair<const IdentifierInfo *, Symbol *>>;
+
 private:
   ScopeKind Kind;
-  std::map<std::string, Symbol> Symbols;
+  EntryList Symbols;
+  std::unique_ptr<std::unordered_map<const IdentifierInfo *, Symbol *>> Index;
   Scope *Parent;
   uint32_t Depth;
   std::vector<Scope *> Children;
+
+  static constexpr std::size_t IndexThreshold = 32;
+  void buildIndex();
 
 public:
   Scope(ScopeKind Kind, Scope *Parent, uint32_t Depth)
@@ -72,13 +85,12 @@ public:
   Scope *getParent() const { return Parent; }
   uint32_t getDepth() const { return Depth; }
   const std::vector<Scope *> &getChildren() const { return Children; }
-  const std::map<std::string, Symbol> &getSymbols() const { return Symbols; }
+  const EntryList &getSymbols() const { return Symbols; }
 
   bool canReturn() const { return Kind == ScopeKind::SCOPE_FUNCTION; }
 
-  // Symbol Operation local to the current scope
-  bool addSymbol(const std::string &Name, Symbol Sym);
-  Symbol *lookupSymbolLocal(const std::string &Name);
+  Symbol *addSymbol(const IdentifierInfo *Name, Symbol *Sym);
+  Symbol *lookupSymbolLocal(const IdentifierInfo *Name);
 };
 
 } // namespace trsc

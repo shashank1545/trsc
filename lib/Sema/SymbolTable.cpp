@@ -4,7 +4,7 @@
 
 namespace trsc {
 
-SymbolTable::SymbolTable() {
+SymbolTable::SymbolTable(IdentifierTable &Idents) : Idents(Idents) {
   std::unique_ptr<Scope> GlobalScopePtr =
       std::make_unique<Scope>(ScopeKind::SCOPE_GLOBAL, nullptr, 0);
   GlobalScope = GlobalScopePtr.get();
@@ -25,12 +25,23 @@ void SymbolTable::exitScope() {
   }
 }
 
-bool SymbolTable::addSymbol(const std::string &Name, Symbol Sym) {
-  return CurrentScope->addSymbol(Name, Sym);
+Symbol *SymbolTable::addSymbol(const IdentifierInfo *Name, Symbol Sym) {
+  // Check for redefinition before touching the arena so a rejected insert does
+  // not leave an orphaned Symbol behind.
+  if (CurrentScope->lookupSymbolLocal(Name))
+    return nullptr;
+  Sym.Name = Name;
+  SymbolArena.push_back(Sym);
+  return CurrentScope->addSymbol(Name, &SymbolArena.back());
 }
 
-Symbol *SymbolTable::lookupSymbol(const std::string &Name) {
-  Scope *Current = CurrentScope;
+Symbol *SymbolTable::lookupSymbol(const IdentifierInfo *Name) {
+  return lookupSymbol(Name, CurrentScope);
+}
+
+Symbol *SymbolTable::lookupSymbol(const IdentifierInfo *Name,
+                                  Scope *CurrScope) {
+  Scope *Current = CurrScope;
   while (Current) {
     if (Symbol *Sym = Current->lookupSymbolLocal(Name)) {
       return Sym;
@@ -40,14 +51,19 @@ Symbol *SymbolTable::lookupSymbol(const std::string &Name) {
   return nullptr;
 }
 
+Symbol *SymbolTable::addSymbol(const std::string &Name, Symbol Sym) {
+  return addSymbol(Idents.get(Name), Sym);
+}
+
+Symbol *SymbolTable::lookupSymbol(const std::string &Name) {
+  return lookupSymbol(Name, CurrentScope);
+}
+
 Symbol *SymbolTable::lookupSymbol(const std::string &Name, Scope *CurrScope) {
-  Scope *Current = CurrScope;
-  while (Current) {
-    if (Symbol *Sym = Current->lookupSymbolLocal(Name)) {
-      return Sym;
-    }
-    Current = Current->getParent();
-  }
+  // find() rather than get(): a lookup must not intern a spelling that was
+  // never declared.
+  if (const IdentifierInfo *Id = Idents.find(Name))
+    return lookupSymbol(Id, CurrScope);
   return nullptr;
 }
 } // namespace trsc

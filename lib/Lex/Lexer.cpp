@@ -1,11 +1,14 @@
 #include "trsc/Lex/Lexer.h"
+#include "trsc/Basic/IdentifierTable.h"
 #include <cctype>
 #include <string_view>
 
 namespace trsc {
 namespace Lex {
 
-Lexer::Lexer(SourceManager &SM, DiagnosticsEngine &Diag) : SM(SM), Diag(Diag) {
+Lexer::Lexer(SourceManager &SM, DiagnosticsEngine &Diag,
+             IdentifierTable &Idents)
+    : SM(SM), Diag(Diag), Idents(Idents) {
   BufferStart = SM.getBufferStart();
   BufferEnd = SM.getBufferEnd();
   CurPtr = BufferStart;
@@ -217,11 +220,12 @@ Token Lexer::Lex() {
   }
 }
 
-Token Lexer::FormToken(TokenKind Kind, const char *TokenStart) {
+Token Lexer::FormToken(TokenKind Kind, const char *TokenStart,
+                       IdentifierInfo *Id) {
   unsigned Length = CurPtr - TokenStart;
   std::string_view Text(TokenStart, Length);
   SourceLocation Loc = SM.getLocation(TokenStart);
-  return Token(Kind, Loc, Length, Text);
+  return Token(Kind, Loc, Length, Text, Id);
 }
 
 void Lexer::SkipWhiteSpace() {
@@ -241,39 +245,11 @@ Token Lexer::LexIdentifierOrKeyword(const char *TokenStart) {
   while (CurPtr < BufferEnd && (isalnum(*CurPtr) || *CurPtr == '_')) {
     CurPtr++;
   }
-  TokenKind Kind;
-  std::string_view Text(TokenStart, CurPtr - TokenStart);
-
-  if (Text == "fn")
-    Kind = TokenKind::KW_FN;
-  else if (Text == "let")
-    Kind = TokenKind::KW_LET;
-  else if (Text == "mut")
-    Kind = TokenKind::KW_MUT;
-  else if (Text == "const")
-    Kind = TokenKind::KW_CONST;
-  else if (Text == "as")
-    Kind = TokenKind::KW_AS;
-  else if (Text == "if")
-    Kind = TokenKind::KW_IF;
-  else if (Text == "else")
-    Kind = TokenKind::KW_ELSE;
-  else if (Text == "return")
-    Kind = TokenKind::KW_RETURN;
-  else if (Text == "true")
-    Kind = TokenKind::KW_TRUE;
-  else if (Text == "false")
-    Kind = TokenKind::KW_FALSE;
-  else if (Text == "while")
-    Kind = TokenKind::KW_WHILE;
-  else if (Text == "for")
-    Kind = TokenKind::KW_FOR;
-  else if (Text == "in")
-    Kind = TokenKind::KW_IN;
-  else
-    Kind = TokenKind::IDENTIFIER;
-
-  return (FormToken(Kind, TokenStart));
+  // Interning classifies keywords as a side effect: the table is seeded with
+  // them, so their TokenKind comes back with the IdentifierInfo.
+  IdentifierInfo *Id =
+      Idents.get(std::string_view(TokenStart, CurPtr - TokenStart));
+  return FormToken(Id->getTokenKind(), TokenStart, Id);
 }
 
 Token Lexer::LexNumber(const char *TokenStart) {

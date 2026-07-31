@@ -29,7 +29,12 @@ void DeclarationCollector::visitFuncDecl(FuncDecl *D) {
   //     Name = Name + Param.ParamType->getName()[0];
   //   }
   // }
-  if (!ST.addSymbol(D->getFuncName()->getName(), FuncInfo)) {
+  FuncInfo.setScope(ST.getCurrentScope());
+  if (Symbol *Declared =
+          ST.addSymbol(D->getFuncName()->getIdentifierInfo(), FuncInfo)) {
+    D->getFuncName()->setScope(ST.getCurrentScope());
+    D->getFuncName()->setSymbol(Declared);
+  } else {
     Diags.Report(DiagKind::Error, "Function already defined",
                  D->getSourceRange().getStart());
   }

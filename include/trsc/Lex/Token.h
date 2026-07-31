@@ -5,6 +5,9 @@
 #include <string_view>
 
 namespace trsc {
+
+class IdentifierInfo;
+
 namespace Lex {
 
 enum class TokenKind {
@@ -84,18 +87,23 @@ class Token {
   SourceLocation Loc;
   unsigned Length;
   std::string_view Text;
+  // Set for identifiers and keywords, null for everything else.
+  IdentifierInfo *Id;
 
 public:
   Token()
-      : Kind(TokenKind::UNKNOWN), Loc({nullptr, 0, 0}), Length(0), Text("") {}
+      : Kind(TokenKind::UNKNOWN), Loc({nullptr, 0, 0}), Length(0), Text(""),
+        Id(nullptr) {}
 
-  Token(TokenKind K, SourceLocation L, unsigned Len, std::string_view T)
-      : Kind(K), Loc(L), Length(Len), Text(T) {}
+  Token(TokenKind K, SourceLocation L, unsigned Len, std::string_view T,
+        IdentifierInfo *Id = nullptr)
+      : Kind(K), Loc(L), Length(Len), Text(T), Id(Id) {}
 
   TokenKind getKind() const { return Kind; }
   SourceLocation getLocation() const { return Loc; }
   unsigned getLength() const { return Length; }
   std::string_view getText() const { return Text; }
+  IdentifierInfo *getIdentifierInfo() const { return Id; }
 
   bool is(TokenKind K) const { return Kind == K; }
   bool isNot(TokenKind K) const { return Kind != K; }

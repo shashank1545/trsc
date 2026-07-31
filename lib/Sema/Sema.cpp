@@ -5,8 +5,8 @@ using namespace trsc;
 SemanticAnalyzer::SemanticAnalyzer(DiagnosticsEngine &Diags, SymbolTable &ST,
                                    ASTContext &Ctx)
     : Diags(Diags), ST(ST), Ctx(Ctx), DeclarationCollector(Diags, ST),
-      NameResolver(Diags, ST), TypeChecker(Diags, ST, Ctx),
-      BorrowChecker(Diags, ST, Ctx) {}
+      NameResolver(Diags, ST), TypeChecker(Diags, Ctx),
+      BorrowChecker(Diags, Ctx) {}
 
 void SemanticAnalyzer::analyze(ASTNode *Ast) {
   DeclarationCollector.visit(Ast);

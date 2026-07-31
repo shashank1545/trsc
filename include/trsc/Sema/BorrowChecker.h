@@ -12,7 +12,7 @@ class ASTContext;
 class BorrowChecker : public ASTVisitor<BorrowChecker> {
 public:
   using ASTVisitor<BorrowChecker>::visit;
-  BorrowChecker(DiagnosticsEngine &Diags, SymbolTable &ST, ASTContext &Ctx);
+  BorrowChecker(DiagnosticsEngine &Diags, ASTContext &Ctx);
 
   void visitLetStmt(LetStmt *Node);
   void visitVarExpr(VarExpr *Node);
@@ -25,7 +25,6 @@ public:
 
 private:
   DiagnosticsEngine &Diags;
-  SymbolTable &ST;
   ASTContext &Ctx;
 };
 

@@ -1,5 +1,6 @@
 #include "trsc/Lex/Lexer.h"
 #include "trsc/Basic/Diagnostics.h"
+#include "trsc/Basic/IdentifierTable.h"
 #include "trsc/Basic/SourceManager.h"
 #include <gtest/gtest.h>
 
@@ -9,6 +10,7 @@ class LexerTest : public ::testing::Test {
 protected:
   trsc::SourceManager SM;
   trsc::DiagnosticsEngine Diag;
+  trsc::IdentifierTable Idents;
 
   LexerTest() : SM(Diag), Diag() {}
 };
@@ -16,7 +18,7 @@ protected:
 TEST_F(LexerTest, BasicTokens) {
   const std::string input = "let x = 10;";
   SM.loadBuffer(input);
-  Lexer lexer(SM, Diag);
+  Lexer lexer(SM, Diag, Idents);
 
   Token tok = lexer.Lex();
   EXPECT_EQ(tok.getKind(), TokenKind::KW_LET);

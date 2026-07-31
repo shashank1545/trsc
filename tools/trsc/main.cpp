@@ -21,6 +21,7 @@
 #include "trsc/AST/ASTPrinter.h"
 #include "trsc/AST/TypedASTPrinter.h"
 #include "trsc/Basic/CommandLine.h"
+#include "trsc/Basic/IdentifierTable.h"
 #include "trsc/Lex/Lexer.h"
 #include "trsc/MLIR/MatMulOpts/MatMulOptPasses.h"
 #include "trsc/MLIR/Transforms/PassPipeline.h"
@@ -51,7 +52,8 @@ int main(int argc, char **argv) {
   if (options.Verbose) {
     std::cerr << "Starting Lexical Analysis..." << "\n";
   }
-  trsc::Lex::Lexer Lex(SM, Diag);
+  trsc::IdentifierTable Idents;
+  trsc::Lex::Lexer Lex(SM, Diag, Idents);
   std::vector<trsc::Lex::Token> Tokens;
   trsc::Lex::Token Tok;
   do {
@@ -125,7 +127,7 @@ int main(int argc, char **argv) {
     std::cerr << "Starting Semantic Analysis..." << "\n";
   }
 
-  trsc::SymbolTable ST;
+  trsc::SymbolTable ST(Idents);
   trsc::ASTContext Ctx;
   trsc::SemanticAnalyzer Sema(Diag, ST, Ctx);
   Sema.analyze(AST.get());

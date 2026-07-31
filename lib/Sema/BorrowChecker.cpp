@@ -4,9 +4,8 @@
 
 namespace trsc {
 
-BorrowChecker::BorrowChecker(DiagnosticsEngine &Diags, SymbolTable &ST,
-                             ASTContext &Ctx)
-    : Diags(Diags), ST(ST), Ctx(Ctx) {}
+BorrowChecker::BorrowChecker(DiagnosticsEngine &Diags, ASTContext &Ctx)
+    : Diags(Diags), Ctx(Ctx) {}
 
 void BorrowChecker::visitLetStmt(LetStmt *Node) {
   if (Node->getInitializer()) {
@@ -15,7 +14,7 @@ void BorrowChecker::visitLetStmt(LetStmt *Node) {
 }
 
 void BorrowChecker::visitVarExpr(VarExpr *Node) {
-  if (!ST.lookupSymbol(Node->getName(), Node->getScope())) {
+  if (!Node->getSymbol()) {
     Diags.Report(DiagKind::Error,
                  "BorrowChecker: Undeclared variable '" + Node->getName() + "'",
                  Node->getSourceRange().getStart());
@@ -54,7 +53,7 @@ void BorrowChecker::visitWhileStmt(WhileStmt *Node) {
 
 void BorrowChecker::visitFuncDecl(FuncDecl *Node) {
   for (const auto &Param : Node->getParams()) {
-    auto Symbol = ST.lookupSymbol(Param.ParamName->getName(), Node->getScope());
+    auto Symbol = Param.ParamName->getSymbol();
     if (!Symbol) {
       Diags.Report(DiagKind::Error,
                    "BorrowChecker: Parameter '" + Param.ParamName->getName() +

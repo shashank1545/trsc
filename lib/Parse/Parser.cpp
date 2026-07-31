@@ -164,8 +164,7 @@ std::unique_ptr<Expr> Parser::parsePrimary() {
     } else {
       EndLoc = currentToken().getLocation();
       Range = SourceRange(StartLoc, EndLoc);
-      return std::make_unique<VarExpr>(std::string(IdentToken.getText()),
-                                       Range);
+      return std::make_unique<VarExpr>(IdentToken.getIdentifierInfo(), Range);
     }
   }
   case Lex::TokenKind::DE_LPAREN: {
@@ -277,7 +276,7 @@ Parser::parseArrayAccessExpr(Lex::Token IndentToken) {
     expectToken(Lex::TokenKind::DE_RBRACKET);
   }
   std::unique_ptr<VarExpr> ArrayExprName;
-  ArrayExprName = std::make_unique<VarExpr>(std::string(IndentToken.getText()));
+  ArrayExprName = std::make_unique<VarExpr>(IndentToken.getIdentifierInfo());
   return std::make_unique<ArrayAccessExpr>(std::move(ArrayExprName),
                                            std::move(IndexExprVec));
 }
@@ -551,7 +550,7 @@ std::unique_ptr<FuncDecl> Parser::parseFunction() {
 
   Lex::Token FuncNameToken = consume(Lex::TokenKind::IDENTIFIER);
   std::unique_ptr<VarExpr> FuncName =
-      std::make_unique<VarExpr>(std::string(FuncNameToken.getText()));
+      std::make_unique<VarExpr>(FuncNameToken.getIdentifierInfo());
 
   if (!expectToken(Lex::TokenKind::DE_LPAREN))
     return nullptr;
@@ -608,7 +607,7 @@ Parser::parseFunCall(std::optional<Lex::Token> FuncNameToken = std::nullopt) {
     consume(Lex::TokenKind::IDENTIFIER);
   }
   std::unique_ptr<VarExpr> FuncName =
-      std::make_unique<VarExpr>(std::string(FuncNameToken->getText()));
+      std::make_unique<VarExpr>(FuncNameToken->getIdentifierInfo());
   if (!expectToken(Lex::TokenKind::DE_LPAREN))
     return nullptr;
 

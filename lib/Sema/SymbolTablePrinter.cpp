@@ -1,8 +1,20 @@
 #include "trsc/Sema/SymbolTablePrinter.h"
+#include "trsc/Basic/IdentifierTable.h"
 #include "trsc/Sema/Scope.h"
+#include <algorithm>
 #include <iomanip>
 
 namespace trsc {
+
+namespace {
+Scope::EntryList sortedByName(const Scope *S) {
+  Scope::EntryList Sorted = S->getSymbols();
+  std::sort(Sorted.begin(), Sorted.end(), [](const auto &A, const auto &B) {
+    return A.first->getName() < B.first->getName();
+  });
+  return Sorted;
+}
+} // namespace
 
 void SymbolTablePrinter::indent(unsigned Level) {
   for (unsigned i = 0; i < Level; ++i) {
@@ -16,20 +28,20 @@ void SymbolTablePrinter::printScope(const Scope *S, unsigned IndentLevel) {
      << " Scope (Depth: " << S->getDepth() << ")\n";
 
   // Print symbols
-  const auto &Symbols = S->getSymbols();
+  const auto Symbols = sortedByName(S);
   if (Symbols.empty()) {
     indent(IndentLevel);
     OS << "│  (no symbols)\n";
   } else {
     for (const auto &[Name, Sym] : Symbols) {
       indent(IndentLevel);
-      OS << "│  " << std::setw(20) << std::left << Name;
+      OS << "│  " << std::setw(20) << std::left << Name->getName();
       OS << " : " << std::setw(12) << std::left
-         << (Sym.Ty.isNull() ? "<unresolved>" : Sym.Ty.getAsString());
-      OS << " [" << getSymbolKindName(Sym.Kind) << "]";
-      if (Sym.IsMutable)
+         << (Sym->Ty.isNull() ? "<unresolved>" : Sym->Ty.getAsString());
+      OS << " [" << getSymbolKindName(Sym->Kind) << "]";
+      if (Sym->IsMutable)
         OS << " mut";
-      if (Sym.IsInitialized)
+      if (Sym->IsInitialized)
         OS << " init";
 
       // if (Sym.Node) {
@@ -65,15 +77,15 @@ void SymbolTablePrinter::print() {
     OS << "Scope #" << i << " - " << getScopeKindName(S->getKind())
        << " (Depth: " << S->getDepth() << ")\n";
 
-    const auto &Symbols = S->getSymbols();
+    const auto Symbols = sortedByName(S);
     if (Symbols.empty()) {
       OS << "  (no symbols)\n";
     } else {
       for (const auto &[Name, Sym] : Symbols) {
-        OS << "  " << std::setw(20) << std::left << Name << " : "
-           << (Sym.Ty.isNull() ? "<unresolved>" : Sym.Ty.getAsString()) << " ["
-           << getSymbolKindName(Sym.Kind) << "]";
-        if (Sym.IsMutable)
+        OS << "  " << std::setw(20) << std::left << Name->getName() << " : "
+           << (Sym->Ty.isNull() ? "<unresolved>" : Sym->Ty.getAsString())
+           << " [" << getSymbolKindName(Sym->Kind) << "]";
+        if (Sym->IsMutable)
           OS << " mut";
         OS << "\n";
       }

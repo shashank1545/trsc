@@ -12,7 +12,11 @@ void NameResolver::visitLetStmt(LetStmt *S) {
   S->setScope(ST.getCurrentScope());
   Symbol Sym;
   Sym.setScope(ST.getCurrentScope());
-  if (!ST.addSymbol(S->getDeclaredVar()->getName(), Sym)) {
+  if (Symbol *Declared =
+          ST.addSymbol(S->getDeclaredVar()->getIdentifierInfo(), Sym)) {
+    S->getDeclaredVar()->setScope(ST.getCurrentScope());
+    S->getDeclaredVar()->setSymbol(Declared);
+  } else {
     Diags.Report(DiagKind::Error, "Redefinition of Variable",
                  S->getSourceRange().getStart());
   }
@@ -25,7 +29,9 @@ void NameResolver::visitForStmt(ForStmt *S) {
   S->setScope(ST.getCurrentScope());
   Symbol Sym;
   Sym.setScope(ST.getCurrentScope());
-  if (!ST.addSymbol(S->getInit()->getName(), Sym)) {
+  if (Symbol *Iterator = ST.addSymbol(S->getInit()->getIdentifierInfo(), Sym)) {
+    S->getInit()->setSymbol(Iterator);
+  } else {
     Diags.Report(DiagKind::Error, "Variable already defined",
                  S->getSourceRange().getStart());
   }
@@ -78,7 +84,11 @@ void NameResolver::visitFuncDecl(FuncDecl *D) {
   D->setScope(ST.getCurrentScope());
   for (const auto &Param : D->getParams()) {
     Symbol ParamInfo(SymbolKind::SYMBOL_PARAMETER, false);
-    if (!ST.addSymbol(Param.ParamName->getName(), ParamInfo)) {
+    ParamInfo.setScope(ST.getCurrentScope());
+    if (Symbol *Declared =
+            ST.addSymbol(Param.ParamName->getIdentifierInfo(), ParamInfo)) {
+      Param.ParamName->setSymbol(Declared);
+    } else {
       Diags.Report(DiagKind::Error, "Parameter already defined",
                    D->getSourceRange().getStart());
     }
@@ -95,10 +105,13 @@ void NameResolver::visitFuncDecl(FuncDecl *D) {
 
 void NameResolver::visitVarExpr(VarExpr *E) {
   E->setScope(ST.getCurrentScope());
-  if (!ST.lookupSymbol(E->getName())) {
+  Symbol *Sym = ST.lookupSymbol(E->getIdentifierInfo());
+  if (!Sym) {
     Diags.Report(DiagKind::Error, "Undeclared variable",
                  E->getSourceRange().getStart());
+    return;
   }
+  E->setSymbol(Sym);
 }
 
 void NameResolver::visitIntExpr(IntExpr *E) {
@@ -125,15 +138,25 @@ void NameResolver::visitArrayExpr(ArrayExpr *E) {
 
 void NameResolver::visitArrayAccessExpr(ArrayAccessExpr *E) {
   E->setScope(ST.getCurrentScope());
-  Symbol *Sym = ST.lookupSymbol(E->getArrayNameExpr()->getName());
-  E->getArrayNameExpr()->setScope(Sym->getScope());
+  VarExpr *ArrayName = E->getArrayNameExpr();
+  Symbol *Sym = ST.lookupSymbol(ArrayName->getIdentifierInfo());
+  if (!Sym) {
+    Diags.Report(DiagKind::Error, "Undeclared variable",
+                 ArrayName->getSourceRange().getStart());
+  } else {
+    ArrayName->setScope(Sym->getScope());
+    ArrayName->setSymbol(Sym);
+  }
   for (const auto &Index : E->getIndexVector()) {
     ASTVisitor<NameResolver>::visit(Index.get());
   }
 }
 
 void NameResolver::visitFunCall(FunCall *E) {
-  if (!ST.lookupSymbol(E->getFuncName()->getName())) {
+  E->getFuncName()->setScope(ST.getCurrentScope());
+  if (Symbol *Sym = ST.lookupSymbol(E->getFuncName()->getIdentifierInfo())) {
+    E->getFuncName()->setSymbol(Sym);
+  } else {
     Diags.Report(DiagKind::Error, "Undeclared function",
                  E->getSourceRange().getStart());
   }
