@@ -42,4 +42,6 @@ perf.data.old
 bench/generated/
 bench/work/
 *.csv
+!bench/results/raw.csv
+!bench/results/results.csv
 __pycache__/
