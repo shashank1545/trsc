@@ -79,6 +79,25 @@ GTX 1650 (sm_75), f32 square matmul, against cuBLAS. Kernel-only timings
 (CUDA events around each launch) are the fair trsc-vs-cuBLAS comparison —
 both operate on device-resident buffers:
 
+GPU levels emit PTX for compute capability 7.5 by default. This is a portable
+baseline for Turing and newer NVIDIA GPUs; the installed driver JIT-compiles
+the PTX for the selected device. The GTX 1650 is the benchmark machine, not a
+runtime requirement.
+
+```bash
+# Prefer CUDA and fall back to scalar CPU lowering when unavailable.
+./build/tools/trsc/trsc --device=auto --matmul-opt-level=6 program.rs
+
+# Emit CPU-only or require CUDA explicitly.
+./build/tools/trsc/trsc --device=cpu --matmul-opt-level=6 program.rs
+./build/tools/trsc/trsc --device=cuda --cuda-arch=sm_80 \
+  --matmul-opt-level=6 program.rs
+```
+
+`--device=auto` embeds CPU and GPU implementations. Missing `libcuda`, no
+visible device, insufficient compute capability, or a CUDA execution error
+selects the CPU implementation without corrupting the output buffer.
+
 ![Kernel-only throughput vs cuBLAS](bench/results/kernel_vs_cublas.png)
 
 | N | L2 | L3 | L4 | L5 | L6 | L7 | L8 | cuBLAS |
@@ -108,4 +127,3 @@ Reproduce with `python3 bench/run_bench.py --all --profile` — see
 [docs/benchmark-methodology.md](docs/benchmark-methodology.md); analysis
 of the results in
 [bench/results/findings.md](bench/results/findings.md).
-

@@ -6,6 +6,8 @@
 #include <optional>
 #include <string>
 
+#include "trsc/Basic/TargetOptions.h"
+
 namespace mlir {
 namespace trscd {
 
@@ -29,10 +31,16 @@ std::unique_ptr<mlir::Pass> createAutoTuningPass(AutoTuneConfig config = {});
 
 // Pass to lower trscd.gemm into standard optimized MLIR (scf, memref, gpu,
 // vector) based on the optimization level
-std::unique_ptr<mlir::Pass> createLowerTrscdMatMulPass(int optLevel);
+std::unique_ptr<mlir::Pass>
+createMaterializeDeviceDispatchPass(int optLevel,
+                                    const trsc::TargetOptions &target);
+
+std::unique_ptr<mlir::Pass>
+createLowerTrscdMatMulPass(int optLevel, trsc::DeviceMode device);
 
 // Pipeline builder to compose the passes
 void buildMatMulOptPipeline(mlir::PassManager &pm, int optLevel,
+                            const trsc::TargetOptions &target,
                             AutoTuneConfig tuneConfig = {});
 
 // Register standalone matmul optimization passes with an MLIR tool driver.

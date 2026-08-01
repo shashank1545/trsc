@@ -34,11 +34,14 @@ void buildLateLoopOptPipeline(mlir::OpPassManager &pm) {
   pm.addNestedPass<mlir::func::FuncOp>(createTrscLoopUnroll());
 }
 
-void buildLoweringPipeline(mlir::OpPassManager &pm) {
+void buildLoweringPipeline(mlir::OpPassManager &pm,
+                           llvm::StringRef cudaArch) {
   // NVVM pipeline never lowers linalg; turn it into loops first.
   pm.addPass(mlir::createConvertLinalgToLoopsPass());
   mlir::gpu::GPUToNVVMPipelineOptions options;
   options.cubinFormat = "isa";
+  options.cubinTriple = "nvptx64-nvidia-cuda";
+  options.cubinChip = cudaArch.str();
   options.optLevel = 3;
   mlir::gpu::buildLowerToNVVMPassPipeline(pm, options);
 }

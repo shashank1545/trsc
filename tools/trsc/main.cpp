@@ -240,14 +240,15 @@ int main(int argc, char **argv) {
     if (Stage == trsc::OptimizationStage::OptimizedMLIR ||
         Stage == trsc::OptimizationStage::StandardLowering) {
       if (options.MatMulOptLevel > 0) {
-        mlir::trscd::buildMatMulOptPipeline(PM, options.MatMulOptLevel);
+        mlir::trscd::buildMatMulOptPipeline(PM, options.MatMulOptLevel,
+                                            options.Target);
         mlir::trscd::buildCleanupPipeline(PM);
       }
       mlir::trscd::buildLateLoopOptPipeline(PM);
       mlir::trscd::buildCleanupPipeline(PM);
     }
     if (Stage == trsc::OptimizationStage::StandardLowering) {
-      mlir::trscd::buildLoweringPipeline(PM);
+      mlir::trscd::buildLoweringPipeline(PM, options.Target.CudaArch);
     }
 
     if (mlir::failed(PM.run(*Module))) {
@@ -387,10 +388,8 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  // GPU-lowered code references mgpu* symbols; the static wrapper archive
-  // provides them so the binary only needs the system CUDA driver. The
-  // archive is only pulled in when referenced, and --as-needed drops the
-  // libcuda dependency for CPU-only binaries.
+  // GPU-lowered code uses a lazily loaded CUDA driver table. Auto-dispatch
+  // binaries therefore start and run their CPU path without libcuda.
   std::string Output =
       options.OutputFile.empty() ? "a.out" : options.OutputFile;
   std::vector<llvm::StringRef> LinkArgs = {Linker,
@@ -399,7 +398,7 @@ int main(int argc, char **argv) {
                                            Output,
                                            TRSC_CUDA_RUNTIME_LIB,
                                            "-Wl,--as-needed",
-                                           "-lcuda",
+                                           "-ldl",
                                            "-lstdc++",
                                            "-lm"};
 

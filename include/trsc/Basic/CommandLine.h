@@ -3,6 +3,8 @@
 
 #include <string>
 
+#include "trsc/Basic/TargetOptions.h"
+
 namespace trsc {
 
 enum class OptimizationStage {
@@ -26,6 +28,7 @@ struct CompilerOptions {
   bool EmitLLVM = false;
   bool EmitObj = false;
   int MatMulOptLevel = 6;
+  TargetOptions Target;
   OptimizationStage Optim = OptimizationStage::OptimizedMLIR;
 };
 

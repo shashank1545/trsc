@@ -63,8 +63,10 @@ struct LowerTrscdMatMulPass
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(LowerTrscdMatMulPass)
 
   int optLevel;
+  trsc::DeviceMode device;
 
-  LowerTrscdMatMulPass(int optLevel) : optLevel(optLevel) {}
+  LowerTrscdMatMulPass(int optLevel, trsc::DeviceMode device)
+      : optLevel(optLevel), device(device) {}
 
   StringRef getArgument() const final { return "matmul-lower"; }
   StringRef getDescription() const final {
@@ -75,6 +77,15 @@ struct LowerTrscdMatMulPass
     getOperation().walk([&](trscd::GemmOp gemmOp) {
       OpBuilder builder(gemmOp);
       Location loc = gemmOp.getLoc();
+
+      int effectiveLevel = optLevel;
+      if (auto target =
+              gemmOp->getAttrOfType<StringAttr>("trscd.gemm_target")) {
+        if (target.getValue() == "cpu")
+          effectiveLevel = 1;
+      } else if (device == trsc::DeviceMode::CPU) {
+        effectiveLevel = 1;
+      }
 
       Value A = gemmOp.getA();
       Value B = gemmOp.getB();
@@ -102,7 +113,7 @@ struct LowerTrscdMatMulPass
       // GPU levels stage operands in device memory. Zero-copy pinned host
       // memory makes every kernel access cross PCIe (~6 GB/s vs ~128 GB/s
       // GDDR), which caps all kernels at PCIe bandwidth regardless of tiling.
-      bool useDevice = optLevel >= 2 && optLevel <= 8;
+      bool useDevice = effectiveLevel >= 2 && effectiveLevel <= 8;
       // gpu.memcpy/gpu.dealloc only lower to runtime calls in async form
       // (isAsyncWithOneDependency), so chain them on a token and gpu.wait.
       Type tokenType = gpu::AsyncTokenType::get(builder.getContext());
@@ -164,7 +175,7 @@ struct LowerTrscdMatMulPass
                             ValueRange{token});
       };
 
-      if (optLevel == 1) {
+      if (effectiveLevel == 1) {
         Value M = memref::DimOp::create(builder, loc, A, 0);
         Value K = memref::DimOp::create(builder, loc, A, 1);
         Value N = memref::DimOp::create(builder, loc, B, 1);
@@ -210,7 +221,7 @@ struct LowerTrscdMatMulPass
             ValueRange{loopI.getInductionVar(), loopJ.getInductionVar()});
 
         gemmOp.erase();
-      } else if (optLevel == 2) {
+      } else if (effectiveLevel == 2) {
         // Level 2: GMEM coalescing (gpu.launch with tx mapped to contiguous
         // memory)
         Value M = memref::DimOp::create(builder, loc, A, 0);
@@ -299,7 +310,7 @@ struct LowerTrscdMatMulPass
         builder.setInsertionPointAfter(launchOp);
         finishDevice();
         gemmOp.erase();
-      } else if (optLevel == 3) {
+      } else if (effectiveLevel == 3) {
         // Level 3: SMEM caching
         Value M = memref::DimOp::create(builder, loc, A, 0);
         Value K = memref::DimOp::create(builder, loc, A, 1);
@@ -473,7 +484,7 @@ struct LowerTrscdMatMulPass
         builder.setInsertionPointAfter(launchOp);
         finishDevice();
         gemmOp.erase();
-      } else if (optLevel == 4) {
+      } else if (effectiveLevel == 4) {
         // Level 4: 1D Blocktiling
         Value M = memref::DimOp::create(builder, loc, A, 0);
         Value K = memref::DimOp::create(builder, loc, A, 1);
@@ -721,7 +732,7 @@ struct LowerTrscdMatMulPass
         builder.setInsertionPointAfter(launchOp);
         finishDevice();
         gemmOp.erase();
-      } else if (optLevel == 5) {
+      } else if (effectiveLevel == 5) {
         // Level 5: 2D Blocktiling
         Value M = memref::DimOp::create(builder, loc, A, 0);
         Value K = memref::DimOp::create(builder, loc, A, 1);
@@ -1002,7 +1013,7 @@ struct LowerTrscdMatMulPass
         builder.setInsertionPointAfter(launchOp);
         finishDevice();
         gemmOp.erase();
-      } else if (optLevel == 6) {
+      } else if (effectiveLevel == 6) {
         // Level 6: Vectorization. float4 GMEM loads; A is stored transposed
         // in SMEM (BK x BM) so per-thread A fragments are vectorizable too.
         Value M = memref::DimOp::create(builder, loc, A, 0);
@@ -1333,7 +1344,7 @@ struct LowerTrscdMatMulPass
         builder.setInsertionPointAfter(launchOp);
         finishDevice();
         gemmOp.erase();
-      } else if (optLevel == 7) {
+      } else if (effectiveLevel == 7) {
         // Level 7: SMEM double buffering on top of level 6. Shared memory
         // holds two copies of the A/B tiles; while the FMA loop consumes
         // buffer p, the next K-tile is prefetched into registers and then
@@ -1793,7 +1804,7 @@ struct LowerTrscdMatMulPass
         builder.setInsertionPointAfter(launchOp);
         finishDevice();
         gemmOp.erase();
-      } else if (optLevel == 8) {
+      } else if (effectiveLevel == 8) {
         // Level 8: warp tiling on top of level 7's double buffering. The
         // block tile (BM x BN) splits into warp tiles (WM x WN); each warp
         // iterates WNITER subtiles of width WSUBN = WN/WNITER, and its 32
@@ -2352,8 +2363,9 @@ struct LowerTrscdMatMulPass
 namespace mlir {
 namespace trscd {
 
-std::unique_ptr<mlir::Pass> createLowerTrscdMatMulPass(int optLevel) {
-  return std::make_unique<LowerTrscdMatMulPass>(optLevel);
+std::unique_ptr<mlir::Pass>
+createLowerTrscdMatMulPass(int optLevel, trsc::DeviceMode device) {
+  return std::make_unique<LowerTrscdMatMulPass>(optLevel, device);
 }
 
 } // namespace trscd

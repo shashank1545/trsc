@@ -21,6 +21,7 @@ endif()
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 
 add_executable(trsc_unit_tests
+  CommandLineTest.cpp
   Lex/LexerTest.cpp
   Sema/SymbolTableTest.cpp
 )
@@ -37,5 +38,4 @@ target_link_libraries(trsc_unit_tests
 include(GoogleTest)
 gtest_discover_tests(trsc_unit_tests
   PROPERTIES LABELS "Unit")
-
 

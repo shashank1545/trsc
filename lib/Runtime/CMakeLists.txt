@@ -1,10 +1,12 @@
 # Static CUDA runtime wrappers (vendored from mlir/lib/ExecutionEngine) so
 # trsc-produced binaries do not depend on the LLVM build tree's
-# libmlir_cuda_runtime.so. Linked statically into every emitted executable;
-# the only remaining runtime dependency is the system CUDA driver (libcuda).
+# libmlir_cuda_runtime.so. The CUDA driver is loaded lazily so emitted
+# auto-dispatch executables also run on CPU-only systems without libcuda.
 find_package(CUDAToolkit REQUIRED)
 
 add_library(TrscCudaRuntime STATIC CudaRuntimeWrappers.cpp)
+
+target_link_libraries(TrscCudaRuntime PUBLIC ${CMAKE_DL_LIBS})
 
 target_include_directories(TrscCudaRuntime PRIVATE
   ${MLIR_INCLUDE_DIRS}

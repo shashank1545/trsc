@@ -15,6 +15,11 @@
 #include "mlir/ExecutionEngine/CRunnerUtils.h"
 
 #include <cstdio>
+#include <cstring>
+#include <cstdlib>
+#include <dlfcn.h>
+#include <string>
+#include <vector>
 
 #include "cuda.h"
 #include "cuda_bf16.h"
@@ -34,16 +39,172 @@
 #define MLIR_CUDA_WRAPPERS_EXPORT __attribute__((visibility("default")))
 #endif // _WIN32
 
-#define CUDA_REPORT_IF_ERROR(expr)                                             \
-  [](CUresult result) {                                                        \
-    if (!result)                                                               \
-      return;                                                                  \
-    const char *name = nullptr;                                                \
-    cuGetErrorName(result, &name);                                             \
-    if (!name)                                                                 \
-      name = "<unknown>";                                                      \
-    fprintf(stderr, "'%s' failed with '%s'\n", #expr, name);                   \
-  }(expr)
+#define TRSC_CUDA_DRIVER_SYMBOLS(X)                                            \
+  X(GetErrorName, cuGetErrorName)                                              \
+  X(Init, cuInit)                                                              \
+  X(DeviceGetCount, cuDeviceGetCount)                                          \
+  X(DeviceGet, cuDeviceGet)                                                    \
+  X(DeviceGetAttribute, cuDeviceGetAttribute)                                  \
+  X(DevicePrimaryCtxRetain, cuDevicePrimaryCtxRetain)                          \
+  X(CtxPushCurrent, cuCtxPushCurrent)                                          \
+  X(CtxPopCurrent, cuCtxPopCurrent)                                            \
+  X(ModuleLoadData, cuModuleLoadData)                                          \
+  X(ModuleLoadDataEx, cuModuleLoadDataEx)                                      \
+  X(ModuleUnload, cuModuleUnload)                                              \
+  X(ModuleGetFunction, cuModuleGetFunction)                                    \
+  X(FuncSetAttribute, cuFuncSetAttribute)                                      \
+  X(EventCreate, cuEventCreate)                                                \
+  X(EventRecord, cuEventRecord)                                                \
+  X(EventSynchronize, cuEventSynchronize)                                      \
+  X(EventElapsedTime, cuEventElapsedTime)                                      \
+  X(EventDestroy, cuEventDestroy)                                              \
+  X(LaunchKernel, cuLaunchKernel)                                              \
+  X(StreamCreate, cuStreamCreate)                                              \
+  X(StreamDestroy, cuStreamDestroy)                                            \
+  X(StreamSynchronize, cuStreamSynchronize)                                    \
+  X(StreamWaitEvent, cuStreamWaitEvent)                                        \
+  X(MemAllocManaged, cuMemAllocManaged)                                        \
+  X(MemAlloc, cuMemAlloc)                                                      \
+  X(MemFree, cuMemFree)                                                        \
+  X(MemcpyAsync, cuMemcpyAsync)                                                \
+  X(MemsetD32Async, cuMemsetD32Async)                                          \
+  X(MemsetD16Async, cuMemsetD16Async)                                          \
+  X(MemHostRegister, cuMemHostRegister)                                        \
+  X(MemHostUnregister, cuMemHostUnregister)                                    \
+  X(LaunchKernelEx, cuLaunchKernelEx)                                          \
+  X(TensorMapEncodeTiled, cuTensorMapEncodeTiled)                              \
+  X(Memcpy, cuMemcpy)
+
+#define TRSC_STRINGIFY_IMPL(value) #value
+#define TRSC_STRINGIFY(value) TRSC_STRINGIFY_IMPL(value)
+
+namespace {
+
+struct CudaDriverApi {
+  void *Library = nullptr;
+#define TRSC_DECLARE_CUDA_SYMBOL(field, symbol) decltype(&symbol) field = nullptr;
+  TRSC_CUDA_DRIVER_SYMBOLS(TRSC_DECLARE_CUDA_SYMBOL)
+#undef TRSC_DECLARE_CUDA_SYMBOL
+};
+
+CudaDriverApi loadCudaDriver() {
+  CudaDriverApi api;
+  if (std::getenv("TRSC_DISABLE_CUDA"))
+    return api;
+
+  if (const char *path = std::getenv("TRSC_CUDA_DRIVER_PATH")) {
+    api.Library = dlopen(path, RTLD_NOW | RTLD_LOCAL);
+  } else {
+    api.Library = dlopen("libcuda.so.1", RTLD_NOW | RTLD_LOCAL);
+    if (!api.Library)
+      api.Library = dlopen("libcuda.so", RTLD_NOW | RTLD_LOCAL);
+  }
+  if (!api.Library)
+    return api;
+
+#define TRSC_LOAD_CUDA_SYMBOL(field, symbol)                                   \
+  api.field = reinterpret_cast<decltype(api.field)>(                           \
+      dlsym(api.Library, TRSC_STRINGIFY(symbol)));
+  TRSC_CUDA_DRIVER_SYMBOLS(TRSC_LOAD_CUDA_SYMBOL)
+#undef TRSC_LOAD_CUDA_SYMBOL
+  return api;
+}
+
+CudaDriverApi &cudaDriver() {
+  static CudaDriverApi api = loadCudaDriver();
+  return api;
+}
+
+thread_local CUresult cudaRuntimeError = CUDA_SUCCESS;
+thread_local int32_t defaultDevice = -1;
+
+template <typename Function, typename... Args>
+CUresult callCuda(Function function, Args... args) {
+  if (!function)
+    return CUDA_ERROR_NOT_SUPPORTED;
+  return function(args...);
+}
+
+void reportCudaError(CUresult result, const char *expression) {
+  if (result == CUDA_SUCCESS)
+    return;
+  if (cudaRuntimeError == CUDA_SUCCESS)
+    cudaRuntimeError = result;
+
+  const char *name = nullptr;
+  if (cudaDriver().GetErrorName)
+    cudaDriver().GetErrorName(result, &name);
+  fprintf(stderr, "'%s' failed with '%s'\n", expression,
+          name ? name : "<unknown>");
+}
+
+} // namespace
+
+#undef cuCtxPushCurrent
+#undef cuCtxPopCurrent
+#undef cuEventElapsedTime
+#undef cuEventDestroy
+#undef cuStreamDestroy
+#undef cuMemAlloc
+#undef cuMemFree
+#undef cuMemHostRegister
+
+#define cuGetErrorName(...)                                                    \
+  callCuda(cudaDriver().GetErrorName, __VA_ARGS__)
+#define cuInit(...) callCuda(cudaDriver().Init, __VA_ARGS__)
+#define cuDeviceGetCount(...)                                                  \
+  callCuda(cudaDriver().DeviceGetCount, __VA_ARGS__)
+#define cuDeviceGet(...) callCuda(cudaDriver().DeviceGet, __VA_ARGS__)
+#define cuDeviceGetAttribute(...)                                              \
+  callCuda(cudaDriver().DeviceGetAttribute, __VA_ARGS__)
+#define cuDevicePrimaryCtxRetain(...)                                          \
+  callCuda(cudaDriver().DevicePrimaryCtxRetain, __VA_ARGS__)
+#define cuCtxPushCurrent(...)                                                  \
+  callCuda(cudaDriver().CtxPushCurrent, __VA_ARGS__)
+#define cuCtxPopCurrent(...) callCuda(cudaDriver().CtxPopCurrent, __VA_ARGS__)
+#define cuModuleLoadData(...)                                                  \
+  callCuda(cudaDriver().ModuleLoadData, __VA_ARGS__)
+#define cuModuleLoadDataEx(...)                                                \
+  callCuda(cudaDriver().ModuleLoadDataEx, __VA_ARGS__)
+#define cuModuleUnload(...) callCuda(cudaDriver().ModuleUnload, __VA_ARGS__)
+#define cuModuleGetFunction(...)                                               \
+  callCuda(cudaDriver().ModuleGetFunction, __VA_ARGS__)
+#define cuFuncSetAttribute(...)                                                \
+  callCuda(cudaDriver().FuncSetAttribute, __VA_ARGS__)
+#define cuEventCreate(...) callCuda(cudaDriver().EventCreate, __VA_ARGS__)
+#define cuEventRecord(...) callCuda(cudaDriver().EventRecord, __VA_ARGS__)
+#define cuEventSynchronize(...)                                                \
+  callCuda(cudaDriver().EventSynchronize, __VA_ARGS__)
+#define cuEventElapsedTime(...)                                                \
+  callCuda(cudaDriver().EventElapsedTime, __VA_ARGS__)
+#define cuEventDestroy(...) callCuda(cudaDriver().EventDestroy, __VA_ARGS__)
+#define cuLaunchKernel(...) callCuda(cudaDriver().LaunchKernel, __VA_ARGS__)
+#define cuStreamCreate(...) callCuda(cudaDriver().StreamCreate, __VA_ARGS__)
+#define cuStreamDestroy(...) callCuda(cudaDriver().StreamDestroy, __VA_ARGS__)
+#define cuStreamSynchronize(...)                                               \
+  callCuda(cudaDriver().StreamSynchronize, __VA_ARGS__)
+#define cuStreamWaitEvent(...)                                                 \
+  callCuda(cudaDriver().StreamWaitEvent, __VA_ARGS__)
+#define cuMemAllocManaged(...)                                                 \
+  callCuda(cudaDriver().MemAllocManaged, __VA_ARGS__)
+#define cuMemAlloc(...) callCuda(cudaDriver().MemAlloc, __VA_ARGS__)
+#define cuMemFree(...) callCuda(cudaDriver().MemFree, __VA_ARGS__)
+#define cuMemcpyAsync(...) callCuda(cudaDriver().MemcpyAsync, __VA_ARGS__)
+#define cuMemsetD32Async(...)                                                  \
+  callCuda(cudaDriver().MemsetD32Async, __VA_ARGS__)
+#define cuMemsetD16Async(...)                                                  \
+  callCuda(cudaDriver().MemsetD16Async, __VA_ARGS__)
+#define cuMemHostRegister(...)                                                 \
+  callCuda(cudaDriver().MemHostRegister, __VA_ARGS__)
+#define cuMemHostUnregister(...)                                               \
+  callCuda(cudaDriver().MemHostUnregister, __VA_ARGS__)
+#define cuLaunchKernelEx(...)                                                  \
+  callCuda(cudaDriver().LaunchKernelEx, __VA_ARGS__)
+#define cuTensorMapEncodeTiled(...)                                            \
+  callCuda(cudaDriver().TensorMapEncodeTiled, __VA_ARGS__)
+#define cuMemcpy(...) callCuda(cudaDriver().Memcpy, __VA_ARGS__)
+
+#define CUDA_REPORT_IF_ERROR(expr) reportCudaError((expr), #expr)
 
 #define CUSPARSE_REPORT_IF_ERROR(expr)                                         \
   {                                                                            \
@@ -53,8 +214,6 @@
               cusparseGetErrorString(status));                                 \
     }                                                                          \
   }
-
-thread_local static int32_t defaultDevice = 0;
 
 /// Helper method that checks environment value for debugging.
 static bool isDebugEnabled() {
@@ -77,9 +236,61 @@ static bool isProfileEnabled() {
   return isEnabled;
 }
 
+extern "C" MLIR_CUDA_WRAPPERS_EXPORT int32_t
+trsc_cuda_is_available(int32_t minimumCapability) {
+  CudaDriverApi &api = cudaDriver();
+  if (!api.Library || !api.Init || !api.DeviceGetCount || !api.DeviceGet ||
+      !api.DeviceGetAttribute)
+    return 0;
+
+  cudaRuntimeError = CUDA_SUCCESS;
+  if (api.Init(/*flags=*/0) != CUDA_SUCCESS)
+    return 0;
+
+  int32_t count = 0;
+  if (api.DeviceGetCount(&count) != CUDA_SUCCESS)
+    return 0;
+
+  for (int32_t ordinal = 0; ordinal < count; ++ordinal) {
+    CUdevice device = 0;
+    int32_t major = 0;
+    int32_t minor = 0;
+    if (api.DeviceGet(&device, ordinal) != CUDA_SUCCESS)
+      continue;
+    if (api.DeviceGetAttribute(
+            &major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,
+            device) != CUDA_SUCCESS)
+      continue;
+    if (api.DeviceGetAttribute(
+            &minor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,
+            device) != CUDA_SUCCESS)
+      continue;
+    if (major * 10 + minor >= minimumCapability) {
+      defaultDevice = ordinal;
+      return 1;
+    }
+  }
+  return 0;
+}
+
+extern "C" MLIR_CUDA_WRAPPERS_EXPORT void trsc_cuda_reset_error() {
+  cudaRuntimeError = CUDA_SUCCESS;
+}
+
+extern "C" MLIR_CUDA_WRAPPERS_EXPORT int32_t trsc_cuda_had_error() {
+  return cudaRuntimeError != CUDA_SUCCESS;
+}
+
+extern "C" MLIR_CUDA_WRAPPERS_EXPORT void trsc_cuda_abort() {
+  fprintf(stderr,
+          "CUDA execution requested, but no compatible operational NVIDIA "
+          "GPU (compute capability 7.5+) is available\n");
+  std::exit(EXIT_FAILURE);
+}
+
 // Returns default CUdevice
 static CUdevice getDefaultCuDevice() {
-  CUdevice device;
+  CUdevice device = 0;
   CUDA_REPORT_IF_ERROR(cuDeviceGet(&device, /*ordinal=*/defaultDevice));
   return device;
 }
@@ -94,7 +305,7 @@ public:
     // defaultDevice.
     static CUcontext context = [] {
       CUDA_REPORT_IF_ERROR(cuInit(/*flags=*/0));
-      CUcontext ctx;
+      CUcontext ctx = nullptr;
       // Note: this does not affect the current context.
       CUDA_REPORT_IF_ERROR(
           cuDevicePrimaryCtxRetain(&ctx, getDefaultCuDevice()));
@@ -123,47 +334,91 @@ static bool cusparseLt_initiated = false;
 #endif // MLIR_ENABLE_CUDA_CUSPARSELT
 #endif // MLIR_ENABLE_CUDA_CUSPARSE
 
-extern "C" MLIR_CUDA_WRAPPERS_EXPORT
-    CUmodule mgpuModuleLoad(void *data, size_t /*gpuBlobSize*/) {
-  ScopedContext scopedContext;
-  CUmodule module = nullptr;
-  CUDA_REPORT_IF_ERROR(cuModuleLoadData(&module, data));
+namespace {
+
+struct LazyCudaModule {
+  std::vector<char> Data;
+  int OptLevel = 0;
+  bool UseJIT = false;
+  CUmodule Loaded = nullptr;
+};
+
+LazyCudaModule *makeLazyModule(void *data, size_t size, bool useJIT,
+                               int optLevel) {
+  auto *module = new LazyCudaModule;
+  if (size == 0)
+    size = std::strlen(static_cast<const char *>(data)) + 1;
+  auto *bytes = static_cast<const char *>(data);
+  module->Data.assign(bytes, bytes + size);
+  if (module->Data.empty() || module->Data.back() != '\0')
+    module->Data.push_back('\0');
+  module->UseJIT = useJIT;
+  module->OptLevel = optLevel;
   return module;
+}
+
+CUmodule loadLazyModule(LazyCudaModule *module) {
+  if (!module || module->Loaded)
+    return module ? module->Loaded : nullptr;
+
+  ScopedContext scopedContext;
+  if (module->UseJIT) {
+    char jitErrorBuffer[4096] = {0};
+    CUjit_option jitOptions[] = {CU_JIT_ERROR_LOG_BUFFER,
+                                 CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES,
+                                 CU_JIT_OPTIMIZATION_LEVEL};
+    void *jitOptionsVals[] = {
+        jitErrorBuffer, reinterpret_cast<void *>(sizeof(jitErrorBuffer)),
+        reinterpret_cast<void *>(static_cast<intptr_t>(module->OptLevel))};
+    CUresult result = cuModuleLoadDataEx(&module->Loaded, module->Data.data(),
+                                        3, jitOptions, jitOptionsVals);
+    if (result != CUDA_SUCCESS) {
+      if (jitErrorBuffer[0] != '\0')
+        fprintf(stderr, "CUDA JIT compilation failed: %s\n", jitErrorBuffer);
+      CUDA_REPORT_IF_ERROR(result);
+    }
+  } else {
+    CUDA_REPORT_IF_ERROR(
+        cuModuleLoadData(&module->Loaded, module->Data.data()));
+  }
+  return module->Loaded;
+}
+
+} // namespace
+
+extern "C" MLIR_CUDA_WRAPPERS_EXPORT
+    CUmodule mgpuModuleLoad(void *data, size_t gpuBlobSize) {
+  return reinterpret_cast<CUmodule>(
+      makeLazyModule(data, gpuBlobSize, /*useJIT=*/false, /*optLevel=*/0));
 }
 
 extern "C" MLIR_CUDA_WRAPPERS_EXPORT CUmodule
-mgpuModuleLoadJIT(void *data, int optLevel, size_t /*assmeblySize*/) {
-  ScopedContext scopedContext;
-  CUmodule module = nullptr;
-  char jitErrorBuffer[4096] = {0};
-  CUjit_option jitOptions[] = {CU_JIT_ERROR_LOG_BUFFER,
-                               CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES,
-                               CU_JIT_OPTIMIZATION_LEVEL};
-  void *jitOptionsVals[] = {jitErrorBuffer,
-                            reinterpret_cast<void *>(sizeof(jitErrorBuffer)),
-                            reinterpret_cast<void *>(optLevel)};
-
-  CUresult result =
-      cuModuleLoadDataEx(&module, data, 3, jitOptions, jitOptionsVals);
-  if (result) {
-    fprintf(stderr, "JIT compilation failed with: '%s'\n", jitErrorBuffer);
-    CUDA_REPORT_IF_ERROR(result);
-  }
-  return module;
+mgpuModuleLoadJIT(void *data, int optLevel, size_t assemblySize) {
+  return reinterpret_cast<CUmodule>(
+      makeLazyModule(data, assemblySize, /*useJIT=*/true, optLevel));
 }
 
 extern "C" MLIR_CUDA_WRAPPERS_EXPORT void mgpuModuleUnload(CUmodule module) {
+  auto *lazy = reinterpret_cast<LazyCudaModule *>(module);
+  if (!lazy)
+    return;
   // Tolerate CUDA_ERROR_DEINITIALIZED: this can run from a global destructor
   // after the CUDA primary context has already been torn down.
-  CUresult result = cuModuleUnload(module);
-  if (result != CUDA_SUCCESS && result != CUDA_ERROR_DEINITIALIZED)
-    CUDA_REPORT_IF_ERROR(result);
+  if (lazy->Loaded) {
+    CUresult result = cuModuleUnload(lazy->Loaded);
+    if (result != CUDA_SUCCESS && result != CUDA_ERROR_DEINITIALIZED)
+      CUDA_REPORT_IF_ERROR(result);
+  }
+  delete lazy;
 }
 
 extern "C" MLIR_CUDA_WRAPPERS_EXPORT CUfunction
 mgpuModuleGetFunction(CUmodule module, const char *name) {
   CUfunction function = nullptr;
-  CUDA_REPORT_IF_ERROR(cuModuleGetFunction(&function, module, name));
+  auto *lazy = reinterpret_cast<LazyCudaModule *>(module);
+  CUmodule loaded = loadLazyModule(lazy);
+  if (loaded)
+    CUDA_REPORT_IF_ERROR(cuModuleGetFunction(&function, loaded, name));
   return function;
 }
 

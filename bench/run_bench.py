@@ -126,11 +126,12 @@ def compile_variant(trsc: Path, runtime: Path, n: int, level: int,
         log(f"cache hit: {binary.name}")
         return binary
     t0 = time.monotonic()
-    run([trsc, f"--matmul-opt-level={level}", "-emit-obj", src, "-o", obj],
+    run([trsc, "--device=cuda", "--cuda-arch=sm_75",
+         f"--matmul-opt-level={level}", "-emit-obj", src, "-o", obj],
         dry_run=dry_run)
     run(["objcopy", "--redefine-sym", "main=trsc_main", obj], dry_run=dry_run)
     run(["cc", harness, obj, runtime,
-         "-Wl,--as-needed", "-lcuda", "-lstdc++", "-lm", "-o", binary],
+         "-Wl,--as-needed", "-ldl", "-lstdc++", "-lm", "-o", binary],
         dry_run=dry_run)
     if not dry_run:
         log(f"compiled {binary.name} in {time.monotonic() - t0:.1f}s")
