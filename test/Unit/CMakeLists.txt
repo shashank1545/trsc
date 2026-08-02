@@ -21,6 +21,7 @@ endif()
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 
 add_executable(trsc_unit_tests
+  AST/ASTAllocatorTest.cpp
   CommandLineTest.cpp
   Lex/LexerTest.cpp
   Sema/SymbolTableTest.cpp

@@ -1,7 +1,9 @@
 #ifndef TRSC_AST_ASTCONTEXT_H
 #define TRSC_AST_ASTCONTEXT_H
 
+#include "trsc/AST/ASTAllocator.h"
 #include "trsc/AST/QualType.h"
+#include "trsc/Basic/ArrayRef.h"
 #include <memory>
 #include <unordered_map>
 
@@ -9,8 +11,8 @@ namespace trsc {
 
 class ASTContext {
 private:
-  // The 18 builtin singletons, by value. Their addresses are stable for the
-  // lifetime of the context, which is all QualType needs.
+  mutable ASTAllocator Allocator;
+
   U8BuiltinType U8Ty;
   U16BuiltinType U16Ty;
   U32BuiltinType U32Ty;
@@ -56,6 +58,23 @@ public:
   ASTContext(const ASTContext &) = delete;
   ASTContext &operator=(const ASTContext &) = delete;
 
+  void *Allocate(size_t Bytes, size_t Align = 8) const {
+    return Allocator.Allocate(Bytes, Align);
+  }
+
+  template <typename T> ArrayRef<T> allocateArray(const std::vector<T> &Src) {
+    if (Src.empty()) {
+      return ArrayRef<T>();
+    }
+    T *Mem = static_cast<T *>(Allocate(sizeof(T) * Src.size(), alignof(T)));
+    for (size_t I = 0; I < Src.size(); ++I) {
+      new (Mem + I) T(Src[I]);
+    }
+    return ArrayRef<T>(Mem, Src.size());
+  }
+
+  size_t getASTMemory() const { return Allocator.getTotalMemory(); }
+
   QualType getU8Type() const { return QualType(&U8Ty); }
   QualType getU16Type() const { return QualType(&U16Ty); }
   QualType getU32Type() const { return QualType(&U32Ty); }
@@ -87,7 +106,6 @@ public:
   QualType getFunctionType(QualType ReturnType,
                            const std::vector<QualType> &ParamsType);
 
-  // Returns a nullptr where no type fits
   QualType getNullType() const { return QualType(); }
 
   QualType getTypeByName(const std::string &Name) const;
@@ -103,5 +121,13 @@ public:
 };
 
 } // namespace trsc
+
+inline void *operator new(size_t Bytes, const trsc::ASTContext &Ctx,
+                          size_t Align = 8) {
+  return Ctx.Allocate(Bytes, Align);
+}
+
+/// Called only if a node constructor throws; the memory stays in the arena.
+inline void operator delete(void *, const trsc::ASTContext &, size_t) {}
 
 #endif // TRSC_AST_ASTCONTEXT_H
