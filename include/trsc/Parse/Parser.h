@@ -7,13 +7,18 @@
 #include <optional>
 
 namespace trsc {
+class ASTContext;
 class DiagnosticsEngine;
 class Parser {
 public:
-  Parser(DiagnosticsEngine &Diag, const std::vector<Lex::Token> &Tokens);
+  // Ctx owns the AST arena the parser allocates into; constructing a Parser
+  // therefore requires the context to already exist and to outlive the tree.
+  Parser(ASTContext &Ctx, DiagnosticsEngine &Diag,
+         const std::vector<Lex::Token> &Tokens);
   std::unique_ptr<Program> parse();
 
 private:
+  ASTContext &Ctx;
   DiagnosticsEngine &Diag;
   const std::vector<Lex::Token> &Tokens;
   unsigned CurrentTokenIdx;

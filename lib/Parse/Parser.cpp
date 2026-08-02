@@ -14,8 +14,9 @@ template <typename T> T parseNumber(std::string_view Text) {
 }
 } // namespace
 
-Parser::Parser(DiagnosticsEngine &Diag, const std::vector<Lex::Token> &Tokens)
-    : Diag(Diag), Tokens(Tokens), CurrentTokenIdx(0) {}
+Parser::Parser(ASTContext &Ctx, DiagnosticsEngine &Diag,
+               const std::vector<Lex::Token> &Tokens)
+    : Ctx(Ctx), Diag(Diag), Tokens(Tokens), CurrentTokenIdx(0) {}
 
 int Parser::getOperatorPrecedence(Lex::TokenKind Kind) {
   switch (Kind) {

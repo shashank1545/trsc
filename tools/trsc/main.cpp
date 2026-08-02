@@ -89,7 +89,10 @@ int main(int argc, char **argv) {
     std::cerr << "Starting Parsing..." << "\n";
   }
 
-  trsc::Parser Parser(Diag, Tokens);
+  // The context owns the AST arena, so it must outlive every consumer of the
+  // tree - it is constructed before the Parser and destroyed after MLIRGen.
+  trsc::ASTContext Ctx;
+  trsc::Parser Parser(Ctx, Diag, Tokens);
   std::unique_ptr<trsc::Program> AST = Parser.parse();
 
   if (Diag.getNumErrors() > 0) {
@@ -128,7 +131,6 @@ int main(int argc, char **argv) {
   }
 
   trsc::SymbolTable ST(Idents);
-  trsc::ASTContext Ctx;
   trsc::SemanticAnalyzer Sema(Diag, ST, Ctx);
   Sema.analyze(AST.get());
 
