@@ -53,7 +53,7 @@ std::string TypedASTPrinter::getTypeString(Expr *E) {
 }
 
 void TypedASTPrinter::printNodeHeader(const ASTNode *Node,
-                                      const std::string &NodeName) {
+                                      std::string_view NodeName) {
   OS << NodeName << " " << getAddressString(Node) << " "
      << getLocationString(Node);
 }

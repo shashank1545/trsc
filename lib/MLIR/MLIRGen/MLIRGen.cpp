@@ -239,19 +239,15 @@ mlir::Value MLIRGen::getOpMemRef(mlir::Operation *Op) {
 }
 
 mlir::Value MLIRGen::getLValueMemRef(Expr *E) {
+  // NameResolver already resolved and cached the Symbol on the node.
   if (auto *VE = llvm::dyn_cast<VarExpr>(E)) {
-    Symbol *Sym = ST.lookupSymbol(VE->getName(), VE->getScope());
-
+    Symbol *Sym = VE->getSymbol();
     mlir::Operation *RawOp = static_cast<mlir::Operation *>(Sym->Op);
-    auto MemRef = getOpMemRef(RawOp);
-    return MemRef;
+    return getOpMemRef(RawOp);
   } else if (auto *AE = llvm::dyn_cast<ArrayAccessExpr>(E)) {
-    Symbol *Sym = ST.lookupSymbol(AE->getArrayNameExpr()->getName(),
-                                  AE->getArrayNameExpr()->getScope());
-
+    Symbol *Sym = AE->getArrayNameExpr()->getSymbol();
     mlir::Operation *RawOp = static_cast<mlir::Operation *>(Sym->Op);
-    auto MemRef = getOpMemRef(RawOp);
-    return MemRef;
+    return getOpMemRef(RawOp);
   }
   return mlir::Value();
 }
@@ -318,8 +314,7 @@ void MLIRGen::genBlockStmt(BlockStmt *Node) {
 void MLIRGen::genLetStmt(LetStmt *Node) {
   mlir::Location Loc = Builder.getUnknownLoc();
   mlir::Value InitValue;
-  Symbol *Sym =
-      ST.lookupSymbol(Node->getDeclaredVar()->getName(), Node->getScope());
+  Symbol *Sym = Node->getDeclaredVar()->getSymbol();
   QualType VarTy = Sym->Ty;
 
   static constexpr size_t StackThreshold = 1024; // 1 KB
@@ -373,8 +368,7 @@ void MLIRGen::genArrayInitImpl(ArrayExpr *Node, mlir::Value DestMemRef,
     if (Elem->getASTNodeKind() == ASTNodeKind::ASTK_ARRAYEXPR) {
       genArrayInitImpl(static_cast<ArrayExpr *>(Elem), DestMemRef, Indices);
     } else if (Elem->isVar()) {
-      Symbol *Sym = ST.lookupSymbol(static_cast<VarExpr *>(Elem)->getName(),
-                                    Elem->getScope());
+      Symbol *Sym = static_cast<VarExpr *>(Elem)->getSymbol();
       if (Sym && Sym->Ty.isArrayType()) {
         mlir::Operation *RawOp = static_cast<mlir::Operation *>(Sym->Op);
         auto SrcMemRef = getOpMemRef(RawOp);
@@ -497,8 +491,7 @@ mlir::Value MLIRGen::visitRefrExpr(RefrExpr *Node) {
 
 mlir::Value MLIRGen::visitArrayAccessExpr(ArrayAccessExpr *Node) {
   auto Loc = Builder.getUnknownLoc();
-  Symbol *Sym = ST.lookupSymbol(Node->getArrayNameExpr()->getName(),
-                                Node->getArrayNameExpr()->getScope());
+  Symbol *Sym = Node->getArrayNameExpr()->getSymbol();
   mlir::Operation *RawPtr = static_cast<mlir::Operation *>(Sym->Op);
   auto memref = getOpMemRef(RawPtr);
   llvm::SmallVector<mlir::Value, 4> IndexValueVec;
@@ -695,7 +688,7 @@ mlir::Value MLIRGen::visitBoolExpr(BoolExpr *Node) {
 }
 
 mlir::Value MLIRGen::visitVarExpr(VarExpr *Node) {
-  Symbol *Sym = ST.lookupSymbol(Node->getName(), Node->getScope());
+  Symbol *Sym = Node->getSymbol();
   mlir::Operation *RawPtr = static_cast<mlir::Operation *>(Sym->Op);
   auto allocaOp = llvm::dyn_cast<mlir::memref::AllocaOp>(RawPtr);
 
@@ -707,9 +700,9 @@ mlir::Value MLIRGen::visitVarExpr(VarExpr *Node) {
 mlir::Value MLIRGen::visitFunCall(FunCall *Node) {
   auto Loc = Builder.getUnknownLoc();
 
-  std::string FuncName = Node->getFuncName()->getName();
+  const std::string &FuncName = Node->getFuncName()->getName();
 
-  Symbol *FuncSym = ST.lookupSymbol(FuncName);
+  Symbol *FuncSym = Node->getFuncName()->getSymbol();
   if (!FuncSym) {
     llvm::errs() << "Error: Function '" << FuncName
                  << "' not found in symbol table\n";
@@ -754,8 +747,7 @@ void MLIRGen::genParams(const std::vector<FuncDecl::Param> &Params) {
   for (size_t i = 0; i < Params.size(); ++i) {
     const auto &Param = Params[i];
 
-    Symbol *ParamSym = ST.lookupSymbol(Param.ParamName->getName(),
-                                       Param.ParamName->getScope());
+    Symbol *ParamSym = Param.ParamName->getSymbol();
 
     if (!ParamSym) {
       llvm::errs() << "Error: Parameter '" << Param.ParamName->getName()
@@ -782,7 +774,7 @@ void MLIRGen::genParams(const std::vector<FuncDecl::Param> &Params) {
 
 void MLIRGen::genFuncDecl(FuncDecl *Node) {
   auto Loc = Builder.getUnknownLoc();
-  Symbol *Sym = ST.lookupSymbol(Node->getFuncName()->getName());
+  Symbol *Sym = Node->getFuncName()->getSymbol();
   if (!Sym)
     return;
 
@@ -1031,7 +1023,7 @@ void MLIRGen::genForStmt(ForStmt *Node) {
   auto loc = Builder.getUnknownLoc();
   VarExpr *Init = Node->getInit();
   if (Init) {
-    Symbol *Sym = ST.lookupSymbol(Init->getName(), Init->getScope());
+    Symbol *Sym = Init->getSymbol();
     auto InitTy = toMemRefType(Sym->Ty);
     auto AllocaOp = mlir::memref::AllocaOp::create(Builder, loc, InitTy);
     Sym->setOp(static_cast<void *>(AllocaOp));
@@ -1051,7 +1043,7 @@ void MLIRGen::genForStmt(ForStmt *Node) {
   Builder.setInsertionPointToStart(forOp.getBody());
 
   if (Init) {
-    Symbol *Sym = ST.lookupSymbol(Init->getName(), Init->getScope());
+    Symbol *Sym = Init->getSymbol();
     mlir::Value iv = forOp.getInductionVar();
     mlir::Type elemTy = toMLIRType(Sym->Ty);
     mlir::Value ivCast =

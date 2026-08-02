@@ -109,44 +109,6 @@ void TypeChecker::visitArrayExpr(ArrayExpr *Node) {
   }
 }
 
-// void TypeChecker::visitArrayAccessExpr(ArrayAccessExpr *Node) {
-//   Symbol* Sym = ST.lookupSymbol(Node->getArrayNameExpr()->getName(),
-//       Node->getScope());
-//   if(!Sym) Diags.Report(DiagKind::Error, "Array not found in SymbolTable.");
-//   if(!Sym->Ty.isArrayType()) {
-//     Diags.Report(DiagKind::Error, Node->getArrayNameExpr()->getName() +
-//         " is not an array.");
-//   }
-//   const ArrayType* ArrayTyPtr = dynamic_cast<const ArrayType*>(
-//       Sym->Ty.getTypePtr());
-//   bool IsElementArray = true;
-//   for(int I = 0; I < Node->getIndexVector().size(); ++I) {
-//     if(!IsElementArray) {
-//       Diags.Report(DiagKind::Error, "Unable to access " + std::to_string(I) +
-//           " dimension " + "in an array with" + std::to_string(I-1) +
-//           " dimension.");
-//       break;
-//     }
-//     size_t ArraySize = ArrayTyPtr->getArraySize();
-//     if(ArrayTyPtr->getElementType().isArrayType()) {
-//       ArrayTyPtr = dynamic_cast<const ArrayType*>(ArrayTyPtr->
-//           getElementType().getTypePtr());
-//     } else IsElementArray = false;
-//     if(Node->getIndexVector()[I]->isNum()) {
-//       NumExpr* Num = static_cast<NumExpr*>(Node->getIndexVector()[I].get());
-//       if(Num->isInt()) {
-//         int64_t IndexValue = static_cast<IntExpr*>(Num)->getValue();
-//         if(IndexValue < 0) {
-//           Diags.Report(DiagKind::Error, "Array index cannot be negative.");
-//         }
-//         if(IndexValue > ArraySize) {
-//           Diags.Report(DiagKind::Error, "Array index out of bound.");
-//         }
-//       } else Diags.Report(DiagKind::Error, "Index can only be integers.");
-//     }
-//   }
-// }
-
 void TypeChecker::visitArrayAccessExpr(ArrayAccessExpr *Node) {
   Symbol *Sym = Node->getArrayNameExpr()->getSymbol();
   if (!Sym) {
@@ -164,6 +126,8 @@ void TypeChecker::visitArrayAccessExpr(ArrayAccessExpr *Node) {
   const ArrayType *ArrayTyPtr =
       static_cast<const ArrayType *>(Sym->Ty.getTypePtr());
 
+  // The result type falls out of the same walk that checks each index.
+  QualType ResultTy = Sym->Ty;
   for (size_t I = 0; I < Node->getIndexVector().size(); ++I) {
     if (!ArrayTyPtr) {
       Diags.Report(DiagKind::Error,
@@ -195,18 +159,10 @@ void TypeChecker::visitArrayAccessExpr(ArrayAccessExpr *Node) {
       }
     }
 
-    QualType ElemTy = ArrayTyPtr->getElementType();
-    ArrayTyPtr = ElemTy.isArrayType()
-                     ? static_cast<const ArrayType *>(ElemTy.getTypePtr())
+    ResultTy = ArrayTyPtr->getElementType();
+    ArrayTyPtr = ResultTy.isArrayType()
+                     ? static_cast<const ArrayType *>(ResultTy.getTypePtr())
                      : nullptr;
-  }
-
-  QualType ResultTy = Sym->Ty;
-  const auto *Cur = static_cast<const ArrayType *>(ResultTy.getTypePtr());
-  for (size_t I = 0; I < Node->getIndexVector().size(); ++I) {
-    ResultTy = Cur->getElementType();
-    if (ResultTy.isArrayType())
-      Cur = static_cast<const ArrayType *>(ResultTy.getTypePtr());
   }
 
   Node->setType(ResultTy);
@@ -579,7 +535,7 @@ void TypeChecker::visitFunCall(FunCall *Node) {
   }
   QualType ReturnExpType = FuncExpType.getReturnType();
   Node->setType(ReturnExpType);
-  std::vector<QualType> ParamsExpType = FuncExpType.getParamsType();
+  const std::vector<QualType> &ParamsExpType = FuncExpType.getParamsType();
 
   // FIXME :: Currently this matches all the params even if some is defined.
   // While not ideal it works and i dont have to care about the ordering of

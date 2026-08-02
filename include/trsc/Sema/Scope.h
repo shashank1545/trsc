@@ -4,9 +4,11 @@
 #include "trsc/AST/QualType.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 namespace trsc {
 
@@ -89,7 +91,9 @@ public:
 
   bool canReturn() const { return Kind == ScopeKind::SCOPE_FUNCTION; }
 
-  Symbol *addSymbol(const IdentifierInfo *Name, Symbol *Sym);
+  // Inserts without probing for duplicates; SymbolTable::addSymbol has
+  // already rejected redefinitions before the Symbol reaches the arena.
+  Symbol *addSymbolUnchecked(const IdentifierInfo *Name, Symbol *Sym);
   Symbol *lookupSymbolLocal(const IdentifierInfo *Name);
 };
 

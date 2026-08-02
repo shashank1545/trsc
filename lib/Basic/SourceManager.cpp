@@ -39,6 +39,7 @@ const char *SourceManager::getBufferEnd() const {
 void SourceManager::buildLineStartCache() {
 
   LineStartCache.clear();
+  LastLineIdx = 0;
 
   LineStartCache.push_back(getBufferStart());
 
@@ -54,13 +55,32 @@ void SourceManager::buildLineStartCache() {
 }
 
 SourceLocation SourceManager::getLocation(const char *Ptr) const {
+  // Fast path: same line as the previous query, or the next one.
+  auto onLine = [this, Ptr](size_t Idx) {
+    return Ptr >= LineStartCache[Idx] &&
+           (Idx + 1 == LineStartCache.size() || Ptr < LineStartCache[Idx + 1]);
+  };
+  if (LastLineIdx < LineStartCache.size()) {
+    if (onLine(LastLineIdx)) {
+      return SourceLocation(MainFilePath.c_str(), LastLineIdx + 1,
+                            (Ptr - LineStartCache[LastLineIdx]) + 1);
+    }
+    if (LastLineIdx + 1 < LineStartCache.size() && onLine(LastLineIdx + 1)) {
+      ++LastLineIdx;
+      return SourceLocation(MainFilePath.c_str(), LastLineIdx + 1,
+                            (Ptr - LineStartCache[LastLineIdx]) + 1);
+    }
+  }
+
   auto it = std::lower_bound(LineStartCache.begin(), LineStartCache.end(), Ptr);
 
-  if (it != LineStartCache.begin() && *it > Ptr) {
+  if (it != LineStartCache.begin() &&
+      (it == LineStartCache.end() || *it > Ptr)) {
     --it;
   }
 
-  unsigned Line = std::distance(LineStartCache.begin(), it) + 1;
+  LastLineIdx = std::distance(LineStartCache.begin(), it);
+  unsigned Line = LastLineIdx + 1;
   unsigned Column = (Ptr - *it) + 1;
 
   return SourceLocation(MainFilePath.c_str(), Line, Column);

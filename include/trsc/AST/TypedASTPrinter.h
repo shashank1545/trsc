@@ -4,6 +4,8 @@
 
 #include "trsc/AST/ASTVisitor.h"
 
+#include <string_view>
+
 namespace trsc {
 class TypedASTPrinter : public ASTVisitor<TypedASTPrinter> {
 private:
@@ -12,7 +14,7 @@ private:
   std::vector<bool> IsLastStack;
 
   void printIndent(bool isLast);
-  void printNodeHeader(const ASTNode *Node, const std::string &NodeName);
+  void printNodeHeader(const ASTNode *Node, std::string_view NodeName);
   std::string getLocationString(const ASTNode *Node);
   std::string getTypeString(Expr *E);
   std::string getAddressString(const void *Ptr);

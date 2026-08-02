@@ -40,9 +40,7 @@ void Scope::buildIndex() {
     Index->emplace(Entry.first, Entry.second);
 }
 
-Symbol *Scope::addSymbol(const IdentifierInfo *Name, Symbol *Sym) {
-  if (lookupSymbolLocal(Name))
-    return nullptr;
+Symbol *Scope::addSymbolUnchecked(const IdentifierInfo *Name, Symbol *Sym) {
   Symbols.emplace_back(Name, Sym);
   if (Index)
     Index->emplace(Name, Sym);

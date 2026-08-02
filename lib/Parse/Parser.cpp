@@ -1,7 +1,18 @@
 #include "trsc/Parse/Parser.h"
 #include "trsc/Basic/Diagnostics.h"
 
+#include <charconv>
+
 namespace trsc {
+
+namespace {
+// std::from_chars on the token's view: no temporary std::string per literal.
+template <typename T> T parseNumber(std::string_view Text) {
+  T Value{};
+  std::from_chars(Text.data(), Text.data() + Text.size(), Value);
+  return Value;
+}
+} // namespace
 
 Parser::Parser(DiagnosticsEngine &Diag, const std::vector<Lex::Token> &Tokens)
     : Diag(Diag), Tokens(Tokens), CurrentTokenIdx(0) {}
@@ -131,14 +142,14 @@ std::unique_ptr<Expr> Parser::parsePrimary() {
   switch (currentToken().getKind()) {
   case Lex::TokenKind::LT_FLOAT: {
     Lex::Token NumToken = consume(Lex::TokenKind::LT_FLOAT);
-    double Val = std::stod(std::string(NumToken.getText()));
+    double Val = parseNumber<double>(NumToken.getText());
     EndLoc = currentToken().getLocation();
     Range = SourceRange(StartLoc, EndLoc);
     return std::make_unique<FloatExpr>(Val, Range);
   }
   case Lex::TokenKind::LT_INTEGER: {
     Lex::Token NumToken = consume(Lex::TokenKind::LT_INTEGER);
-    int64_t Val = std::stoll(std::string(NumToken.getText()));
+    int64_t Val = parseNumber<int64_t>(NumToken.getText());
     EndLoc = currentToken().getLocation();
     Range = SourceRange(StartLoc, EndLoc);
     return std::make_unique<IntExpr>(Val, Range);
@@ -393,7 +404,7 @@ std::unique_ptr<Type> Parser::parseType() {
   } else if (currentToken().getKind() == Lex::TokenKind::OP_AMP) {
     consume(Lex::TokenKind::OP_AMP);
     bool IsMut;
-    if (std::string(currentToken().getText()) == "mut") {
+    if (currentToken().is(Lex::TokenKind::KW_MUT)) {
       consume(Lex::TokenKind::KW_MUT);
       IsMut = true;
     } else {
@@ -420,7 +431,7 @@ std::unique_ptr<Type> Parser::parseType() {
                   currentToken().getLocation());
       return nullptr;
     }
-    size_t Size = std::stoull(std::string(currentToken().getText()));
+    size_t Size = parseNumber<size_t>(currentToken().getText());
     consume(Lex::TokenKind::LT_INTEGER);
     if (!expectToken(Lex::TokenKind::DE_RBRACKET))
       return nullptr;

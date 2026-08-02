@@ -26,13 +26,14 @@ void SymbolTable::exitScope() {
 }
 
 Symbol *SymbolTable::addSymbol(const IdentifierInfo *Name, Symbol Sym) {
-  // Check for redefinition before touching the arena so a rejected insert does
-  // not leave an orphaned Symbol behind.
+  // Single redefinition probe lives here, before touching the arena so a
+  // rejected insert does not leave an orphaned Symbol behind;
+  // addSymbolUnchecked skips Scope's own duplicate check.
   if (CurrentScope->lookupSymbolLocal(Name))
     return nullptr;
   Sym.Name = Name;
   SymbolArena.push_back(Sym);
-  return CurrentScope->addSymbol(Name, &SymbolArena.back());
+  return CurrentScope->addSymbolUnchecked(Name, &SymbolArena.back());
 }
 
 Symbol *SymbolTable::lookupSymbol(const IdentifierInfo *Name) {

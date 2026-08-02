@@ -30,6 +30,11 @@ private:
   std::vector<char> Buffer;
 
   std::vector<const char *> LineStartCache;
+  // The lexer queries locations in buffer order, so the answer is almost
+  // always the line of the previous query or the one after it. Remembering
+  // the last hit turns the common case into two comparisons instead of a
+  // binary search per token.
+  mutable size_t LastLineIdx = 0;
   void buildLineStartCache();
 };
 } // namespace trsc
