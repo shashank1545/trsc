@@ -122,12 +122,4 @@ public:
 
 } // namespace trsc
 
-inline void *operator new(size_t Bytes, const trsc::ASTContext &Ctx,
-                          size_t Align = 8) {
-  return Ctx.Allocate(Bytes, Align);
-}
-
-/// Called only if a node constructor throws; the memory stays in the arena.
-inline void operator delete(void *, const trsc::ASTContext &, size_t) {}
-
 #endif // TRSC_AST_ASTCONTEXT_H

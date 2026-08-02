@@ -73,7 +73,7 @@ void TypedASTPrinter::visitProgram(Program *Node) {
     }
 
     printIndent(isLast);
-    visit(Statements[i].get());
+    visit(Statements[i]);
 
     if (IndentLevel > 0 && !IsLastStack.empty()) {
       IsLastStack.pop_back();
@@ -283,7 +283,7 @@ void TypedASTPrinter::visitBlockStmt(BlockStmt *Node) {
     }
 
     printIndent(isLast);
-    visit(Statements[i].get());
+    visit(Statements[i]);
 
     if (IndentLevel > 0 && !IsLastStack.empty()) {
       IsLastStack.pop_back();
@@ -363,7 +363,7 @@ void TypedASTPrinter::visitFuncDecl(FuncDecl *Node) {
         IsLastStack.push_back(false);
       }
       printIndent(false);
-      visit(Params[i].ParamName.get());
+      visit(Params[i].ParamName);
       if (IndentLevel > 0 && !IsLastStack.empty()) {
         IsLastStack.pop_back();
       }
@@ -375,7 +375,7 @@ void TypedASTPrinter::visitFuncDecl(FuncDecl *Node) {
         IsLastStack.push_back(true);
       }
       printIndent(true);
-      visit(Params[i].ParamType.get());
+      visit(Params[i].ParamType);
       if (IndentLevel > 0 && !IsLastStack.empty()) {
         IsLastStack.pop_back();
       }
@@ -438,7 +438,7 @@ void TypedASTPrinter::visitFunCall(FunCall *Node) {
       }
 
       printIndent(isLast);
-      visit(Params[i].get());
+      visit(Params[i]);
 
       if (IndentLevel > 0 && !IsLastStack.empty()) {
         IsLastStack.pop_back();
@@ -539,7 +539,7 @@ void TypedASTPrinter::visitArrayExpr(ArrayExpr *Node) {
     IsLastStack.resize(IndentLevel - 1);
     IsLastStack.push_back(IsLast);
     printIndent(IsLast);
-    visit(Elems[I].get());
+    visit(Elems[I]);
     IsLastStack.pop_back();
   }
 
@@ -571,7 +571,7 @@ void TypedASTPrinter::visitArrayAccessExpr(ArrayAccessExpr *Node) {
     IsLastStack.push_back(IsLast);
     printIndent(IsLast);
     OS << "[" << I << "] ";
-    visit(Indices[I].get());
+    visit(Indices[I]);
     IsLastStack.pop_back();
   }
   IndentLevel--;

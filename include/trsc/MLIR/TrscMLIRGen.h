@@ -32,7 +32,7 @@ public:
 
   mlir::OwningOpRef<mlir::ModuleOp> genModule(trsc::Program &Prog);
 
-  void genParams(const std::vector<FuncDecl::Param> &Params);
+  void genParams(ArrayRef<FuncDecl::Param> Params);
   void genFuncDecl(FuncDecl *Node);
   void genBlockStmt(BlockStmt *Stmt);
   void genLetStmt(LetStmt *Node);

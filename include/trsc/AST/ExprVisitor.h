@@ -87,23 +87,23 @@ public:
   }
 
   RetTy visitFunCall(FunCall *E) {
-    for (const auto &Arg : E->getParams()) {
-      getDerived().visit(Arg.get());
+    for (Expr *Arg : E->getParams()) {
+      getDerived().visit(Arg);
     }
     return RetTy();
   }
 
   RetTy visitArrayExpr(ArrayExpr *E) {
-    for (const auto &Child : E->getChildElemExprVec()) {
-      getDerived().visit(Child.get());
+    for (Expr *Child : E->getChildElemExprVec()) {
+      getDerived().visit(Child);
     }
     return RetTy();
   }
 
   RetTy visitArrayAccessExpr(ArrayAccessExpr *E) {
     getDerived().visit(E->getArrayNameExpr());
-    for (const auto &Index : E->getIndexVector()) {
-      getDerived().visit(Index.get());
+    for (Expr *Index : E->getIndexVector()) {
+      getDerived().visit(Index);
     }
     return RetTy();
   }

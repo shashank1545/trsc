@@ -2,6 +2,7 @@
 #include "trsc/Basic/Diagnostics.h"
 
 #include <charconv>
+#include <cstdint>
 
 namespace trsc {
 
@@ -120,23 +121,23 @@ bool Parser::expectToken(Lex::TokenKind Kind) {
   return true;
 }
 
-std::unique_ptr<Program> Parser::parse() {
+Program *Parser::parse() {
   SourceLocation Start = currentToken().getLocation();
-  std::vector<std::unique_ptr<Stmt>> Statements;
+  std::vector<Stmt *> Statements;
   while (!isAtEnd()) {
-    std::unique_ptr<trsc::Stmt> PStmt = parseStmt();
+    Stmt *PStmt = parseStmt();
     if (PStmt) {
-      Statements.push_back(std::move(PStmt));
+      Statements.push_back(PStmt);
     } else
       advance();
   }
 
   SourceLocation End = currentToken().getLocation();
   SourceRange LocRange = SourceRange(Start, End);
-  return std::make_unique<Program>(LocRange, std::move(Statements));
+  return new (Ctx) Program(Ctx, LocRange, Statements);
 }
 
-std::unique_ptr<Expr> Parser::parsePrimary() {
+Expr *Parser::parsePrimary() {
   SourceLocation StartLoc = currentToken().getLocation();
   SourceLocation EndLoc;
   SourceRange Range;
@@ -146,26 +147,26 @@ std::unique_ptr<Expr> Parser::parsePrimary() {
     double Val = parseNumber<double>(NumToken.getText());
     EndLoc = currentToken().getLocation();
     Range = SourceRange(StartLoc, EndLoc);
-    return std::make_unique<FloatExpr>(Val, Range);
+    return new (Ctx) FloatExpr(Val, Range);
   }
   case Lex::TokenKind::LT_INTEGER: {
     Lex::Token NumToken = consume(Lex::TokenKind::LT_INTEGER);
     int64_t Val = parseNumber<int64_t>(NumToken.getText());
     EndLoc = currentToken().getLocation();
     Range = SourceRange(StartLoc, EndLoc);
-    return std::make_unique<IntExpr>(Val, Range);
+    return new (Ctx) IntExpr(Val, Range);
   }
   case Lex::TokenKind::KW_TRUE: {
     consume(Lex::TokenKind::KW_TRUE);
     EndLoc = currentToken().getLocation();
     Range = SourceRange(StartLoc, EndLoc);
-    return std::make_unique<BoolExpr>(true, Range);
+    return new (Ctx) BoolExpr(true, Range);
   }
   case Lex::TokenKind::KW_FALSE: {
     consume(Lex::TokenKind::KW_FALSE);
     EndLoc = currentToken().getLocation();
     Range = SourceRange(StartLoc, EndLoc);
-    return std::make_unique<BoolExpr>(false, Range);
+    return new (Ctx) BoolExpr(false, Range);
   }
   case Lex::TokenKind::IDENTIFIER: {
     Lex::Token IdentToken = consume(Lex::TokenKind::IDENTIFIER);
@@ -176,12 +177,12 @@ std::unique_ptr<Expr> Parser::parsePrimary() {
     } else {
       EndLoc = currentToken().getLocation();
       Range = SourceRange(StartLoc, EndLoc);
-      return std::make_unique<VarExpr>(IdentToken.getIdentifierInfo(), Range);
+      return new (Ctx) VarExpr(IdentToken.getIdentifierInfo(), Range);
     }
   }
   case Lex::TokenKind::DE_LPAREN: {
     consume(Lex::TokenKind::DE_LPAREN);
-    auto E = parseExpr(0);
+    Expr *E = parseExpr(0);
     if (!E)
       return nullptr;
     if (currentToken().getKind() != Lex::TokenKind::DE_RPAREN) {
@@ -192,7 +193,7 @@ std::unique_ptr<Expr> Parser::parsePrimary() {
     return E;
   }
   case Lex::TokenKind::DE_LBRACKET: {
-    std::vector<int> Shape;
+    std::vector<int64_t> Shape;
     return parseArray(Shape);
   }
   case Lex::TokenKind::OP_AMP: {
@@ -202,10 +203,10 @@ std::unique_ptr<Expr> Parser::parsePrimary() {
       consume(Lex::TokenKind::KW_MUT);
       IsMut = true;
     }
-    std::unique_ptr<Expr> ReferentExpr = parsePrimary();
+    Expr *ReferentExpr = parsePrimary();
     EndLoc = currentToken().getLocation();
     Range = SourceRange(StartLoc, EndLoc);
-    return std::make_unique<RefrExpr>(std::move(ReferentExpr), IsMut, Range);
+    return new (Ctx) RefrExpr(ReferentExpr, IsMut, Range);
   }
   default:
     Diag.Report(DiagKind::Error, "Expected an expression",
@@ -214,20 +215,19 @@ std::unique_ptr<Expr> Parser::parsePrimary() {
   }
 }
 
-std::unique_ptr<Expr> Parser::parseExpr(int MinPrecedence) {
+Expr *Parser::parseExpr(int MinPrecedence) {
   SourceLocation StartLoc = currentToken().getLocation();
   SourceLocation EndLoc;
   SourceRange Range;
-  auto LHS = parsePrimary();
+  Expr *LHS = parsePrimary();
   if (!LHS)
     return nullptr;
-  std::unique_ptr<Type> ToType;
   if (currentToken().getKind() == Lex::TokenKind::KW_AS) {
     consume(Lex::TokenKind::KW_AS);
-    ToType = parseType();
+    Type *ToType = parseType();
     EndLoc = currentToken().getLocation();
     Range = SourceRange(StartLoc, EndLoc);
-    LHS = std::make_unique<ASExpr>(std::move(LHS), std::move(ToType), Range);
+    LHS = new (Ctx) ASExpr(LHS, ToType, Range);
   }
   while (true) {
     Lex::TokenKind CurrentOp = currentToken().getKind();
@@ -235,14 +235,13 @@ std::unique_ptr<Expr> Parser::parseExpr(int MinPrecedence) {
     if (CurrentPrecedence < MinPrecedence)
       break;
     consume(CurrentOp);
-    auto RHS = parseExpr(CurrentPrecedence + 1);
+    Expr *RHS = parseExpr(CurrentPrecedence + 1);
     if (!RHS)
       return nullptr;
 
     EndLoc = currentToken().getLocation();
     Range = SourceRange(StartLoc, EndLoc);
-    LHS = std::make_unique<BinExpr>(CurrentOp, std::move(LHS), std::move(RHS),
-                                    Range);
+    LHS = new (Ctx) BinExpr(CurrentOp, LHS, RHS, Range);
   }
   return LHS;
 }
@@ -250,52 +249,45 @@ std::unique_ptr<Expr> Parser::parseExpr(int MinPrecedence) {
 // Case1: [elem; num]
 // Case2: [elem, elem, .. elem]
 // Mix: [[elem1;num1], [elem2;num2], [elem, elem... elem]];
-std::unique_ptr<ArrayExpr> Parser::parseArray(std::vector<int> Shape) {
+ArrayExpr *Parser::parseArray(std::vector<int64_t> Shape) {
   consume(Lex::TokenKind::DE_LBRACKET);
-  std::vector<std::unique_ptr<Expr>> ChildElemExprVec;
-  std::unique_ptr<Expr> BaseExpr = parsePrimary();
-  std::unique_ptr<IntExpr> CountExpr;
-  ChildElemExprVec.emplace_back(std::move(BaseExpr));
+  std::vector<Expr *> ChildElemExprVec;
+  Expr *BaseExpr = parsePrimary();
+  IntExpr *CountExpr = nullptr;
+  ChildElemExprVec.push_back(BaseExpr);
   if (currentToken().getKind() == Lex::TokenKind::DE_SEMICOLON) {
     consume(Lex::TokenKind::DE_SEMICOLON);
-    CountExpr = std::unique_ptr<IntExpr>(
-        static_cast<IntExpr *>(parsePrimary().release()));
+    CountExpr = static_cast<IntExpr *>(parsePrimary());
     expectToken(Lex::TokenKind::DE_RBRACKET);
-    Shape.emplace_back(CountExpr->getValue());
-    return std::make_unique<ArrayExpr>(std::move(ChildElemExprVec),
-                                       std::move(CountExpr), std::move(Shape));
+    Shape.push_back(CountExpr->getValue());
+    return new (Ctx) ArrayExpr(Ctx, ChildElemExprVec, CountExpr, Shape);
   }
   while (currentToken().getKind() != Lex::TokenKind::DE_RBRACKET) {
     expectToken(Lex::TokenKind::DE_COMMA);
-    std::unique_ptr<Expr> ElemExpr = parsePrimary();
-    ChildElemExprVec.emplace_back(std::move(ElemExpr));
+    ChildElemExprVec.push_back(parsePrimary());
   }
   consume(Lex::TokenKind::DE_RBRACKET);
-  CountExpr = std::make_unique<IntExpr>(ChildElemExprVec.size());
-  Shape.emplace_back(CountExpr->getValue());
-  return std::make_unique<ArrayExpr>(std::move(ChildElemExprVec),
-                                     std::move(CountExpr), std::move(Shape));
+  CountExpr = new (Ctx) IntExpr(static_cast<int64_t>(ChildElemExprVec.size()));
+  Shape.push_back(CountExpr->getValue());
+  return new (Ctx) ArrayExpr(Ctx, ChildElemExprVec, CountExpr, Shape);
 }
 
-std::unique_ptr<ArrayAccessExpr>
-Parser::parseArrayAccessExpr(Lex::Token IndentToken) {
-  std::vector<std::unique_ptr<Expr>> IndexExprVec;
+ArrayAccessExpr *Parser::parseArrayAccessExpr(Lex::Token IndentToken) {
+  std::vector<Expr *> IndexExprVec;
   while (true) {
     if (currentToken().getKind() != Lex::TokenKind::DE_LBRACKET)
       break;
     consume(Lex::TokenKind::DE_LBRACKET);
-    IndexExprVec.emplace_back(parsePrimary());
+    IndexExprVec.push_back(parsePrimary());
     expectToken(Lex::TokenKind::DE_RBRACKET);
   }
-  std::unique_ptr<VarExpr> ArrayExprName;
-  ArrayExprName = std::make_unique<VarExpr>(IndentToken.getIdentifierInfo());
-  return std::make_unique<ArrayAccessExpr>(std::move(ArrayExprName),
-                                           std::move(IndexExprVec));
+  VarExpr *ArrayExprName = new (Ctx) VarExpr(IndentToken.getIdentifierInfo());
+  return new (Ctx) ArrayAccessExpr(Ctx, ArrayExprName, IndexExprVec);
 }
 
-std::unique_ptr<RangeExpr> Parser::parseRangeExpr() {
+RangeExpr *Parser::parseRangeExpr() {
   SourceLocation StartLoc = currentToken().getLocation();
-  std::unique_ptr<Expr> Start = parsePrimary();
+  Expr *Start = parsePrimary();
   bool IsInclusive;
   if (currentToken().getKind() == Lex::TokenKind::OP_DOTDOT) {
     IsInclusive = false;
@@ -305,14 +297,13 @@ std::unique_ptr<RangeExpr> Parser::parseRangeExpr() {
     consume(Lex::TokenKind::OP_DOTDOTEQUAL);
   } else
     return nullptr;
-  std::unique_ptr<Expr> End = parsePrimary();
+  Expr *End = parsePrimary();
   SourceLocation EndLoc = currentToken().getLocation();
   SourceRange Range = SourceRange(StartLoc, EndLoc);
-  return std::make_unique<RangeExpr>(IsInclusive, std::move(Start),
-                                     std::move(End), Range);
+  return new (Ctx) RangeExpr(IsInclusive, Start, End, Range);
 }
 
-std::unique_ptr<Stmt> Parser::parseStmt() {
+Stmt *Parser::parseStmt() {
   switch (currentToken().getKind()) {
   case Lex::TokenKind::KW_LET:
     return parseLetStmt();
@@ -333,7 +324,7 @@ std::unique_ptr<Stmt> Parser::parseStmt() {
   }
 }
 
-std::unique_ptr<LetStmt> Parser::parseLetStmt() {
+LetStmt *Parser::parseLetStmt() {
   SourceLocation Start = currentToken().getLocation();
   SourceLocation End;
   SourceRange Range;
@@ -347,14 +338,13 @@ std::unique_ptr<LetStmt> Parser::parseLetStmt() {
     reportExpectedError(Lex::TokenKind::IDENTIFIER);
     return nullptr;
   }
-  auto DeclRawPtr = parsePrimary().release();
-  std::unique_ptr<VarExpr> DeclaredVar(static_cast<VarExpr *>(DeclRawPtr));
-  std::unique_ptr<Type> VarType;
+  VarExpr *DeclaredVar = static_cast<VarExpr *>(parsePrimary());
+  Type *VarType = nullptr;
   if (currentToken().getKind() == Lex::TokenKind::DE_COLON) {
     consume(Lex::TokenKind::DE_COLON);
     VarType = parseType();
   }
-  std::unique_ptr<Expr> Initializer;
+  Expr *Initializer = nullptr;
   if (currentToken().getKind() == Lex::TokenKind::DE_SEMICOLON) {
     consume(Lex::TokenKind::DE_SEMICOLON);
     End = currentToken().getLocation();
@@ -374,12 +364,10 @@ std::unique_ptr<LetStmt> Parser::parseLetStmt() {
     End = currentToken().getLocation();
     Range = SourceRange(Start, End);
   }
-  return std::make_unique<trsc::LetStmt>(IsMut, std::move(DeclaredVar),
-                                         std::move(VarType),
-                                         std::move(Initializer), Range);
+  return new (Ctx) LetStmt(IsMut, DeclaredVar, VarType, Initializer, Range);
 }
 
-std::unique_ptr<Type> Parser::parseType() {
+Type *Parser::parseType() {
   SourceLocation Start = currentToken().getLocation();
   SourceLocation End;
   SourceRange Range;
@@ -396,12 +384,12 @@ std::unique_ptr<Type> Parser::parseType() {
       Diag.Report(DiagKind::Error,
                   "Raw pointer types can only be mut or const.");
     }
-    auto Pointee = parseType();
+    Type *Pointee = parseType();
     if (!Pointee)
       return nullptr;
     End = currentToken().getLocation();
     Range = SourceRange(Start, End);
-    return std::make_unique<PointerTypeName>(std::move(Pointee), IsMut, Range);
+    return new (Ctx) PointerTypeName(Pointee, IsMut, Range);
   } else if (currentToken().getKind() == Lex::TokenKind::OP_AMP) {
     consume(Lex::TokenKind::OP_AMP);
     bool IsMut;
@@ -411,16 +399,15 @@ std::unique_ptr<Type> Parser::parseType() {
     } else {
       IsMut = false;
     }
-    auto Referent = parseType();
+    Type *Referent = parseType();
     if (!Referent)
       return nullptr;
     End = currentToken().getLocation();
     Range = SourceRange(Start, End);
-    return std::make_unique<ReferenceTypeName>(std::move(Referent), IsMut,
-                                               Range);
+    return new (Ctx) ReferenceTypeName(Referent, IsMut, Range);
   } else if (currentToken().getKind() == Lex::TokenKind::DE_LBRACKET) {
     consume(Lex::TokenKind::DE_LBRACKET);
-    auto Elemente = parseType();
+    Type *Elemente = parseType();
     if (!Elemente)
       return nullptr;
 
@@ -438,7 +425,7 @@ std::unique_ptr<Type> Parser::parseType() {
       return nullptr;
     End = currentToken().getLocation();
     Range = SourceRange(Start, End);
-    return std::make_unique<ArrayTypeName>(std::move(Elemente), Size, Range);
+    return new (Ctx) ArrayTypeName(Elemente, Size, Range);
   } else {
     if (currentToken().getKind() != Lex::TokenKind::IDENTIFIER) {
       reportExpectedError(Lex::TokenKind::IDENTIFIER);
@@ -447,15 +434,13 @@ std::unique_ptr<Type> Parser::parseType() {
     Lex::Token TypeNameToken = consume(Lex::TokenKind::IDENTIFIER);
     End = currentToken().getLocation();
     Range = SourceRange(Start, End);
-    return std::make_unique<TypeName>(ASTNodeKind::ASTK_TYPENAME,
-                                      std::string(TypeNameToken.getText()),
-                                      Range);
+    return new (Ctx) TypeName(TypeNameToken.getIdentifierInfo(), Range);
   }
 }
 
-std::unique_ptr<ExprStmt> Parser::parseExprStmt() {
+ExprStmt *Parser::parseExprStmt() {
   SourceLocation Start = currentToken().getLocation();
-  auto Expression = parseExpr(0);
+  Expr *Expression = parseExpr(0);
   if (!Expression)
     return nullptr;
 
@@ -464,18 +449,18 @@ std::unique_ptr<ExprStmt> Parser::parseExprStmt() {
   if (!expectToken(Lex::TokenKind::DE_SEMICOLON))
     return nullptr;
 
-  return std::make_unique<ExprStmt>(Range, std::move(Expression));
+  return new (Ctx) ExprStmt(Range, Expression);
 }
 
-std::unique_ptr<BlockStmt> Parser::parseBlockStmt() {
+BlockStmt *Parser::parseBlockStmt() {
   SourceLocation Start = currentToken().getLocation();
   consume(Lex::TokenKind::DE_LBRACE);
 
-  std::vector<std::unique_ptr<Stmt>> Statements;
+  std::vector<Stmt *> Statements;
   while (currentToken().getKind() != Lex::TokenKind::DE_RBRACE && !isAtEnd()) {
-    auto S = parseStmt();
+    Stmt *S = parseStmt();
     if (S) {
-      Statements.push_back(std::move(S));
+      Statements.push_back(S);
     } else {
       while (currentToken().getKind() != Lex::TokenKind::DE_RBRACE &&
              currentToken().getKind() != Lex::TokenKind::DE_SEMICOLON &&
@@ -491,22 +476,22 @@ std::unique_ptr<BlockStmt> Parser::parseBlockStmt() {
   if (!expectToken(Lex::TokenKind::DE_RBRACE))
     return nullptr;
   SourceRange Range = SourceRange(Start, End);
-  return std::make_unique<BlockStmt>(Range, std::move(Statements));
+  return new (Ctx) BlockStmt(Ctx, Range, Statements);
 }
 
-std::unique_ptr<IfStmt> Parser::parseIfStmt() {
+IfStmt *Parser::parseIfStmt() {
   SourceLocation Start = currentToken().getLocation();
   consume(Lex::TokenKind::KW_IF);
 
-  std::unique_ptr<Expr> Condition = parseExpr(0);
+  Expr *Condition = parseExpr(0);
   if (!Condition)
     return nullptr;
 
-  std::unique_ptr<Stmt> Then = parseStmt();
+  Stmt *Then = parseStmt();
   if (!Then)
     return nullptr;
 
-  std::unique_ptr<Stmt> Else = nullptr;
+  Stmt *Else = nullptr;
 
   if (currentToken().getKind() == Lex::TokenKind::KW_ELSE) {
     consume(Lex::TokenKind::KW_ELSE);
@@ -517,41 +502,37 @@ std::unique_ptr<IfStmt> Parser::parseIfStmt() {
   SourceLocation End = currentToken().getLocation();
   SourceRange Range = SourceRange(Start, End);
 
-  return std::make_unique<IfStmt>(std::move(Condition), std::move(Then),
-                                  std::move(Else), Range);
+  return new (Ctx) IfStmt(Condition, Then, Else, Range);
 }
 
-std::unique_ptr<ForStmt> Parser::parseForStmt() {
+ForStmt *Parser::parseForStmt() {
   SourceLocation Start = currentToken().getLocation();
   consume(Lex::TokenKind::KW_FOR);
 
-  auto InitRawPtr = parsePrimary().release();
-  std::unique_ptr<VarExpr> Init(static_cast<VarExpr *>(InitRawPtr));
+  VarExpr *Init = static_cast<VarExpr *>(parsePrimary());
   if (!expectToken(Lex::TokenKind::KW_IN))
     return nullptr;
 
-  std::unique_ptr<RangeExpr> Range = parseRangeExpr();
-  std::unique_ptr<Stmt> Body = parseStmt();
+  RangeExpr *Range = parseRangeExpr();
+  Stmt *Body = parseStmt();
 
   SourceLocation End = currentToken().getLocation();
   SourceRange RangeLoc = SourceRange(Start, End);
-  return std::make_unique<trsc::ForStmt>(std::move(Init), std::move(Range),
-                                         std::move(Body), RangeLoc);
+  return new (Ctx) ForStmt(Init, Range, Body, RangeLoc);
 }
 
-std::unique_ptr<WhileStmt> Parser::parseWhileStmt() {
+WhileStmt *Parser::parseWhileStmt() {
   SourceLocation Start = currentToken().getLocation();
   consume(Lex::TokenKind::KW_WHILE);
-  std::unique_ptr<Expr> Condition = parseExpr(0);
-  std::unique_ptr<Stmt> Block = parseStmt();
+  Expr *Condition = parseExpr(0);
+  Stmt *Block = parseStmt();
   SourceLocation End = currentToken().getLocation();
   SourceRange Range = SourceRange(Start, End);
 
-  return std::make_unique<WhileStmt>(std::move(Condition), std::move(Block),
-                                     Range);
+  return new (Ctx) WhileStmt(Condition, Block, Range);
 }
 
-std::unique_ptr<FuncDecl> Parser::parseFunction() {
+FuncDecl *Parser::parseFunction() {
   SourceLocation Start = currentToken().getLocation();
   consume(Lex::TokenKind::KW_FN);
 
@@ -561,8 +542,7 @@ std::unique_ptr<FuncDecl> Parser::parseFunction() {
   }
 
   Lex::Token FuncNameToken = consume(Lex::TokenKind::IDENTIFIER);
-  std::unique_ptr<VarExpr> FuncName =
-      std::make_unique<VarExpr>(FuncNameToken.getIdentifierInfo());
+  VarExpr *FuncName = new (Ctx) VarExpr(FuncNameToken.getIdentifierInfo());
 
   if (!expectToken(Lex::TokenKind::DE_LPAREN))
     return nullptr;
@@ -575,16 +555,12 @@ std::unique_ptr<FuncDecl> Parser::parseFunction() {
         reportExpectedError(Lex::TokenKind::IDENTIFIER);
         return nullptr;
       }
-      auto ParamNamePtr = parsePrimary().release();
-      std::unique_ptr<VarExpr> ParamNameExpr(
-          static_cast<VarExpr *>(ParamNamePtr));
-      MyParam.ParamName = std::move(ParamNameExpr);
+      MyParam.ParamName = static_cast<VarExpr *>(parsePrimary());
       if (currentToken().getKind() == Lex::TokenKind::DE_COLON) {
         consume(Lex::TokenKind::DE_COLON);
         MyParam.ParamType = parseType();
-      } else
-        MyParam.ParamType = nullptr;
-      ParamVector.push_back(std::move(MyParam));
+      }
+      ParamVector.push_back(MyParam);
 
       if (currentToken().getKind() == Lex::TokenKind::DE_RPAREN)
         break;
@@ -594,21 +570,20 @@ std::unique_ptr<FuncDecl> Parser::parseFunction() {
   }
 
   consume(Lex::TokenKind::DE_RPAREN);
-  std::unique_ptr<Type> FuncReturnType;
+  Type *FuncReturnType = nullptr;
   if (currentToken().getKind() == Lex::TokenKind::DE_RETURNTYPE) {
     consume(Lex::TokenKind::DE_RETURNTYPE);
     FuncReturnType = parseType();
   }
-  std::unique_ptr<BlockStmt> Block = parseBlockStmt();
+  BlockStmt *Block = parseBlockStmt();
   SourceLocation End = currentToken().getLocation();
   SourceRange LocRange = SourceRange(Start, End);
 
-  return std::make_unique<FuncDecl>(LocRange, std::move(FuncName),
-                                    std::move(FuncReturnType),
-                                    std::move(ParamVector), std::move(Block));
+  return new (Ctx)
+      FuncDecl(Ctx, LocRange, FuncName, FuncReturnType, ParamVector, Block);
 }
 
-std::unique_ptr<FunCall>
+FunCall *
 Parser::parseFunCall(std::optional<Lex::Token> FuncNameToken = std::nullopt) {
   SourceLocation Start = currentToken().getLocation();
   if (!FuncNameToken) {
@@ -618,16 +593,14 @@ Parser::parseFunCall(std::optional<Lex::Token> FuncNameToken = std::nullopt) {
     FuncNameToken = currentToken();
     consume(Lex::TokenKind::IDENTIFIER);
   }
-  std::unique_ptr<VarExpr> FuncName =
-      std::make_unique<VarExpr>(FuncNameToken->getIdentifierInfo());
+  VarExpr *FuncName = new (Ctx) VarExpr(FuncNameToken->getIdentifierInfo());
   if (!expectToken(Lex::TokenKind::DE_LPAREN))
     return nullptr;
 
-  std::vector<std::unique_ptr<Expr>> ParamVector;
+  std::vector<Expr *> ParamVector;
   if (currentToken().getKind() != Lex::TokenKind::DE_RPAREN) {
     while (true) {
-      std::unique_ptr<Expr> Param = parsePrimary();
-      ParamVector.emplace_back(std::move(Param));
+      ParamVector.push_back(parsePrimary());
       if (currentToken().getKind() == Lex::TokenKind::DE_RPAREN)
         break;
       if (!expectToken(Lex::TokenKind::DE_COMMA))
@@ -639,15 +612,14 @@ Parser::parseFunCall(std::optional<Lex::Token> FuncNameToken = std::nullopt) {
   SourceLocation End = currentToken().getLocation();
   SourceRange Range = SourceRange(Start, End);
 
-  return std::make_unique<FunCall>(Range, std::move(FuncName),
-                                   std::move(ParamVector));
+  return new (Ctx) FunCall(Ctx, Range, FuncName, ParamVector);
 }
 
-std::unique_ptr<ReturnStmt> Parser::parseReturnStmt() {
+ReturnStmt *Parser::parseReturnStmt() {
   SourceLocation Start = currentToken().getLocation();
   consume(Lex::TokenKind::KW_RETURN);
 
-  std::unique_ptr<Expr> ReturnValue = nullptr;
+  Expr *ReturnValue = nullptr;
   if (currentToken().getKind() != Lex::TokenKind::DE_SEMICOLON) {
     ReturnValue = parseExpr(0);
   }
@@ -657,7 +629,7 @@ std::unique_ptr<ReturnStmt> Parser::parseReturnStmt() {
     return nullptr;
   SourceRange Range = SourceRange(Start, End);
 
-  return std::make_unique<ReturnStmt>(Range, std::move(ReturnValue));
+  return new (Ctx) ReturnStmt(Range, ReturnValue);
 }
 
 } // namespace trsc

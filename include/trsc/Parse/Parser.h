@@ -3,11 +3,10 @@
 
 #include "trsc/AST/AST.h"
 
-#include <memory>
+#include <cstdint>
 #include <optional>
 
 namespace trsc {
-class ASTContext;
 class DiagnosticsEngine;
 class Parser {
 public:
@@ -15,7 +14,7 @@ public:
   // therefore requires the context to already exist and to outlive the tree.
   Parser(ASTContext &Ctx, DiagnosticsEngine &Diag,
          const std::vector<Lex::Token> &Tokens);
-  std::unique_ptr<Program> parse();
+  Program *parse();
 
 private:
   ASTContext &Ctx;
@@ -34,23 +33,22 @@ private:
   bool expectToken(Lex::TokenKind Kind);
   void reportExpectedError(Lex::TokenKind ExpectedKind);
 
-  std::unique_ptr<trsc::Type> parseType();
-  std::unique_ptr<trsc::Stmt> parseStmt();
-  std::unique_ptr<trsc::LetStmt> parseLetStmt();
-  std::unique_ptr<trsc::Expr> parseExpr(int);
-  std::unique_ptr<trsc::ArrayExpr> parseArray(std::vector<int>);
-  std::unique_ptr<trsc::ArrayAccessExpr> parseArrayAccessExpr(Lex::Token Token);
-  std::unique_ptr<trsc::Expr> parsePrimary();
-  std::unique_ptr<trsc::RangeExpr> parseRangeExpr();
-  std::unique_ptr<trsc::WhileStmt> parseWhileStmt();
-  std::unique_ptr<trsc::ForStmt> parseForStmt();
-  std::unique_ptr<trsc::IfStmt> parseIfStmt();
-  std::unique_ptr<trsc::IfStmt> parseIfPrim();
-  std::unique_ptr<trsc::BlockStmt> parseBlockStmt();
-  std::unique_ptr<trsc::ExprStmt> parseExprStmt();
-  std::unique_ptr<trsc::FuncDecl> parseFunction();
-  std::unique_ptr<trsc::ReturnStmt> parseReturnStmt();
-  std::unique_ptr<trsc::FunCall> parseFunCall(std::optional<Lex::Token>);
+  trsc::Type *parseType();
+  trsc::Stmt *parseStmt();
+  trsc::LetStmt *parseLetStmt();
+  trsc::Expr *parseExpr(int);
+  trsc::ArrayExpr *parseArray(std::vector<int64_t> Shape);
+  trsc::ArrayAccessExpr *parseArrayAccessExpr(Lex::Token Token);
+  trsc::Expr *parsePrimary();
+  trsc::RangeExpr *parseRangeExpr();
+  trsc::WhileStmt *parseWhileStmt();
+  trsc::ForStmt *parseForStmt();
+  trsc::IfStmt *parseIfStmt();
+  trsc::BlockStmt *parseBlockStmt();
+  trsc::ExprStmt *parseExprStmt();
+  trsc::FuncDecl *parseFunction();
+  trsc::ReturnStmt *parseReturnStmt();
+  trsc::FunCall *parseFunCall(std::optional<Lex::Token>);
 };
 } // namespace trsc
 

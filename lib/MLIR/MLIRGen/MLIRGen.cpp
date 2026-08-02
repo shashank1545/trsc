@@ -300,14 +300,14 @@ void MLIRGen::genStmt(Stmt *S) {
 }
 
 void MLIRGen::genProgram(Program *Node) {
-  for (auto &S : Node->getStatements()) {
-    genStmt(S.get());
+  for (Stmt *S : Node->getStatements()) {
+    genStmt(S);
   }
 }
 
 void MLIRGen::genBlockStmt(BlockStmt *Node) {
-  for (const auto &S : Node->getStatements()) {
-    genStmt(S.get());
+  for (Stmt *S : Node->getStatements()) {
+    genStmt(S);
   }
 }
 
@@ -364,7 +364,7 @@ void MLIRGen::genArrayInitImpl(ArrayExpr *Node, mlir::Value DestMemRef,
 
     // [e; N] → Elems.size()==1, I % 1 == 0 always → repeats Elems[0]
     // [e1,e2,..] → Elems.size()==N, I % N == I → picks Elems[I]
-    Expr *Elem = Elems[I % Elems.size()].get();
+    Expr *Elem = Elems[I % Elems.size()];
     if (Elem->getASTNodeKind() == ASTNodeKind::ASTK_ARRAYEXPR) {
       genArrayInitImpl(static_cast<ArrayExpr *>(Elem), DestMemRef, Indices);
     } else if (Elem->isVar()) {
@@ -425,7 +425,7 @@ Expr *getUniformRepeatChild(ArrayExpr *Node) {
   if (Elems.size() != 1)
     return nullptr;
 
-  Expr *Elem = Elems[0].get();
+  Expr *Elem = Elems[0];
 
   if (Elem->getASTNodeKind() == ASTNodeKind::ASTK_ARRAYEXPR)
     return getUniformRepeatChild(static_cast<ArrayExpr *>(Elem));
@@ -495,12 +495,12 @@ mlir::Value MLIRGen::visitArrayAccessExpr(ArrayAccessExpr *Node) {
   mlir::Operation *RawPtr = static_cast<mlir::Operation *>(Sym->Op);
   auto memref = getOpMemRef(RawPtr);
   llvm::SmallVector<mlir::Value, 4> IndexValueVec;
-  for (const auto &Index : Node->getIndexVector()) {
+  for (Expr *Index : Node->getIndexVector()) {
     mlir::Value IndexValue;
     if (Index->isNum()) {
-      IndexValue = visitIntExpr(static_cast<IntExpr *>(Index.get()));
+      IndexValue = visitIntExpr(static_cast<IntExpr *>(Index));
     } else if (Index->isVar()) {
-      IndexValue = visitVarExpr(static_cast<VarExpr *>(Index.get()));
+      IndexValue = visitVarExpr(static_cast<VarExpr *>(Index));
     } else
       llvm_unreachable("Index can only be integer or variable.");
     mlir::Value IV = mlir::arith::IndexCastOp::create(
@@ -721,8 +721,8 @@ mlir::Value MLIRGen::visitFunCall(FunCall *Node) {
   }
 
   llvm::SmallVector<mlir::Value, 4> Args;
-  for (const auto &ArgExpr : Node->getParams()) {
-    mlir::Value ArgValue = visit(ArgExpr.get());
+  for (Expr *ArgExpr : Node->getParams()) {
+    mlir::Value ArgValue = visit(ArgExpr);
     if (!ArgValue) {
       llvm::errs() << "Error: Failed to generate argument for function call\n";
       return mlir::Value();
@@ -741,7 +741,7 @@ mlir::Value MLIRGen::visitFunCall(FunCall *Node) {
   }
 }
 
-void MLIRGen::genParams(const std::vector<FuncDecl::Param> &Params) {
+void MLIRGen::genParams(ArrayRef<FuncDecl::Param> Params) {
   auto Loc = Builder.getUnknownLoc();
 
   for (size_t i = 0; i < Params.size(); ++i) {
@@ -917,12 +917,12 @@ void MLIRGen::genAssignment(BinExpr *Node) {
   if (auto *AAE = llvm::dyn_cast<ArrayAccessExpr>(Node->getLHS())) {
     mlir::Value BaseMemRef = getLValueMemRef(Node->getLHS());
     llvm::SmallVector<mlir::Value, 4> IndexValueVec;
-    for (const auto &Index : AAE->getIndexVector()) {
+    for (Expr *Index : AAE->getIndexVector()) {
       mlir::Value IndexValue;
       if (Index->isNum()) {
-        IndexValue = visitIntExpr(static_cast<IntExpr *>(Index.get()));
+        IndexValue = visitIntExpr(static_cast<IntExpr *>(Index));
       } else if (Index->isVar()) {
-        IndexValue = visitVarExpr(static_cast<VarExpr *>(Index.get()));
+        IndexValue = visitVarExpr(static_cast<VarExpr *>(Index));
       } else
         llvm_unreachable("Index can only be integer or variable.");
       mlir::Value IV = mlir::arith::IndexCastOp::create(

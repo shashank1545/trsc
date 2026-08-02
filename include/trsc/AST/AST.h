@@ -1,11 +1,13 @@
 #ifndef TRSC_AST_AST_H
 #define TRSC_AST_AST_H
 
+#include "trsc/AST/ASTContext.h"
 #include "trsc/AST/QualType.h"
+#include "trsc/Basic/ArrayRef.h"
 #include "trsc/Basic/IdentifierTable.h"
 #include "trsc/Lex/Token.h"
 
-#include <memory>
+#include <cstdint>
 #include <vector>
 
 namespace trsc {
@@ -20,7 +22,6 @@ enum class ASTNodeKind {
   ASTK_REFERTYPENAME,
   ASTK_POINTERTYPENAME,
   ASTK_ARRAYTYPENAME,
-  // ASTK_VECTORTYPENAME,
   ASTK_EXPR,
   ASTK_ASEXPR,
   ASTK_BOOLEXPR,
@@ -45,6 +46,11 @@ enum class ASTNodeKind {
   ASTK_FUNCDECL,
 };
 
+/// Every AST node lives in the ASTContext arena: allocated with
+/// `new (Ctx) Node(...)`, never destroyed individually, freed wholesale when
+/// the context dies. Nodes therefore hold raw non-owning pointers to their
+/// children and must stay trivially destructible (enforced by static_asserts
+/// in lib/AST/AST.cpp).
 class ASTNode {
 protected:
   SourceRange Loc;
@@ -55,10 +61,15 @@ public:
   ASTNode(ASTNodeKind Kind, SourceRange Loc = {})
       : Loc(Loc), Kind(Kind), CurrentScope(nullptr) {}
 
-  ASTNode(ASTNodeKind Kind, Scope *CurrentScope, SourceRange Loc = {})
-      : Loc(Loc), Kind(Kind), CurrentScope(CurrentScope) {}
+  void *operator new(size_t Bytes, const ASTContext &Ctx, size_t Align = 8) {
+    return Ctx.Allocate(Bytes, Align);
+  }
 
-  virtual ~ASTNode() = default;
+  void operator delete(void *, const ASTContext &, size_t) {}
+
+  void *operator new(size_t) = delete;
+  void operator delete(void *) = delete;
+
   SourceRange getSourceRange() const { return Loc; }
   ASTNodeKind getASTNodeKind() const { return Kind; }
   void setScope(Scope *MyScope) { CurrentScope = MyScope; }
@@ -77,25 +88,24 @@ public:
 };
 
 class TypeName : public Type {
-  std::string Name;
+  const IdentifierInfo *Name;
 
 public:
-  TypeName(ASTNodeKind Kind, const std::string &Name, SourceRange Loc = {})
+  TypeName(const IdentifierInfo *Name, SourceRange Loc = {})
       : Type(ASTNodeKind::ASTK_TYPENAME, Loc), Name(Name) {}
-  std::string getName() const override { return Name; }
+  std::string getName() const override { return Name->getName(); }
 };
 
 class PointerTypeName : public Type {
-  std::unique_ptr<Type> Pointee;
+  Type *Pointee;
   bool IsMut;
 
 public:
-  PointerTypeName(std::unique_ptr<Type> Pointee, bool IsMut,
-                  SourceRange Loc = {})
-      : Type(ASTNodeKind::ASTK_POINTERTYPENAME, Loc),
-        Pointee(std::move(Pointee)), IsMut(IsMut) {}
+  PointerTypeName(Type *Pointee, bool IsMut, SourceRange Loc = {})
+      : Type(ASTNodeKind::ASTK_POINTERTYPENAME, Loc), Pointee(Pointee),
+        IsMut(IsMut) {}
 
-  Type *getPointee() const { return Pointee.get(); }
+  Type *getPointee() const { return Pointee; }
   bool isMut() const override { return IsMut; }
   std::string getName() const override {
     return (IsMut ? "*mut " : "*const ") + Pointee->getName();
@@ -103,16 +113,15 @@ public:
 };
 
 class ReferenceTypeName : public Type {
-  std::unique_ptr<Type> Referent;
+  Type *Referent;
   bool IsMut;
 
 public:
-  ReferenceTypeName(std::unique_ptr<Type> Referent, bool IsMut,
-                    SourceRange Loc = {})
-      : Type(ASTNodeKind::ASTK_REFERTYPENAME, Loc),
-        Referent(std::move(Referent)), IsMut(IsMut) {}
+  ReferenceTypeName(Type *Referent, bool IsMut, SourceRange Loc = {})
+      : Type(ASTNodeKind::ASTK_REFERTYPENAME, Loc), Referent(Referent),
+        IsMut(IsMut) {}
 
-  Type *getReferent() const { return Referent.get(); }
+  Type *getReferent() const { return Referent; }
   bool isMut() const override { return IsMut; }
   std::string getName() const override {
     return (IsMut ? "&mut " : "&") + Referent->getName();
@@ -120,16 +129,15 @@ public:
 };
 
 class ArrayTypeName : public Type {
-  std::unique_ptr<Type> Elemente;
+  Type *Elemente;
   size_t Size;
 
 public:
-  ArrayTypeName(std::unique_ptr<Type> Elemente, size_t Size,
-                SourceRange Loc = {})
-      : Type(ASTNodeKind::ASTK_ARRAYTYPENAME, Loc),
-        Elemente(std::move(Elemente)), Size(Size) {}
+  ArrayTypeName(Type *Elemente, size_t Size, SourceRange Loc = {})
+      : Type(ASTNodeKind::ASTK_ARRAYTYPENAME, Loc), Elemente(Elemente),
+        Size(Size) {}
 
-  Type *getElemente() const { return Elemente.get(); }
+  Type *getElemente() const { return Elemente; }
   size_t getSize() const { return Size; }
   std::string getName() const override {
     return "[" + Elemente->getName() + "; " + std::to_string(Size) + "]";
@@ -231,14 +239,14 @@ public:
 };
 
 class RefrExpr : public Expr {
-  std::unique_ptr<Expr> ReferentExpr;
+  Expr *ReferentExpr;
   bool IsMut;
 
 public:
-  RefrExpr(std::unique_ptr<Expr> ReferentExpr, bool IsMut, SourceRange Loc = {})
-      : Expr(ASTNodeKind::ASTK_REFREXPR, Loc),
-        ReferentExpr(std::move(ReferentExpr)), IsMut(IsMut) {}
-  Expr *getReferent() const { return ReferentExpr.get(); }
+  RefrExpr(Expr *ReferentExpr, bool IsMut, SourceRange Loc = {})
+      : Expr(ASTNodeKind::ASTK_REFREXPR, Loc), ReferentExpr(ReferentExpr),
+        IsMut(IsMut) {}
+  Expr *getReferent() const { return ReferentExpr; }
   bool isMut() const { return IsMut; }
   static bool classof(const Expr *E) {
     return E->getASTNodeKind() == ASTNodeKind::ASTK_REFREXPR;
@@ -247,16 +255,14 @@ public:
 
 class BinExpr : public Expr {
   Lex::TokenKind Op;
-  std::unique_ptr<Expr> LHS, RHS;
+  Expr *LHS, *RHS;
 
 public:
-  BinExpr(Lex::TokenKind Op, std::unique_ptr<Expr> LHS,
-          std::unique_ptr<Expr> RHS, SourceRange Loc = {})
-      : Expr(ASTNodeKind::ASTK_BINEXPR, Loc), Op(Op), LHS(std::move(LHS)),
-        RHS(std::move(RHS)) {}
+  BinExpr(Lex::TokenKind Op, Expr *LHS, Expr *RHS, SourceRange Loc = {})
+      : Expr(ASTNodeKind::ASTK_BINEXPR, Loc), Op(Op), LHS(LHS), RHS(RHS) {}
   Lex::TokenKind getOp() const { return Op; }
-  Expr *getLHS() const { return LHS.get(); }
-  Expr *getRHS() const { return RHS.get(); }
+  Expr *getLHS() const { return LHS; }
+  Expr *getRHS() const { return RHS; }
   static bool classof(const Expr *E) {
     return E->getASTNodeKind() == ASTNodeKind::ASTK_BINEXPR;
   }
@@ -264,17 +270,16 @@ public:
 
 class ASExpr : public Expr {
 private:
-  std::unique_ptr<Expr> FromExpr;
-  std::unique_ptr<Type> ToType;
+  Expr *FromExpr;
+  Type *ToType;
 
 public:
-  ASExpr(std::unique_ptr<Expr> FromExpr, std::unique_ptr<Type> ToType,
-         SourceRange Loc = {})
-      : Expr(ASTNodeKind::ASTK_ASEXPR, Loc), FromExpr(std::move(FromExpr)),
-        ToType(std::move(ToType)) {}
+  ASExpr(Expr *FromExpr, Type *ToType, SourceRange Loc = {})
+      : Expr(ASTNodeKind::ASTK_ASEXPR, Loc), FromExpr(FromExpr),
+        ToType(ToType) {}
 
-  Expr *getFromExpr() const { return FromExpr.get(); }
-  Type *getToType() const { return ToType.get(); }
+  Expr *getFromExpr() const { return FromExpr; }
+  Type *getToType() const { return ToType; }
   static bool classof(const Expr *E) {
     return E->getASTNodeKind() == ASTNodeKind::ASTK_ASEXPR;
   }
@@ -282,26 +287,23 @@ public:
 
 class ArrayExpr : public Expr {
 private:
-  std::vector<std::unique_ptr<Expr>> ChildElemExprVec;
+  ArrayRef<Expr *> ChildElemExprVec;
   /* For n dimensional array , LastDim will give the number/count of the
      underlying n-1 dimensional array.*/
-  std::unique_ptr<IntExpr> LastDim;
-  std::vector<int> Shape;
+  IntExpr *LastDim;
+  ArrayRef<int64_t> Shape;
 
 public:
-  ArrayExpr(std::vector<std::unique_ptr<Expr>> ChildElemExprVec,
-            std::unique_ptr<IntExpr> LastDim, std::vector<int> Shape,
+  ArrayExpr(ASTContext &C, const std::vector<Expr *> &ChildElemExprVec,
+            IntExpr *LastDim, const std::vector<int64_t> &Shape,
             SourceRange Loc = {})
       : Expr(ASTNodeKind::ASTK_ARRAYEXPR, Loc),
-        ChildElemExprVec(std::move(ChildElemExprVec)),
-        LastDim(std::move(LastDim)), Shape(std::move(Shape)) {}
+        ChildElemExprVec(C.allocateArray(ChildElemExprVec)), LastDim(LastDim),
+        Shape(C.allocateArray(Shape)) {}
 
-  const std::vector<std::unique_ptr<Expr>> &getChildElemExprVec() const {
-    return ChildElemExprVec;
-  }
-  // Expr* getBaseElemExpr() const { return }
-  IntExpr *getTrailingDim() const { return LastDim.get(); }
-  const std::vector<int> &getShape() const { return Shape; }
+  ArrayRef<Expr *> getChildElemExprVec() const { return ChildElemExprVec; }
+  IntExpr *getTrailingDim() const { return LastDim; }
+  ArrayRef<int64_t> getShape() const { return Shape; }
   static bool classof(const Expr *E) {
     return E->getASTNodeKind() == ASTNodeKind::ASTK_ARRAYEXPR;
   }
@@ -309,21 +311,18 @@ public:
 
 class ArrayAccessExpr : public Expr {
 private:
-  std::unique_ptr<VarExpr> ArrayNameExpr;
-  std::vector<std::unique_ptr<Expr>> IndexExprVec;
+  VarExpr *ArrayNameExpr;
+  ArrayRef<Expr *> IndexExprVec;
 
 public:
-  ArrayAccessExpr(std::unique_ptr<VarExpr> ArrayNameExpr,
-                  std::vector<std::unique_ptr<Expr>> IndexExprVeci,
-                  SourceRange Loc = {})
+  ArrayAccessExpr(ASTContext &C, VarExpr *ArrayNameExpr,
+                  const std::vector<Expr *> &IndexExprVec, SourceRange Loc = {})
       : Expr(ASTNodeKind::ASTK_ARRAYACCESSEXPR, Loc),
-        ArrayNameExpr(std::move(ArrayNameExpr)),
-        IndexExprVec(std::move(IndexExprVeci)) {}
+        ArrayNameExpr(ArrayNameExpr),
+        IndexExprVec(C.allocateArray(IndexExprVec)) {}
 
-  VarExpr *getArrayNameExpr() { return ArrayNameExpr.get(); }
-  const std::vector<std::unique_ptr<Expr>> &getIndexVector() const {
-    return IndexExprVec;
-  }
+  VarExpr *getArrayNameExpr() { return ArrayNameExpr; }
+  ArrayRef<Expr *> getIndexVector() const { return IndexExprVec; }
   static bool classof(const Expr *E) {
     return E->getASTNodeKind() == ASTNodeKind::ASTK_ARRAYACCESSEXPR;
   }
@@ -331,18 +330,16 @@ public:
 
 class RangeExpr : public Expr {
   bool IsInclusive;
-  std::unique_ptr<Expr> Start, End;
+  Expr *Start, *End;
 
 public:
-  RangeExpr(bool IsInclusive, std::unique_ptr<Expr> Start,
-            std::unique_ptr<Expr> End, SourceRange Loc = {})
+  RangeExpr(bool IsInclusive, Expr *Start, Expr *End, SourceRange Loc = {})
       : Expr(ASTNodeKind::ASTK_RANGEEXPR, Loc), IsInclusive(IsInclusive),
-        Start(std::move(Start)), End(std::move(End)) {}
+        Start(Start), End(End) {}
 
   bool isInclusive() const { return IsInclusive; }
-  Expr *getStart() const { return Start.get(); }
-  Expr *getEnd() const { return End.get(); }
-  bool isExpr() const override { return true; }
+  Expr *getStart() const { return Start; }
+  Expr *getEnd() const { return End; }
   static bool classof(const Expr *E) {
     return E->getASTNodeKind() == ASTNodeKind::ASTK_RANGEEXPR;
   }
@@ -350,171 +347,152 @@ public:
 
 class LetStmt : public Stmt {
   bool IsMut;
-  std::unique_ptr<VarExpr> DeclaredVar;
-  std::unique_ptr<Type> DeclaredType;
-  std::unique_ptr<Expr> Initializer;
+  VarExpr *DeclaredVar;
+  Type *DeclaredType;
+  Expr *Initializer;
 
 public:
-  LetStmt(bool IsMut, std::unique_ptr<VarExpr> DeclaredVar,
-          std::unique_ptr<Type> DeclaredType, std::unique_ptr<Expr> Initializer,
-          SourceRange Loc = {})
+  LetStmt(bool IsMut, VarExpr *DeclaredVar, Type *DeclaredType,
+          Expr *Initializer, SourceRange Loc = {})
       : Stmt(ASTNodeKind::ASTK_LETSTMT, Loc), IsMut(IsMut),
-        DeclaredVar(std::move(DeclaredVar)),
-        DeclaredType(std::move(DeclaredType)),
-        Initializer(std::move(Initializer)) {}
+        DeclaredVar(DeclaredVar), DeclaredType(DeclaredType),
+        Initializer(Initializer) {}
 
-  const bool isMut() const { return IsMut; }
-  VarExpr *getDeclaredVar() const { return DeclaredVar.get(); }
-  Type *getDeclaredType() const { return DeclaredType.get(); }
-  Expr *getInitializer() const { return Initializer.get(); }
-  bool isStmt() const override { return true; }
+  bool isMut() const { return IsMut; }
+  VarExpr *getDeclaredVar() const { return DeclaredVar; }
+  Type *getDeclaredType() const { return DeclaredType; }
+  Expr *getInitializer() const { return Initializer; }
 };
 
 class BlockStmt : public Stmt {
-  std::vector<std::unique_ptr<Stmt>> Statements;
+  ArrayRef<Stmt *> Statements;
 
 public:
-  BlockStmt(SourceRange Loc, std::vector<std::unique_ptr<Stmt>> Statements)
+  BlockStmt(ASTContext &C, SourceRange Loc,
+            const std::vector<Stmt *> &Statements)
       : Stmt(ASTNodeKind::ASTK_BLOCKSTMT, Loc),
-        Statements(std::move(Statements)) {}
+        Statements(C.allocateArray(Statements)) {}
 
-  const std::vector<std::unique_ptr<Stmt>> &getStatements() const {
-    return Statements;
-  }
-
-  std::vector<std::unique_ptr<Stmt>> &getStatements() { return Statements; }
-  bool isStmt() const override { return true; }
+  ArrayRef<Stmt *> getStatements() const { return Statements; }
 };
 
 class IfStmt : public Stmt {
-  std::unique_ptr<Expr> Condition;
-  std::unique_ptr<Stmt> ThenBranch;
-  std::unique_ptr<Stmt> ElseBranch;
+  Expr *Condition;
+  Stmt *ThenBranch;
+  Stmt *ElseBranch;
 
 public:
-  IfStmt(std::unique_ptr<Expr> Condition, std::unique_ptr<Stmt> ThenBranch,
-         std::unique_ptr<Stmt> ElseBranch, SourceRange Loc = {})
-      : Stmt(ASTNodeKind::ASTK_IFSTMT, Loc), Condition(std::move(Condition)),
-        ThenBranch(std::move(ThenBranch)), ElseBranch(std::move(ElseBranch)) {}
+  IfStmt(Expr *Condition, Stmt *ThenBranch, Stmt *ElseBranch,
+         SourceRange Loc = {})
+      : Stmt(ASTNodeKind::ASTK_IFSTMT, Loc), Condition(Condition),
+        ThenBranch(ThenBranch), ElseBranch(ElseBranch) {}
 
-  Expr *getCondition() const { return Condition.get(); }
-  Stmt *getThenBranch() const { return ThenBranch.get(); }
-  Stmt *getElseBranch() const { return ElseBranch.get(); }
+  Expr *getCondition() const { return Condition; }
+  Stmt *getThenBranch() const { return ThenBranch; }
+  Stmt *getElseBranch() const { return ElseBranch; }
 };
 
 class ExprStmt : public Stmt {
-  std::unique_ptr<Expr> Expression;
+  Expr *Expression;
 
 public:
-  ExprStmt(SourceRange Loc, std::unique_ptr<Expr> Expression)
-      : Stmt(ASTNodeKind::ASTK_EXPRSTMT, Loc),
-        Expression(std::move(Expression)) {}
+  ExprStmt(SourceRange Loc, Expr *Expression)
+      : Stmt(ASTNodeKind::ASTK_EXPRSTMT, Loc), Expression(Expression) {}
 
-  Expr *getExpression() const { return Expression.get(); }
-  bool isStmt() const override { return true; }
+  Expr *getExpression() const { return Expression; }
 };
 
 class ForStmt : public Stmt {
-  std::unique_ptr<VarExpr> Init;
-  std::unique_ptr<RangeExpr> Range;
-  std::unique_ptr<Stmt> Body;
+  VarExpr *Init;
+  RangeExpr *Range;
+  Stmt *Body;
 
 public:
-  ForStmt(std::unique_ptr<VarExpr> Init, std::unique_ptr<RangeExpr> Range,
-          std::unique_ptr<Stmt> Body, SourceRange Loc = {})
-      : Stmt(ASTNodeKind::ASTK_FORSTMT, Loc), Init(std::move(Init)),
-        Range(std::move(Range)), Body(std::move(Body)) {}
+  ForStmt(VarExpr *Init, RangeExpr *Range, Stmt *Body, SourceRange Loc = {})
+      : Stmt(ASTNodeKind::ASTK_FORSTMT, Loc), Init(Init), Range(Range),
+        Body(Body) {}
 
-  VarExpr *getInit() const { return Init.get(); }
-  RangeExpr *getRange() const { return Range.get(); }
-  Stmt *getBody() const { return Body.get(); }
-  bool isStmt() const override { return true; }
+  VarExpr *getInit() const { return Init; }
+  RangeExpr *getRange() const { return Range; }
+  Stmt *getBody() const { return Body; }
 };
 
 class WhileStmt : public Stmt {
-  std::unique_ptr<Expr> Condition;
-  std::unique_ptr<Stmt> Body;
+  Expr *Condition;
+  Stmt *Body;
 
 public:
-  WhileStmt(std::unique_ptr<Expr> Condition, std::unique_ptr<Stmt> Body,
-            SourceRange Loc = {})
-      : Stmt(ASTNodeKind::ASTK_WHILESTMT, Loc), Condition(std::move(Condition)),
-        Body(std::move(Body)) {}
+  WhileStmt(Expr *Condition, Stmt *Body, SourceRange Loc = {})
+      : Stmt(ASTNodeKind::ASTK_WHILESTMT, Loc), Condition(Condition),
+        Body(Body) {}
 
-  Expr *getCondition() const { return Condition.get(); }
-  Stmt *getBody() const { return Body.get(); }
-  bool isStmt() const override { return true; }
+  Expr *getCondition() const { return Condition; }
+  Stmt *getBody() const { return Body; }
 };
 
 class FuncDecl : public Stmt {
 public:
+  // Trivially copyable; the param list is one arena array.
   struct Param {
-    std::unique_ptr<VarExpr> ParamName;
-    std::unique_ptr<Type> ParamType;
+    VarExpr *ParamName = nullptr;
+    Type *ParamType = nullptr;
   };
 
 private:
-  std::unique_ptr<VarExpr> FuncName;
-  std::unique_ptr<Type> FuncReturnType;
-  std::vector<Param> Params;
-  std::unique_ptr<Stmt> Body;
+  VarExpr *FuncName;
+  Type *FuncReturnType;
+  ArrayRef<Param> Params;
+  Stmt *Body;
 
 public:
-  FuncDecl(SourceRange Loc, std::unique_ptr<VarExpr> Name,
-           std::unique_ptr<Type> FuncReturnType, std::vector<Param> Params,
-           std::unique_ptr<Stmt> Body)
-      : Stmt(ASTNodeKind::ASTK_FUNCDECL, Loc), FuncName(std::move(Name)),
-        FuncReturnType(std::move(FuncReturnType)), Params(std::move(Params)),
-        Body(std::move(Body)) {}
+  FuncDecl(ASTContext &C, SourceRange Loc, VarExpr *Name, Type *FuncReturnType,
+           const std::vector<Param> &Params, Stmt *Body)
+      : Stmt(ASTNodeKind::ASTK_FUNCDECL, Loc), FuncName(Name),
+        FuncReturnType(FuncReturnType), Params(C.allocateArray(Params)),
+        Body(Body) {}
 
-  const std::vector<Param> &getParams() const { return Params; }
-  VarExpr *getFuncName() const { return FuncName.get(); }
-  Type *getReturnType() const { return FuncReturnType.get(); }
-  Stmt *getBody() const { return Body.get(); }
-  bool isStmt() const override { return true; }
+  ArrayRef<Param> getParams() const { return Params; }
+  VarExpr *getFuncName() const { return FuncName; }
+  Type *getReturnType() const { return FuncReturnType; }
+  Stmt *getBody() const { return Body; }
 };
 
 class FunCall : public Expr {
 private:
-  std::unique_ptr<VarExpr> FuncName;
-  std::vector<std::unique_ptr<Expr>> Params;
+  VarExpr *FuncName;
+  ArrayRef<Expr *> Params;
 
 public:
-  FunCall(SourceRange Range, std::unique_ptr<VarExpr> Name,
-          std::vector<std::unique_ptr<Expr>> Params)
-      : Expr(ASTNodeKind::ASTK_FUNCALL, Range), FuncName(std::move(Name)),
-        Params(std::move(Params)) {}
+  FunCall(ASTContext &C, SourceRange Range, VarExpr *Name,
+          const std::vector<Expr *> &Params)
+      : Expr(ASTNodeKind::ASTK_FUNCALL, Range), FuncName(Name),
+        Params(C.allocateArray(Params)) {}
 
-  VarExpr *getFuncName() const { return FuncName.get(); }
-  const std::vector<std::unique_ptr<Expr>> &getParams() const { return Params; }
-  bool isExpr() const override { return true; }
+  VarExpr *getFuncName() const { return FuncName; }
+  ArrayRef<Expr *> getParams() const { return Params; }
   static bool classof(const Expr *E) {
     return E->getASTNodeKind() == ASTNodeKind::ASTK_FUNCALL;
   }
 };
 
 class ReturnStmt : public Stmt {
-  std::unique_ptr<Expr> ReturnValue;
+  Expr *ReturnValue;
 
 public:
-  ReturnStmt(SourceRange Loc, std::unique_ptr<Expr> ReturnValue)
-      : Stmt(ASTNodeKind::ASTK_RETURNSTMT, Loc),
-        ReturnValue(std::move(ReturnValue)) {}
+  ReturnStmt(SourceRange Loc, Expr *ReturnValue)
+      : Stmt(ASTNodeKind::ASTK_RETURNSTMT, Loc), ReturnValue(ReturnValue) {}
 
-  Expr *getReturnValue() const { return ReturnValue.get(); }
-  bool isStmt() const override { return true; }
+  Expr *getReturnValue() const { return ReturnValue; }
 };
 
 class Program : public ASTNode {
-  std::vector<std::unique_ptr<Stmt>> Statements;
+  ArrayRef<Stmt *> Statements;
 
 public:
-  Program(SourceRange Loc, std::vector<std::unique_ptr<Stmt>> Statements)
+  Program(ASTContext &C, SourceRange Loc, const std::vector<Stmt *> &Statements)
       : ASTNode(ASTNodeKind::ASTK_PROGRAM, Loc),
-        Statements(std::move(Statements)) {}
-  const std::vector<std::unique_ptr<Stmt>> &getStatements() const {
-    return Statements;
-  }
+        Statements(C.allocateArray(Statements)) {}
+  ArrayRef<Stmt *> getStatements() const { return Statements; }
 };
 
 } // namespace trsc

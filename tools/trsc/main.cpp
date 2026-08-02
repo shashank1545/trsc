@@ -93,7 +93,7 @@ int main(int argc, char **argv) {
   // tree - it is constructed before the Parser and destroyed after MLIRGen.
   trsc::ASTContext Ctx;
   trsc::Parser Parser(Ctx, Diag, Tokens);
-  std::unique_ptr<trsc::Program> AST = Parser.parse();
+  trsc::Program *AST = Parser.parse();
 
   if (Diag.getNumErrors() > 0) {
     std::cerr << "Parsing failed with " << Diag.getNumErrors() << " errors."
@@ -114,10 +114,10 @@ int main(int argc, char **argv) {
           return 1;
         }
         trsc::ASTPrinter printer(outfile);
-        printer.visit(AST.get());
+        printer.visit(AST);
       } else {
         trsc::ASTPrinter printer(std::cout);
-        printer.visit(AST.get());
+        printer.visit(AST);
       }
     }
     if (options.Verbose) {
@@ -132,7 +132,7 @@ int main(int argc, char **argv) {
 
   trsc::SymbolTable ST(Idents);
   trsc::SemanticAnalyzer Sema(Diag, ST, Ctx);
-  Sema.analyze(AST.get());
+  Sema.analyze(AST);
 
   if (Diag.getNumErrors() > 0) {
     std::cerr << "Semantic analysis failed with " << Diag.getNumErrors()
@@ -193,10 +193,10 @@ int main(int argc, char **argv) {
         return 1;
       }
       trsc::TypedASTPrinter Printer(outfile);
-      Printer.visit(AST.get());
+      Printer.visit(AST);
     } else {
       trsc::TypedASTPrinter Printer(std::cout);
-      Printer.visit(AST.get());
+      Printer.visit(AST);
     }
     if (options.Verbose) {
       std::cerr << "Exiting after Semantic Analysis (dump-typedast requested)."

@@ -93,8 +93,8 @@ void TypeChecker::visitArrayExpr(ArrayExpr *Node) {
   ExpectedType = OldExpectedType.isArrayType() ? OldExpectedType.getBaseType()
                                                : QualType();
 
-  for (const auto &Child : Node->getChildElemExprVec()) {
-    visit(Child.get());
+  for (Expr *Child : Node->getChildElemExprVec()) {
+    visit(Child);
   }
 
   ExpectedType = OldExpectedType;
@@ -136,7 +136,7 @@ void TypeChecker::visitArrayAccessExpr(ArrayAccessExpr *Node) {
       return;
     }
 
-    visit(Node->getIndexVector()[I].get());
+    visit(Node->getIndexVector()[I]);
 
     QualType IdxTy = Node->getIndexVector()[I]->getType();
     if (!IdxTy.isIntegerType()) {
@@ -145,7 +145,7 @@ void TypeChecker::visitArrayAccessExpr(ArrayAccessExpr *Node) {
     }
 
     if (Node->getIndexVector()[I]->isNum()) {
-      auto *Num = static_cast<NumExpr *>(Node->getIndexVector()[I].get());
+      auto *Num = static_cast<NumExpr *>(Node->getIndexVector()[I]);
       if (Num->isInt()) {
         int64_t IndexValue = static_cast<IntExpr *>(Num)->getValue();
         if (IndexValue < 0) {
@@ -471,7 +471,7 @@ void TypeChecker::visitFuncDecl(FuncDecl *Node) {
   if (!Node->getParams().empty()) {
     for (const auto &Param : Node->getParams()) {
       if (Param.ParamType) {
-        QualType ParamQualType = resolveType(Param.ParamType.get());
+        QualType ParamQualType = resolveType(Param.ParamType);
         if (ParamQualType.isNull()) {
           Diags.Report(DiagKind::Error,
                        "Unknown type name for parameter '" +
@@ -540,9 +540,9 @@ void TypeChecker::visitFunCall(FunCall *Node) {
   // FIXME :: Currently this matches all the params even if some is defined.
   // While not ideal it works and i dont have to care about the ordering of
   // params and assignment in the function declaration.
-  const std::vector<std::unique_ptr<Expr>> &ParamCallType = Node->getParams();
+  ArrayRef<Expr *> ParamCallType = Node->getParams();
   for (int I = 0; I < ParamCallType.size(); ++I) {
-    visit(ParamCallType[I].get());
+    visit(ParamCallType[I]);
     if (ParamCallType[I]->getType() != ParamsExpType[I]) {
       Diags.Report(DiagKind::Error,
                    "Function " + Node->getFuncName()->getName() +

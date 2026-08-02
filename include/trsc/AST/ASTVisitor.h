@@ -94,8 +94,8 @@ public:
   }
 
   void visitProgram(Program *P) {
-    for (const auto &Stmt : P->getStatements()) {
-      getDerived().visit(Stmt.get());
+    for (Stmt *S : P->getStatements()) {
+      getDerived().visit(S);
     }
   }
 
@@ -106,8 +106,8 @@ public:
   }
 
   void visitBlockStmt(BlockStmt *S) {
-    for (const auto &Stmt : S->getStatements()) {
-      getDerived().visit(Stmt.get());
+    for (Stmt *Child : S->getStatements()) {
+      getDerived().visit(Child);
     }
   }
 
@@ -147,8 +147,8 @@ public:
   void visitFuncDecl(FuncDecl *D) {
     getDerived().visit(D->getFuncName());
     for (const auto &Param : D->getParams()) {
-      getDerived().visit(Param.ParamName.get());
-      getDerived().visit(Param.ParamType.get());
+      getDerived().visit(Param.ParamName);
+      getDerived().visit(Param.ParamType);
     }
     getDerived().visit(D->getReturnType());
     getDerived().visit(D->getBody());
@@ -170,23 +170,23 @@ public:
   }
 
   void visitArrayExpr(ArrayExpr *E) {
-    for (const auto &ChildElem : E->getChildElemExprVec()) {
-      getDerived().visit(ChildElem.get());
+    for (Expr *ChildElem : E->getChildElemExprVec()) {
+      getDerived().visit(ChildElem);
     }
     getDerived().visit(E->getTrailingDim());
   }
 
   void visitArrayAccessExpr(ArrayAccessExpr *E) {
     getDerived().visit(E->getArrayNameExpr());
-    for (const auto &Index : E->getIndexVector()) {
-      getDerived().visit(Index.get());
+    for (Expr *Index : E->getIndexVector()) {
+      getDerived().visit(Index);
     }
   }
 
   void visitFunCall(FunCall *E) {
     getDerived().visit(E->getFuncName());
-    for (const auto &Param : E->getParams()) {
-      getDerived().visit(Param.get());
+    for (Expr *Param : E->getParams()) {
+      getDerived().visit(Param);
     }
   }
 

@@ -147,8 +147,8 @@ void NameResolver::visitArrayAccessExpr(ArrayAccessExpr *E) {
     ArrayName->setScope(Sym->getScope());
     ArrayName->setSymbol(Sym);
   }
-  for (const auto &Index : E->getIndexVector()) {
-    ASTVisitor<NameResolver>::visit(Index.get());
+  for (Expr *Index : E->getIndexVector()) {
+    ASTVisitor<NameResolver>::visit(Index);
   }
 }
 
@@ -160,8 +160,8 @@ void NameResolver::visitFunCall(FunCall *E) {
     Diags.Report(DiagKind::Error, "Undeclared function",
                  E->getSourceRange().getStart());
   }
-  for (const auto &Param : E->getParams()) {
-    visit(Param.get());
+  for (Expr *Param : E->getParams()) {
+    visit(Param);
   }
 }
 

@@ -5,6 +5,7 @@ set(TRSC_LIB
   ${CMAKE_CURRENT_SOURCE_DIR}/Basic/SourceManager.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/Basic/CommandLine.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/Basic/IdentifierTable.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/AST/AST.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/AST/ASTPrinter.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/AST/TypedASTPrinter.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/AST/ASTContext.cpp

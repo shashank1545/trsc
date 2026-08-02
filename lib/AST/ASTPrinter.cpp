@@ -14,7 +14,7 @@ void ASTPrinter::visitProgram(Program *Node) {
   IndentLevel++;
   for (auto &S : Node->getStatements()) {
     if (S) {
-      visit(S.get());
+      visit(S);
     }
   }
 }
@@ -106,7 +106,7 @@ void ASTPrinter::visitBlockStmt(BlockStmt *Node) {
   IndentLevel++;
   for (auto &S : Node->getStatements()) {
     if (S) {
-      visit(S.get());
+      visit(S);
     }
   }
   IndentLevel--;
@@ -154,7 +154,7 @@ void ASTPrinter::visitArrayExpr(ArrayExpr *Node) {
   OS << "ArrayExpr: " << "\n";
   IndentLevel++;
   for (const auto &Child : Node->getChildElemExprVec()) {
-    visit(Child.get());
+    visit(Child);
   }
   OS << "NumElement: " << Node->getTrailingDim()->getValue() << "\n";
   IndentLevel--;
@@ -167,7 +167,7 @@ void ASTPrinter::visitArrayAccessExpr(ArrayAccessExpr *Node) {
   visit(Node->getArrayNameExpr());
   OS << "Index: \n";
   for (const auto &Index : Node->getIndexVector()) {
-    getDerived().visit(Index.get());
+    getDerived().visit(Index);
   }
   IndentLevel--;
 }
@@ -209,7 +209,7 @@ void ASTPrinter::visitFuncDecl(FuncDecl *Node) {
     BlockStmt *BodyBlock = static_cast<BlockStmt *>(Node->getBody());
     for (auto &S : BodyBlock->getStatements()) {
       if (S) {
-        visit(S.get());
+        visit(S);
       }
     }
   }
@@ -222,7 +222,7 @@ void ASTPrinter::visitFunCall(FunCall *Node) {
   if (Node->getParams().size() != 0) {
     for (auto &E : Node->getParams()) {
       if (E) {
-        visit(E.get());
+        visit(E);
       }
     }
   }

@@ -5,9 +5,9 @@
 using namespace trsc;
 
 void DeclarationCollector::visitProgram(Program *P) {
-  for (const auto &Stmt : P->getStatements()) {
-    if (Stmt->getASTNodeKind() == ASTNodeKind::ASTK_FUNCDECL) {
-      getDerived().visit(Stmt.get());
+  for (Stmt *S : P->getStatements()) {
+    if (S->getASTNodeKind() == ASTNodeKind::ASTK_FUNCDECL) {
+      getDerived().visit(S);
     }
   }
 }
