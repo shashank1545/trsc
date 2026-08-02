@@ -17,7 +17,7 @@ class ASTAllocator {
   char *End = nullptr;
   size_t TotalBytes = 0;
   size_t NextSlabSize = 4096;
-  static constexpr size_t MaxSlabSize = 256 * 1024;
+  static constexpr size_t MaxSlabSize = size_t{256} * 1024;
 
   void newSlab(size_t MinBytes) {
     size_t Size = NextSlabSize;

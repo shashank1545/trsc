@@ -68,7 +68,7 @@ public:
     }
     T *Mem = static_cast<T *>(Allocate(sizeof(T) * Src.size(), alignof(T)));
     for (size_t I = 0; I < Src.size(); ++I) {
-      new (Mem + I) T(Src[I]);
+      new (static_cast<void *>(Mem + I)) T(Src[I]);
     }
     return ArrayRef<T>(Mem, Src.size());
   }

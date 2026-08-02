@@ -1,4 +1,5 @@
 #include "trsc/AST/TypedASTPrinter.h"
+#include <cstdint>
 #include <iomanip>
 
 namespace trsc {
@@ -518,8 +519,8 @@ void TypedASTPrinter::visitArrayExpr(ArrayExpr *Node) {
   }
   OS << "]";
 
-  int Total = 1;
-  for (int D : Shape)
+  int64_t Total = 1;
+  for (int64_t D : Shape)
     Total *= D;
   OS << " (" << Total << " elements)";
   OS << "\n";
