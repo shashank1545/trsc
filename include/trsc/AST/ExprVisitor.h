@@ -75,8 +75,8 @@ public:
   }
 
   RetTy visitASExpr(ASExpr *E) {
+    // The target type is not an Expr; only the source operand is visitable.
     getDerived().visit(E->getFromExpr());
-    getDerived().visit(E->getToType());
     return RetTy();
   }
 

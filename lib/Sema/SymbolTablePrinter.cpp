@@ -44,22 +44,8 @@ void SymbolTablePrinter::printScope(const Scope *S, unsigned IndentLevel) {
       if (Sym->IsInitialized)
         OS << " init";
 
-      // if (Sym.Node) {
-      //   auto Loc = Sym.Node->getSourceRange().getStart();
-      //   if (Loc.isValid()) {
-      //     OS << "  @ " << Loc.Line << ":" << Loc.Column;
-      //   }
-      // }
       OS << "\n";
     }
-  }
-
-  // Print children recursively
-  const auto &Children = S->getChildren();
-  for (size_t i = 0; i < Children.size(); ++i) {
-    indent(IndentLevel);
-    OS << "│\n";
-    printScope(Children[i], IndentLevel + 1);
   }
 
   indent(IndentLevel);
@@ -98,7 +84,11 @@ void SymbolTablePrinter::print() {
 
 void SymbolTablePrinter::printTree() {
   OS << "\n========== SYMBOL TABLE TREE ==========\n\n";
-  printScope(ST.getGlobalScope(), 0);
+  // Scopes are stored in creation (preorder) order; indenting each one by its
+  // depth reproduces the nesting without needing child links on Scope.
+  for (const auto &S : ST.getAllScopes()) {
+    printScope(S.get(), S->getDepth());
+  }
   OS << "=======================================\n\n";
 }
 

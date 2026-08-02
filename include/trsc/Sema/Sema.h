@@ -1,7 +1,6 @@
 #ifndef TRSC_SEMA_SEMA_H
 #define TRSC_SEMA_SEMA_H
 
-#include "trsc/Sema/BorrowChecker.h"
 #include "trsc/Sema/DeclarationCollector.h"
 #include "trsc/Sema/NameResolver.h"
 #include "trsc/Sema/TypeChecker.h"
@@ -19,10 +18,6 @@ public:
 
   void analyze(ASTNode *Ast);
 
-  SymbolTable &getSymbolTable() { return ST; }
-  ASTContext &getASTContext() { return Ctx; }
-  DiagnosticsEngine &getDiagnostics() { return Diags; }
-
 private:
   DiagnosticsEngine &Diags;
   SymbolTable &ST;
@@ -30,7 +25,6 @@ private:
   DeclarationCollector DeclarationCollector;
   NameResolver NameResolver;
   TypeChecker TypeChecker;
-  BorrowChecker BorrowChecker;
 };
 
 } // namespace trsc

@@ -4,4 +4,4 @@ fn main() {
     let x = y;
 }
 
-// CHECK: BorrowChecker: Undeclared variable 'y'
+// CHECK: 4:13: Error: Undeclared variable

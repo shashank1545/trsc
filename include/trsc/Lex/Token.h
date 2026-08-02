@@ -85,94 +85,25 @@ class Token {
 
   TokenKind Kind;
   SourceLocation Loc;
-  unsigned Length;
+  // Length is Text.size(); the view carries both pointer and extent.
   std::string_view Text;
   // Set for identifiers and keywords, null for everything else.
   IdentifierInfo *Id;
 
 public:
   Token()
-      : Kind(TokenKind::UNKNOWN), Loc({nullptr, 0, 0}), Length(0), Text(""),
-        Id(nullptr) {}
+      : Kind(TokenKind::UNKNOWN), Loc({nullptr, 0, 0}), Text(""), Id(nullptr) {}
 
-  Token(TokenKind K, SourceLocation L, unsigned Len, std::string_view T,
+  Token(TokenKind K, SourceLocation L, std::string_view T,
         IdentifierInfo *Id = nullptr)
-      : Kind(K), Loc(L), Length(Len), Text(T), Id(Id) {}
+      : Kind(K), Loc(L), Text(T), Id(Id) {}
 
   TokenKind getKind() const { return Kind; }
   SourceLocation getLocation() const { return Loc; }
-  unsigned getLength() const { return Length; }
   std::string_view getText() const { return Text; }
   IdentifierInfo *getIdentifierInfo() const { return Id; }
 
   bool is(TokenKind K) const { return Kind == K; }
-  bool isNot(TokenKind K) const { return Kind != K; }
-  bool isIdentifier() const { return Kind == TokenKind::IDENTIFIER; }
-
-  bool isKeyword() const {
-    switch (Kind) {
-    case TokenKind::KW_FN:
-    case TokenKind::KW_LET:
-    case TokenKind::KW_MUT:
-    case TokenKind::KW_CONST:
-    case TokenKind::KW_AS:
-    case TokenKind::KW_IF:
-    case TokenKind::KW_ELSE:
-    case TokenKind::KW_RETURN:
-    case TokenKind::KW_TRUE:
-    case TokenKind::KW_FALSE:
-    case TokenKind::KW_WHILE:
-    case TokenKind::KW_FOR:
-    case TokenKind::KW_IN:
-      return true;
-    default:
-      return false;
-    }
-  }
-
-  bool isOperator() const {
-    switch (Kind) {
-    case TokenKind::OP_PLUS:
-    case TokenKind::OP_MINUS:
-    case TokenKind::OP_STAR:
-    case TokenKind::OP_SLASH:
-    case TokenKind::OP_PERCENT:
-    case TokenKind::OP_EQUAL:
-    case TokenKind::OP_EQUALEQUAL:
-    case TokenKind::OP_BANG:
-    case TokenKind::OP_BANGEQUAL:
-    case TokenKind::OP_LESS:
-    case TokenKind::OP_LESSEQUAL:
-    case TokenKind::OP_GREATER:
-    case TokenKind::OP_GREATEREQUAL:
-    case TokenKind::OP_COLONCOLON:
-    case TokenKind::OP_PLUSEQUAL:
-    case TokenKind::OP_MINUSEQUAL:
-    case TokenKind::OP_STARSTAR:
-    case TokenKind::OP_LESSLESS:
-    case TokenKind::OP_GREATERGREATER:
-    case TokenKind::OP_DOTDOT:
-    case TokenKind::OP_DOTDOTEQUAL:
-    case TokenKind::OP_PIPE:
-    case TokenKind::OP_PIPEPIPE:
-    case TokenKind::OP_AMP:
-    case TokenKind::OP_AMPAMP:
-      return true;
-    default:
-      return false;
-    }
-  }
-
-  bool isLiteral() const {
-    switch (Kind) {
-    case TokenKind::LT_INTEGER:
-    case TokenKind::LT_FLOAT:
-    case TokenKind::LT_STRING:
-      return true;
-    default:
-      return false;
-    }
-  }
 };
 
 } // namespace Lex

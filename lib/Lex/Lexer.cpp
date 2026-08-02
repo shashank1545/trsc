@@ -222,10 +222,10 @@ Token Lexer::Lex() {
 
 Token Lexer::FormToken(TokenKind Kind, const char *TokenStart,
                        IdentifierInfo *Id) {
-  unsigned Length = CurPtr - TokenStart;
-  std::string_view Text(TokenStart, Length);
+  std::string_view Text(TokenStart,
+                        static_cast<std::size_t>(CurPtr - TokenStart));
   SourceLocation Loc = SM.getLocation(TokenStart);
-  return Token(Kind, Loc, Length, Text, Id);
+  return Token(Kind, Loc, Text, Id);
 }
 
 void Lexer::SkipWhiteSpace() {

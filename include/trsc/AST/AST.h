@@ -1,13 +1,17 @@
 #ifndef TRSC_AST_AST_H
 #define TRSC_AST_AST_H
 
+#include "trsc/AST/QualType.h"
 #include "trsc/Basic/IdentifierTable.h"
 #include "trsc/Lex/Token.h"
-#include "trsc/Sema/Scope.h"
 
 #include <memory>
+#include <vector>
 
 namespace trsc {
+
+class Scope;
+struct Symbol;
 
 enum class ASTNodeKind {
   ASTK_PROGRAM,
@@ -40,8 +44,6 @@ enum class ASTNodeKind {
   ASTK_FUNCALL,
   ASTK_FUNCDECL,
 };
-
-const char *getASTKindName(ASTNodeKind Kind);
 
 class ASTNode {
 protected:
