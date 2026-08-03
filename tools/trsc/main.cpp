@@ -1,4 +1,5 @@
 #include <fstream>
+#include <system_error>
 
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Support/LLVM.h"
@@ -386,7 +387,10 @@ int main(int argc, char **argv) {
   }
   if (Linker.empty()) {
     std::cerr << "Error: No C compiler driver (clang/gcc/cc) found to link.\n";
-    llvm::sys::fs::remove(ObjPath);
+    if (std::error_code ec = llvm::sys::fs::remove(ObjPath)) {
+      std::cerr << "Warning: Failed to remove temporary file '"
+                << ObjPath.c_str() << "': " << ec.message() << "\n";
+    }
     return 1;
   }
 
@@ -407,7 +411,10 @@ int main(int argc, char **argv) {
   std::string LinkError;
   int LinkResult = llvm::sys::ExecuteAndWait(Linker, LinkArgs, std::nullopt, {},
                                              0, 0, &LinkError);
-  llvm::sys::fs::remove(ObjPath);
+  if (std::error_code ec = llvm::sys::fs::remove(ObjPath)) {
+    std::cerr << "Warning: Failed to remove temporary file '" << ObjPath.c_str()
+              << "': " << ec.message() << "\n";
+  }
   if (LinkResult != 0) {
     std::cerr << "Error: Linking failed";
     if (!LinkError.empty()) {

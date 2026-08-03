@@ -67,11 +67,11 @@ bool mlir::trscd::areIndicesPerfectlyAligned(mlir::Operation *op1,
                                              mlir::scf::ForOp loop2) {
   auto indices1 = mlir::trscd::getIndicesIfMemRefOp(op1);
   auto indices2 = mlir::trscd::getIndicesIfMemRefOp(op2);
+  if (!indices1 || !indices2)
+    return false;
   if (indices1->size() != indices2->size())
     return false;
 
-  if (!indices1 || !indices2)
-    return false;
   mlir::Value iv1 = loop1.getInductionVar();
   mlir::Value iv2 = loop2.getInductionVar();
   for (auto [idx1, idx2] : llvm::zip(*indices1, *indices2)) {

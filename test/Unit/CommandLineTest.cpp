@@ -36,8 +36,7 @@ TEST(CommandLineTest, AcceptsExplicitDeviceModes) {
 
 TEST(CommandLineTest, AcceptsModernCudaArchitecture) {
   trsc::CompilerOptions options;
-  ASSERT_TRUE(
-      parse({"trsc", "--cuda-arch=sm_80", "input.rs"}, options));
+  ASSERT_TRUE(parse({"trsc", "--cuda-arch=sm_80", "input.rs"}, options));
   EXPECT_EQ(options.Target.CudaArch, "sm_80");
   EXPECT_EQ(options.Target.MinimumCudaCapability, 80);
 }
@@ -53,8 +52,7 @@ TEST(CommandLineTest, RejectsUnknownDeviceMode) {
 TEST(CommandLineTest, RejectsPreTuringCudaArchitecture) {
   trsc::CompilerOptions options;
   testing::internal::CaptureStderr();
-  EXPECT_FALSE(
-      parse({"trsc", "--cuda-arch=sm_70", "input.rs"}, options));
+  EXPECT_FALSE(parse({"trsc", "--cuda-arch=sm_70", "input.rs"}, options));
   EXPECT_NE(testing::internal::GetCapturedStderr().find("minimum is sm_75"),
             std::string::npos);
 }
@@ -62,8 +60,7 @@ TEST(CommandLineTest, RejectsPreTuringCudaArchitecture) {
 TEST(CommandLineTest, RejectsMalformedCudaArchitecture) {
   trsc::CompilerOptions options;
   testing::internal::CaptureStderr();
-  EXPECT_FALSE(
-      parse({"trsc", "--cuda-arch=native", "input.rs"}, options));
+  EXPECT_FALSE(parse({"trsc", "--cuda-arch=native", "input.rs"}, options));
   EXPECT_NE(testing::internal::GetCapturedStderr().find("expected sm_NN"),
             std::string::npos);
 }

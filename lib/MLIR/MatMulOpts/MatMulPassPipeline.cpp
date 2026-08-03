@@ -8,7 +8,7 @@ namespace trscd {
 
 void buildMatMulOptPipeline(mlir::PassManager &pm, int optLevel,
                             const trsc::TargetOptions &target,
-                            AutoTuneConfig tuneConfig) {
+                            const AutoTuneConfig &tuneConfig) {
   // Phase 1: Recognize matmul patterns from both entry points
   pm.nest<func::FuncOp>().addPass(createMatMulRecognitionPass());
 

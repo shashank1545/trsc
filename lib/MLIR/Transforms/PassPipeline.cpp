@@ -34,8 +34,7 @@ void buildLateLoopOptPipeline(mlir::OpPassManager &pm) {
   pm.addNestedPass<mlir::func::FuncOp>(createTrscLoopUnroll());
 }
 
-void buildLoweringPipeline(mlir::OpPassManager &pm,
-                           llvm::StringRef cudaArch) {
+void buildLoweringPipeline(mlir::OpPassManager &pm, llvm::StringRef cudaArch) {
   // NVVM pipeline never lowers linalg; turn it into loops first.
   pm.addPass(mlir::createConvertLinalgToLoopsPass());
   mlir::gpu::GPUToNVVMPipelineOptions options;

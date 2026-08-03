@@ -38,16 +38,15 @@ void emitVoidCall(OpBuilder &builder, Location loc, func::FuncOp callee) {
 Value asCondition(OpBuilder &builder, Location loc, Value value) {
   Value zero = arith::ConstantIntOp::create(builder, loc, 0, 32);
   return arith::CmpIOp::create(builder, loc, arith::CmpIPredicate::ne, value,
-                              zero);
+                               zero);
 }
 
 void tagGemm(trscd::GemmOp gemm, StringRef target) {
-  gemm->setAttr(kGemmTargetAttr,
-                StringAttr::get(gemm.getContext(), target));
+  gemm->setAttr(kGemmTargetAttr, StringAttr::get(gemm.getContext(), target));
 }
 
-trscd::GemmOp cloneGemm(OpBuilder &builder, trscd::GemmOp source,
-                        Value output, StringRef target) {
+trscd::GemmOp cloneGemm(OpBuilder &builder, trscd::GemmOp source, Value output,
+                        StringRef target) {
   Operation *clone = builder.clone(*source.getOperation());
   clone->setOperand(2, output);
   auto gemm = cast<trscd::GemmOp>(clone);
@@ -66,15 +65,13 @@ Value allocateScratchLike(OpBuilder &builder, Location loc, Value source) {
 }
 
 struct MaterializeDeviceDispatchPass
-    : PassWrapper<MaterializeDeviceDispatchPass,
-                  OperationPass<func::FuncOp>> {
+    : PassWrapper<MaterializeDeviceDispatchPass, OperationPass<func::FuncOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(MaterializeDeviceDispatchPass)
 
   int optLevel;
   trsc::TargetOptions target;
 
-  MaterializeDeviceDispatchPass(int optLevel,
-                                const trsc::TargetOptions &target)
+  MaterializeDeviceDispatchPass(int optLevel, const trsc::TargetOptions &target)
       : optLevel(optLevel), target(target) {}
 
   StringRef getArgument() const final { return "matmul-device-dispatch"; }
@@ -101,12 +98,12 @@ struct MaterializeDeviceDispatchPass
     func::FuncOp isAvailable = getOrCreateRuntimeFunction(
         module, "trsc_cuda_is_available",
         declarationBuilder.getFunctionType({i32}, {i32}));
-    func::FuncOp resetError = getOrCreateRuntimeFunction(
-        module, "trsc_cuda_reset_error", noArgsVoid);
-    func::FuncOp hadError = getOrCreateRuntimeFunction(
-        module, "trsc_cuda_had_error", noArgsI32);
-    func::FuncOp abortCuda = getOrCreateRuntimeFunction(
-        module, "trsc_cuda_abort", noArgsVoid);
+    func::FuncOp resetError =
+        getOrCreateRuntimeFunction(module, "trsc_cuda_reset_error", noArgsVoid);
+    func::FuncOp hadError =
+        getOrCreateRuntimeFunction(module, "trsc_cuda_had_error", noArgsI32);
+    func::FuncOp abortCuda =
+        getOrCreateRuntimeFunction(module, "trsc_cuda_abort", noArgsVoid);
 
     SmallVector<trscd::GemmOp> work;
     function.walk([&](trscd::GemmOp gemm) { work.push_back(gemm); });
@@ -129,8 +126,8 @@ struct MaterializeDeviceDispatchPass
         memref::CopyOp::create(builder, loc, gemm.getC(), scratch);
         cloneGemm(builder, gemm, scratch, "cuda");
 
-        Value failed = asCondition(
-            builder, loc, emitI32Call(builder, loc, hadError));
+        Value failed =
+            asCondition(builder, loc, emitI32Call(builder, loc, hadError));
         auto recover =
             scf::IfOp::create(builder, loc, failed, /*withElseRegion=*/true);
 
@@ -144,8 +141,8 @@ struct MaterializeDeviceDispatchPass
         memref::DeallocOp::create(builder, loc, scratch);
       } else {
         cloneGemm(builder, gemm, gemm.getC(), "cuda");
-        Value failed = asCondition(
-            builder, loc, emitI32Call(builder, loc, hadError));
+        Value failed =
+            asCondition(builder, loc, emitI32Call(builder, loc, hadError));
         auto report = scf::IfOp::create(builder, loc, failed,
                                         /*withElseRegion=*/false);
         builder.setInsertionPointToStart(&report.getThenRegion().front());

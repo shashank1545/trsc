@@ -15,8 +15,8 @@
 #include "mlir/ExecutionEngine/CRunnerUtils.h"
 
 #include <cstdio>
-#include <cstring>
 #include <cstdlib>
+#include <cstring>
 #include <dlfcn.h>
 #include <string>
 #include <vector>
@@ -82,7 +82,8 @@ namespace {
 
 struct CudaDriverApi {
   void *Library = nullptr;
-#define TRSC_DECLARE_CUDA_SYMBOL(field, symbol) decltype(&symbol) field = nullptr;
+#define TRSC_DECLARE_CUDA_SYMBOL(field, symbol)                                \
+  decltype(&symbol) field = nullptr;
   TRSC_CUDA_DRIVER_SYMBOLS(TRSC_DECLARE_CUDA_SYMBOL)
 #undef TRSC_DECLARE_CUDA_SYMBOL
 };
@@ -149,21 +150,17 @@ void reportCudaError(CUresult result, const char *expression) {
 #undef cuMemFree
 #undef cuMemHostRegister
 
-#define cuGetErrorName(...)                                                    \
-  callCuda(cudaDriver().GetErrorName, __VA_ARGS__)
+#define cuGetErrorName(...) callCuda(cudaDriver().GetErrorName, __VA_ARGS__)
 #define cuInit(...) callCuda(cudaDriver().Init, __VA_ARGS__)
-#define cuDeviceGetCount(...)                                                  \
-  callCuda(cudaDriver().DeviceGetCount, __VA_ARGS__)
+#define cuDeviceGetCount(...) callCuda(cudaDriver().DeviceGetCount, __VA_ARGS__)
 #define cuDeviceGet(...) callCuda(cudaDriver().DeviceGet, __VA_ARGS__)
 #define cuDeviceGetAttribute(...)                                              \
   callCuda(cudaDriver().DeviceGetAttribute, __VA_ARGS__)
 #define cuDevicePrimaryCtxRetain(...)                                          \
   callCuda(cudaDriver().DevicePrimaryCtxRetain, __VA_ARGS__)
-#define cuCtxPushCurrent(...)                                                  \
-  callCuda(cudaDriver().CtxPushCurrent, __VA_ARGS__)
+#define cuCtxPushCurrent(...) callCuda(cudaDriver().CtxPushCurrent, __VA_ARGS__)
 #define cuCtxPopCurrent(...) callCuda(cudaDriver().CtxPopCurrent, __VA_ARGS__)
-#define cuModuleLoadData(...)                                                  \
-  callCuda(cudaDriver().ModuleLoadData, __VA_ARGS__)
+#define cuModuleLoadData(...) callCuda(cudaDriver().ModuleLoadData, __VA_ARGS__)
 #define cuModuleLoadDataEx(...)                                                \
   callCuda(cudaDriver().ModuleLoadDataEx, __VA_ARGS__)
 #define cuModuleUnload(...) callCuda(cudaDriver().ModuleUnload, __VA_ARGS__)
@@ -190,16 +187,13 @@ void reportCudaError(CUresult result, const char *expression) {
 #define cuMemAlloc(...) callCuda(cudaDriver().MemAlloc, __VA_ARGS__)
 #define cuMemFree(...) callCuda(cudaDriver().MemFree, __VA_ARGS__)
 #define cuMemcpyAsync(...) callCuda(cudaDriver().MemcpyAsync, __VA_ARGS__)
-#define cuMemsetD32Async(...)                                                  \
-  callCuda(cudaDriver().MemsetD32Async, __VA_ARGS__)
-#define cuMemsetD16Async(...)                                                  \
-  callCuda(cudaDriver().MemsetD16Async, __VA_ARGS__)
+#define cuMemsetD32Async(...) callCuda(cudaDriver().MemsetD32Async, __VA_ARGS__)
+#define cuMemsetD16Async(...) callCuda(cudaDriver().MemsetD16Async, __VA_ARGS__)
 #define cuMemHostRegister(...)                                                 \
   callCuda(cudaDriver().MemHostRegister, __VA_ARGS__)
 #define cuMemHostUnregister(...)                                               \
   callCuda(cudaDriver().MemHostUnregister, __VA_ARGS__)
-#define cuLaunchKernelEx(...)                                                  \
-  callCuda(cudaDriver().LaunchKernelEx, __VA_ARGS__)
+#define cuLaunchKernelEx(...) callCuda(cudaDriver().LaunchKernelEx, __VA_ARGS__)
 #define cuTensorMapEncodeTiled(...)                                            \
   callCuda(cudaDriver().TensorMapEncodeTiled, __VA_ARGS__)
 #define cuMemcpy(...) callCuda(cudaDriver().Memcpy, __VA_ARGS__)
@@ -257,13 +251,13 @@ trsc_cuda_is_available(int32_t minimumCapability) {
     int32_t minor = 0;
     if (api.DeviceGet(&device, ordinal) != CUDA_SUCCESS)
       continue;
-    if (api.DeviceGetAttribute(
-            &major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,
-            device) != CUDA_SUCCESS)
+    if (api.DeviceGetAttribute(&major,
+                               CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,
+                               device) != CUDA_SUCCESS)
       continue;
-    if (api.DeviceGetAttribute(
-            &minor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,
-            device) != CUDA_SUCCESS)
+    if (api.DeviceGetAttribute(&minor,
+                               CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,
+                               device) != CUDA_SUCCESS)
       continue;
     if (major * 10 + minor >= minimumCapability) {
       defaultDevice = ordinal;
@@ -371,7 +365,7 @@ CUmodule loadLazyModule(LazyCudaModule *module) {
         jitErrorBuffer, reinterpret_cast<void *>(sizeof(jitErrorBuffer)),
         reinterpret_cast<void *>(static_cast<intptr_t>(module->OptLevel))};
     CUresult result = cuModuleLoadDataEx(&module->Loaded, module->Data.data(),
-                                        3, jitOptions, jitOptionsVals);
+                                         3, jitOptions, jitOptionsVals);
     if (result != CUDA_SUCCESS) {
       if (jitErrorBuffer[0] != '\0')
         fprintf(stderr, "CUDA JIT compilation failed: %s\n", jitErrorBuffer);
@@ -386,8 +380,8 @@ CUmodule loadLazyModule(LazyCudaModule *module) {
 
 } // namespace
 
-extern "C" MLIR_CUDA_WRAPPERS_EXPORT
-    CUmodule mgpuModuleLoad(void *data, size_t gpuBlobSize) {
+extern "C" MLIR_CUDA_WRAPPERS_EXPORT CUmodule
+mgpuModuleLoad(void *data, size_t gpuBlobSize) {
   return reinterpret_cast<CUmodule>(
       makeLazyModule(data, gpuBlobSize, /*useJIT=*/false, /*optLevel=*/0));
 }

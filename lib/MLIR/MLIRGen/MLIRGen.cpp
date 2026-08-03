@@ -179,8 +179,6 @@ mlir::Type MLIRGen::toMLIRType(QualType T) {
     switch (Width) {
     case 32:
       return Builder.getF32Type();
-    case 64:
-      return Builder.getF64Type();
     default:
       return Builder.getF64Type();
     }

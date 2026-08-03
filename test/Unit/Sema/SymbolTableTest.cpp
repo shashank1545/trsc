@@ -62,18 +62,19 @@ TEST_F(SymbolTableTest, SymbolPointersSurviveLaterInserts) {
   Table.enterScope(ScopeKind::SCOPE_FUNCTION);
   std::vector<Symbol *> Handles;
   std::vector<std::string> Names;
+  Names.reserve(500);
   for (int I = 0; I < 500; ++I) {
     Names.push_back("v" + std::to_string(I));
   }
   for (int I = 0; I < 500; ++I) {
     Symbol *S = Table.addSymbol(id(Names[I].c_str()), Symbol());
     ASSERT_NE(S, nullptr);
-    S->Op = reinterpret_cast<void *>(static_cast<intptr_t>(I + 1));
+    S->Op = reinterpret_cast<void *>(static_cast<intptr_t>(I + 1)); // NOLINT
     Handles.push_back(S);
   }
   for (int I = 0; I < 500; ++I) {
     EXPECT_EQ(Handles[I]->Op,
-              reinterpret_cast<void *>(static_cast<intptr_t>(I + 1)));
+              reinterpret_cast<void *>(static_cast<intptr_t>(I + 1))); // NOLINT
     EXPECT_EQ(Table.lookupSymbol(id(Names[I].c_str())), Handles[I]);
   }
 }
@@ -83,6 +84,7 @@ TEST_F(SymbolTableTest, SymbolPointersSurviveLaterInserts) {
 TEST_F(SymbolTableTest, SpellingAndPointerKeysAgree) {
   Table.enterScope(ScopeKind::SCOPE_FUNCTION);
   std::vector<std::string> Names;
+  Names.reserve(64);
   for (int I = 0; I < 64; ++I) {
     Names.push_back("sym" + std::to_string(I));
   }

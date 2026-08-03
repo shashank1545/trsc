@@ -27,7 +27,7 @@ std::unique_ptr<mlir::Pass> createGemmEpilogueFusionPass();
 
 // Pass to compute optimal parameters and attach them as attributes to
 // trscd.gemm
-std::unique_ptr<mlir::Pass> createAutoTuningPass(AutoTuneConfig config = {});
+std::unique_ptr<mlir::Pass> createAutoTuningPass(const AutoTuneConfig &config);
 
 // Pass to lower trscd.gemm into standard optimized MLIR (scf, memref, gpu,
 // vector) based on the optimization level
@@ -35,13 +35,13 @@ std::unique_ptr<mlir::Pass>
 createMaterializeDeviceDispatchPass(int optLevel,
                                     const trsc::TargetOptions &target);
 
-std::unique_ptr<mlir::Pass>
-createLowerTrscdMatMulPass(int optLevel, trsc::DeviceMode device);
+std::unique_ptr<mlir::Pass> createLowerTrscdMatMulPass(int optLevel,
+                                                       trsc::DeviceMode device);
 
 // Pipeline builder to compose the passes
 void buildMatMulOptPipeline(mlir::PassManager &pm, int optLevel,
                             const trsc::TargetOptions &target,
-                            AutoTuneConfig tuneConfig = {});
+                            const AutoTuneConfig &tuneConfig = {});
 
 // Register standalone matmul optimization passes with an MLIR tool driver.
 void registerMatMulOptPasses();

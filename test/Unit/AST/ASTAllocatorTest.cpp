@@ -57,7 +57,8 @@ TEST(ASTAllocatorTest, GrowsAcrossSlabs) {
 
 TEST(ASTAllocatorTest, OversizedRequestGetsOwnSlab) {
   ASTAllocator A;
-  void *P = A.Allocate(1024 * 1024, 8); // larger than the 256 KB cap
+  void *P = A.Allocate(static_cast<size_t>(1024) * 1024,
+                       8); // larger than the 256 KB cap
   ASSERT_NE(P, nullptr);
   // Must still be usable end to end.
   auto *Bytes = static_cast<char *>(P);

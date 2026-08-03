@@ -13,7 +13,7 @@ struct AutoTuningPass
 
   trscd::AutoTuneConfig config;
 
-  AutoTuningPass(trscd::AutoTuneConfig config) : config(config) {}
+  AutoTuningPass(const trscd::AutoTuneConfig &config) : config(config) {}
 
   StringRef getArgument() const final { return "matmul-autotune"; }
   StringRef getDescription() const final {
@@ -61,7 +61,7 @@ struct AutoTuningPass
 namespace mlir {
 namespace trscd {
 
-std::unique_ptr<mlir::Pass> createAutoTuningPass(AutoTuneConfig config) {
+std::unique_ptr<mlir::Pass> createAutoTuningPass(const AutoTuneConfig &config) {
   return std::make_unique<AutoTuningPass>(config);
 }
 
