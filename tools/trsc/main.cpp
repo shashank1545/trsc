@@ -3,7 +3,6 @@
 
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Support/LLVM.h"
-#include "mlir/Target/LLVMIR/Dialect/All.h"
 #include "mlir/Target/LLVMIR/Export.h"
 
 #include "llvm/IR/LLVMContext.h"
@@ -279,10 +278,6 @@ int main(int argc, char **argv) {
     }
     return 0;
   }
-
-  mlir::DialectRegistry TranslationRegistry;
-  mlir::registerAllToLLVMIRTranslations(TranslationRegistry);
-  Module->getContext()->appendDialectRegistry(TranslationRegistry);
 
   llvm::LLVMContext LLVMCtx;
   auto LLVMModule = mlir::translateModuleToLLVMIR(*Module, LLVMCtx);

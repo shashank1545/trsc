@@ -8,9 +8,26 @@
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "mlir/Dialect/LLVMIR/NVVMDialect.h"
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
-#include "mlir/InitAllExtensions.h"
 #include "mlir/Target/LLVM/NVVM/Target.h"
-#include "mlir/Target/LLVMIR/Dialect/All.h"
+
+#include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
+#include "mlir/Conversion/ComplexToLLVM/ComplexToLLVM.h"
+#include "mlir/Conversion/ControlFlowToLLVM/ControlFlowToLLVM.h"
+#include "mlir/Conversion/FuncToLLVM/ConvertFuncToLLVM.h"
+#include "mlir/Conversion/GPUCommon/GPUToLLVM.h"
+#include "mlir/Conversion/GPUToNVVM/GPUToNVVM.h"
+#include "mlir/Conversion/IndexToLLVM/IndexToLLVM.h"
+#include "mlir/Conversion/MathToLLVM/MathToLLVM.h"
+#include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
+#include "mlir/Conversion/NVVMToLLVM/NVVMToLLVM.h"
+#include "mlir/Conversion/UBToLLVM/UBToLLVM.h"
+#include "mlir/Conversion/VectorToLLVM/ConvertVectorToLLVM.h"
+
+#include "mlir/Target/LLVMIR/Dialect/Builtin/BuiltinToLLVMIRTranslation.h"
+#include "mlir/Target/LLVMIR/Dialect/GPU/GPUToLLVMIRTranslation.h"
+#include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
+#include "mlir/Target/LLVMIR/Dialect/NVVM/NVVMToLLVMIRTranslation.h"
+
 #include "trsc/AST/ASTContext.h"
 #include "trsc/MLIR/TrscDialect.h"
 #include "trsc/MLIR/TrscMLIRGen.h"
@@ -31,11 +48,28 @@ MLIRGen::MLIRGen(mlir::MLIRContext &MLIRCtx, trsc::ASTContext &ASTCtx,
   Registry.insert<mlir::NVVM::NVVMDialect>();
   Registry.insert<mlir::vector::VectorDialect>();
   Registry.insert<mlir::trscd::TrscDialect>();
-  mlir::registerAllExtensions(Registry);
+
+  mlir::arith::registerConvertArithToLLVMInterface(Registry);
+  mlir::registerConvertComplexToLLVMInterface(Registry);
+  mlir::cf::registerConvertControlFlowToLLVMInterface(Registry);
+  mlir::registerConvertFuncToLLVMInterface(Registry);
+  mlir::index::registerConvertIndexToLLVMInterface(Registry);
+  mlir::registerConvertMathToLLVMInterface(Registry);
+  mlir::registerConvertMemRefToLLVMInterface(Registry);
+  mlir::registerConvertNVVMToLLVMInterface(Registry);
+  mlir::ub::registerConvertUBToLLVMInterface(Registry);
+  mlir::vector::registerConvertVectorToLLVMInterface(Registry);
+  mlir::gpu::registerConvertGpuToLLVMInterface(Registry);
+  mlir::NVVM::registerConvertGpuToNVVMInterface(Registry);
+
   mlir::NVVM::registerNVVMTargetInterfaceExternalModels(Registry);
-  // gpu-module-to-binary serializes device modules to LLVM IR mid-pipeline,
-  // so translation interfaces must be registered up front.
-  mlir::registerAllToLLVMIRTranslations(Registry);
+
+  mlir::registerBuiltinDialectTranslation(Registry);
+  mlir::registerLLVMDialectTranslation(Registry);
+  mlir::registerGPUDialectTranslation(Registry);
+  mlir::registerNVVMDialectTranslation(Registry);
+  mlir::gpu::registerOffloadingLLVMTranslationInterfaceExternalModels(Registry);
+
   MLIRCtx.appendDialectRegistry(Registry);
   MLIRCtx.loadAllAvailableDialects();
 }
