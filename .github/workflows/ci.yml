@@ -17,8 +17,44 @@ jobs:
       - name: Check formatting
         run: git ls-files '*.cpp' '*.h' | xargs clang-format --dry-run --Werror
 
+  build:
+    name: build and test (LLVM 23)
+    needs: format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install LLVM 23 toolchain
+        run: sudo bash ci/install-llvm23.sh
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-llvm23-${{ runner.os }}-v1
+          restore-keys: |
+            ccache-llvm23-${{ runner.os }}-
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DENABLE_TESTING=ON \
+            -DMLIR_DIR=/usr/lib/llvm-23/lib/cmake/mlir \
+            -DLLVM_DIR=/usr/lib/llvm-23/lib/cmake/llvm \
+            -DCMAKE_C_COMPILER=clang-23 \
+            -DCMAKE_CXX_COMPILER=clang++-23
+      - name: Build
+        run: cmake --build build
+      - name: Test non-GPU suite
+        run: ctest --test-dir build --output-on-failure -j4 -LE GPU
+      - name: Upload test log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: llvm23-last-test-log
+          path: build/Testing/Temporary/LastTest.log
+
   tidy:
     name: clang-tidy (frontend)
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

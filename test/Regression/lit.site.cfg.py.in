@@ -1,0 +1,8 @@
+config.trsc_bin = r"$<TARGET_FILE:trsc>"
+config.trsc_opt_bin = r"$<TARGET_FILE:trsc-opt>"
+config.filecheck_bin = r"@LLVM_TOOLS_BINARY_DIR@/FileCheck"
+config.not_bin = r"@LLVM_TOOLS_BINARY_DIR@/not"
+config.test_source_root = r"@CMAKE_CURRENT_SOURCE_DIR@"
+config.test_exec_root = r"@CMAKE_CURRENT_BINARY_DIR@"
+
+lit_config.load_config(config, r"@CMAKE_CURRENT_SOURCE_DIR@/lit.cfg.py")

@@ -1,0 +1,17 @@
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV CC=clang-23
+ENV CXX=clang++-23
+
+WORKDIR /src
+
+COPY ci/install-llvm23.sh /tmp/install-llvm23.sh
+RUN bash /tmp/install-llvm23.sh \
+      && rm -f /tmp/install-llvm23.sh \
+      && rm -rf /var/lib/apt/lists/*
+
+RUN ln -s /usr/bin/clang-23 /usr/bin/clang \
+      && ln -s /usr/bin/clang++-23 /usr/bin/clang++
+
+COPY . .

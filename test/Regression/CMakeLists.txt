@@ -24,17 +24,20 @@ set_tests_properties(regression_build PROPERTIES
   FIXTURES_SETUP regression_fixture
 )
 
-# Pass each subdirectory as a separate argument so lit discovers all of them.
+configure_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/lit.site.cfg.py.in
+  ${CMAKE_CURRENT_BINARY_DIR}/lit.site.cfg.py.gen
+  @ONLY
+)
+file(GENERATE
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/lit.site.cfg.py
+  INPUT  ${CMAKE_CURRENT_BINARY_DIR}/lit.site.cfg.py.gen
+)
+
 add_test(
   NAME regression
   COMMAND ${LIT_EXECUTABLE} -v
-    ${CMAKE_CURRENT_SOURCE_DIR}/Ops
-    ${CMAKE_CURRENT_SOURCE_DIR}/Sema
-    ${CMAKE_CURRENT_SOURCE_DIR}/Lex
-    ${CMAKE_CURRENT_SOURCE_DIR}/Parse
-    ${CMAKE_CURRENT_SOURCE_DIR}/MLIR
-    ${CMAKE_CURRENT_SOURCE_DIR}/MatMul
-    ${CMAKE_CURRENT_SOURCE_DIR}/CodeGen
+    ${CMAKE_CURRENT_BINARY_DIR}
 )
 set_tests_properties(regression PROPERTIES
   LABELS            "Regression"

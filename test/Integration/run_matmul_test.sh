@@ -21,10 +21,21 @@ EXPECTED=$8
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
+CUDA_LINK_ARGS=()
+for CUDA_STUB_DIR in \
+  "${CUDA_STUB_DIR:-}" \
+  /usr/local/cuda/targets/x86_64-linux/lib/stubs \
+  /usr/local/cuda-*/targets/x86_64-linux/lib/stubs; do
+  if [ -n "$CUDA_STUB_DIR" ] && [ -f "$CUDA_STUB_DIR/libcuda.so" ]; then
+    CUDA_LINK_ARGS=(-L"$CUDA_STUB_DIR")
+    break
+  fi
+done
+
 "$TRSC" --matmul-opt-level="$LEVEL" -emit-obj "$SRC" -o "$WORK/mm.o"
 "$OBJCOPY" --redefine-sym main=trsc_main "$WORK/mm.o"
 "$CC" "$HARNESS" "$WORK/mm.o" "$RUNTIME" \
-  -Wl,--as-needed -lcuda -lstdc++ -lm -o "$WORK/mm_test"
+  "${CUDA_LINK_ARGS[@]}" -Wl,--as-needed -lcuda -lstdc++ -lm -o "$WORK/mm_test"
 
 ACTUAL=$("$WORK/mm_test")
 

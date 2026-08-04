@@ -1,7 +1,11 @@
 cmake_minimum_required(VERSION 3.20)
 
-set(CMAKE_C_COMPILER "/usr/bin/clang")
-set(CMAKE_CXX_COMPILER "/usr/bin/clang++")
+if(NOT DEFINED CMAKE_C_COMPILER)
+  set(CMAKE_C_COMPILER "/usr/bin/clang")
+endif()
+if(NOT DEFINED CMAKE_CXX_COMPILER)
+  set(CMAKE_CXX_COMPILER "/usr/bin/clang++")
+endif()
 
 project(trsc C CXX)
 
@@ -29,13 +33,30 @@ set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=lld")
 set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -fuse-ld=lld")
 
 option(ENABLE_TESTING "Build the testing suite" OFF)
+
+set(TRSC_REQUESTED_MLIR_DIR "${MLIR_DIR}")
+set(TRSC_REQUESTED_LLVM_DIR "${LLVM_DIR}")
+
+find_package(MLIR REQUIRED CONFIG)
+find_package(LLVM REQUIRED CONFIG)
+
+if(TRSC_REQUESTED_MLIR_DIR AND
+   NOT "${MLIR_DIR}" STREQUAL "${TRSC_REQUESTED_MLIR_DIR}")
+  message(FATAL_ERROR
+    "Requested MLIR_DIR '${TRSC_REQUESTED_MLIR_DIR}', but CMake resolved "
+    "'${MLIR_DIR}'. Refusing an unexpected MLIR installation.")
+endif()
+if(TRSC_REQUESTED_LLVM_DIR AND
+   NOT "${LLVM_DIR}" STREQUAL "${TRSC_REQUESTED_LLVM_DIR}")
+  message(FATAL_ERROR
+    "Requested LLVM_DIR '${TRSC_REQUESTED_LLVM_DIR}', but CMake resolved "
+    "'${LLVM_DIR}'. Refusing an unexpected LLVM installation.")
+endif()
+
 if(ENABLE_TESTING)
   enable_testing()
   add_subdirectory(test)
 endif()
-
-find_package(MLIR REQUIRED CONFIG)
-find_package(LLVM REQUIRED CONFIG)
 
 list(APPEND CMAKE_MODULE_PATH "${MLIR_CMAKE_DIR}")
 list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")

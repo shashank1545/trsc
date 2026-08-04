@@ -8,6 +8,11 @@
 # 32x32 all-ones x all-twos matmul).
 
 set(TRSC_INTEGRATION_RUNTIME ${CMAKE_BINARY_DIR}/lib/libTrscCudaRuntime.a)
+find_program(TRSC_READELF_EXECUTABLE
+  NAMES llvm-readelf llvm-readelf-23 readelf
+  HINTS ${LLVM_TOOLS_BINARY_DIR}
+  REQUIRED
+)
 
 # Levels 0-1 lower to CPU loops; levels 2-8 launch CUDA kernels and need a
 # working GPU at test time (labelled GPU so they can be excluded with
@@ -112,7 +117,7 @@ add_test(
   COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/run_cuda_unavailable_test.sh
     $<TARGET_FILE:trsc>
     ${CMAKE_CURRENT_SOURCE_DIR}/matmul.rs
-    ${CMAKE_READELF}
+    ${TRSC_READELF_EXECUTABLE}
 )
 set_tests_properties(integration_cuda_required_unavailable PROPERTIES
   LABELS            "Integration;CPUFallback"

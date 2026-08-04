@@ -233,17 +233,25 @@ static bool isProfileEnabled() {
 extern "C" MLIR_CUDA_WRAPPERS_EXPORT int32_t
 trsc_cuda_is_available(int32_t minimumCapability) {
   CudaDriverApi &api = cudaDriver();
+  cudaRuntimeError = CUDA_ERROR_NOT_INITIALIZED;
+  defaultDevice = -1;
   if (!api.Library || !api.Init || !api.DeviceGetCount || !api.DeviceGet ||
       !api.DeviceGetAttribute)
     return 0;
 
   cudaRuntimeError = CUDA_SUCCESS;
-  if (api.Init(/*flags=*/0) != CUDA_SUCCESS)
+  CUresult result = api.Init(/*flags=*/0);
+  if (result != CUDA_SUCCESS) {
+    cudaRuntimeError = result;
     return 0;
+  }
 
   int32_t count = 0;
-  if (api.DeviceGetCount(&count) != CUDA_SUCCESS)
+  result = api.DeviceGetCount(&count);
+  if (result != CUDA_SUCCESS) {
+    cudaRuntimeError = result;
     return 0;
+  }
 
   for (int32_t ordinal = 0; ordinal < count; ++ordinal) {
     CUdevice device = 0;

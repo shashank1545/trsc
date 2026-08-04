@@ -1,4 +1,8 @@
-llvm_map_components_to_libnames(trsc_codegen_libs core native nativecodegen)
+if(LLVM_LINK_LLVM_DYLIB)
+  set(trsc_codegen_libs LLVM)
+else()
+  llvm_map_components_to_libnames(trsc_codegen_libs core native nativecodegen)
+endif()
 
 add_executable(trsc main.cpp)
 
