@@ -52,6 +52,8 @@ public:
       return getDerived().visitRangeExpr(static_cast<RangeExpr *>(E));
     case ASTNodeKind::ASTK_FUNCALL:
       return getDerived().visitFunCall(static_cast<FunCall *>(E));
+    case ASTNodeKind::ASTK_MACROCALL:
+      return getDerived().visitMacroCall(static_cast<MacroCall *>(E));
     default:
       // For base expression types or unknown kinds, return default value
       return RetTy();
@@ -87,6 +89,13 @@ public:
   }
 
   RetTy visitFunCall(FunCall *E) {
+    for (Expr *Arg : E->getParams()) {
+      getDerived().visit(Arg);
+    }
+    return RetTy();
+  }
+
+  RetTy visitMacroCall(MacroCall *E) {
     for (Expr *Arg : E->getParams()) {
       getDerived().visit(Arg);
     }

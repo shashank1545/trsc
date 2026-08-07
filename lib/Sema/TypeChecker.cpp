@@ -5,6 +5,33 @@
 
 namespace trsc {
 
+namespace {
+bool countFormatArguments(std::string_view Format, std::size_t &Count) {
+  Count = 0;
+  for (std::size_t I = 0; I < Format.size(); ++I) {
+    if (Format[I] == '{') {
+      if (I + 1 < Format.size() && Format[I + 1] == '{') {
+        ++I;
+        continue;
+      }
+      std::size_t Close = Format.find('}', I + 1);
+      if (Close == std::string_view::npos)
+        return false;
+      std::string_view Spec = Format.substr(I + 1, Close - I - 1);
+      if (!Spec.empty() && Spec != ":?")
+        return false;
+      ++Count;
+      I = Close;
+    } else if (Format[I] == '}') {
+      if (I + 1 >= Format.size() || Format[I + 1] != '}')
+        return false;
+      ++I;
+    }
+  }
+  return true;
+}
+} // namespace
+
 TypeChecker::TypeChecker(DiagnosticsEngine &Diags, ASTContext &Ctx)
     : Diags(Diags), Ctx(Ctx) {}
 
@@ -226,6 +253,15 @@ void TypeChecker::visitLetStmt(LetStmt *Node) {
                    Node->getSourceRange().getStart());
       return;
     }
+  }
+
+  // A unit-typed binding has no storage to allocate; letting one through
+  // reaches MLIRGen and trips an assertion building the memref for it.
+  if (FinalType.isUnitType()) {
+    Diags.Report(DiagKind::Error,
+                 "Cannot bind a value of type '()' to a variable",
+                 Node->getSourceRange().getStart());
+    return;
   }
 
   if (!FinalType.isNull()) {
@@ -464,9 +500,23 @@ void TypeChecker::visitWhileStmt(WhileStmt *Node) {
   }
 }
 
-void TypeChecker::visitFuncDecl(FuncDecl *Node) {
-  QualType OldFunctionReturnType = CurrentFunctionReturnType;
-  CurrentFunctionReturnType = QualType();
+void TypeChecker::visitProgram(Program *Node) {
+  for (Stmt *S : Node->getStatements()) {
+    if (S->getASTNodeKind() == ASTNodeKind::ASTK_FUNCDECL)
+      resolveFuncSignature(static_cast<FuncDecl *>(S));
+  }
+
+  for (Stmt *S : Node->getStatements()) {
+    visit(S);
+  }
+}
+
+QualType TypeChecker::resolveFuncSignature(FuncDecl *Node) {
+  Symbol *FuncSym = Node->getFuncName()->getSymbol();
+  if (FuncSym && !FuncSym->Ty.isNull()) {
+    return FuncSym->Ty;
+  }
+
   std::vector<QualType> ParamTypes;
   if (!Node->getParams().empty()) {
     for (const auto &Param : Node->getParams()) {
@@ -506,15 +556,26 @@ void TypeChecker::visitFuncDecl(FuncDecl *Node) {
                        Node->getFuncName()->getName() + "'",
                    Node->getReturnType()->getSourceRange().getStart());
     }
-    CurrentFunctionReturnType = FuncReturnQualType;
   } else {
     FuncReturnQualType = Ctx.getUnitType();
   }
 
   QualType FunctionType = Ctx.getFunctionType(FuncReturnQualType, ParamTypes);
-  auto Sym = Node->getFuncName()->getSymbol();
-  if (Sym)
-    Sym->Ty = FunctionType;
+  if (FuncSym)
+    FuncSym->Ty = FunctionType;
+  return FunctionType;
+}
+
+void TypeChecker::visitFuncDecl(FuncDecl *Node) {
+  QualType OldFunctionReturnType = CurrentFunctionReturnType;
+  CurrentFunctionReturnType = QualType();
+
+  QualType FunctionType = resolveFuncSignature(Node);
+  // Only an explicit annotation constrains `return`; an unannotated function
+  // leaves the tracked type null, which is what visitReturnStmt expects.
+  if (Node->getReturnType() && !FunctionType.isNull())
+    CurrentFunctionReturnType = FunctionType.getReturnType();
+
   if (Node->getBody()) {
     visit(Node->getBody());
   }
@@ -541,14 +602,74 @@ void TypeChecker::visitFunCall(FunCall *Node) {
   // While not ideal it works and i dont have to care about the ordering of
   // params and assignment in the function declaration.
   ArrayRef<Expr *> ParamCallType = Node->getParams();
-  for (int I = 0; I < ParamCallType.size(); ++I) {
+  if (ParamCallType.size() != ParamsExpType.size()) {
+    // Bail out before the loop: it indexes the declared list with the call's
+    // argument count, which would run off the end on an over-long call.
+    Diags.Report(DiagKind::Error,
+                 "Function " + Node->getFuncName()->getName() + " expects " +
+                     std::to_string(ParamsExpType.size()) +
+                     " argument(s) but got " +
+                     std::to_string(ParamCallType.size()),
+                 Node->getSourceRange().getStart());
+    return;
+  }
+  QualType OldExpectedType = ExpectedType;
+  for (std::size_t I = 0; I < ParamCallType.size(); ++I) {
+    // The declared parameter type is what an untyped literal argument should
+    // adopt; without it a literal falls back to i32/f64 and mismatches.
+    ExpectedType = ParamsExpType[I];
     visit(ParamCallType[I]);
+    ExpectedType = OldExpectedType;
     if (ParamCallType[I]->getType() != ParamsExpType[I]) {
       Diags.Report(DiagKind::Error,
                    "Function " + Node->getFuncName()->getName() +
                        " expected Type " + ParamsExpType[I].getAsString() +
                        " but got " + ParamCallType[I]->getType().getAsString());
       break;
+    }
+  }
+}
+
+void TypeChecker::visitMacroCall(MacroCall *Node) {
+  // Every macro evaluates to unit, including the unsupported ones that the
+  // name resolver has already rejected: leaving the node untyped would make
+  // any enclosing expression report a second, misleading error.
+  Node->setType(Ctx.getUnitType());
+
+  if (Node->getName() != "println")
+    return;
+
+  if (!Node->hasFormatString()) {
+    if (!Node->getParams().empty()) {
+      Diags.Report(DiagKind::Error, "println! requires a string literal format",
+                   Node->getSourceRange().getStart());
+    }
+  } else {
+    std::size_t FormatArguments = 0;
+    if (!countFormatArguments(Node->getFormatString(), FormatArguments)) {
+      Diags.Report(DiagKind::Error, "Invalid println! format string",
+                   Node->getSourceRange().getStart());
+    } else if (FormatArguments != Node->getParams().size()) {
+      Diags.Report(DiagKind::Error,
+                   "println! expects " + std::to_string(FormatArguments) +
+                       " argument(s) for its placeholders but got " +
+                       std::to_string(Node->getParams().size()),
+                   Node->getSourceRange().getStart());
+    }
+  }
+
+  for (Expr *Param : Node->getParams()) {
+    visit(Param);
+    QualType ParamType = Param->getType();
+    if (ParamType.isNull())
+      continue; // Already diagnosed while checking the argument itself.
+    if (!ParamType.isIntegerType() && !ParamType.isFloatingType() &&
+        !ParamType.isBooleanType()) {
+      Diags.Report(DiagKind::Error,
+                   "println! cannot format a value of type '" +
+                       ParamType.getAsString() +
+                       "'; only integers, floats and bool are supported",
+                   Param->getSourceRange().getStart());
     }
   }
 }

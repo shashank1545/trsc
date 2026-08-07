@@ -450,6 +450,28 @@ void TypedASTPrinter::visitFunCall(FunCall *Node) {
   }
 }
 
+void TypedASTPrinter::visitMacroCall(MacroCall *Node) {
+  printNodeHeader(Node, "MacroCall");
+  OS << " '" << Node->getName() << "!'";
+  if (Node->hasFormatString())
+    OS << " format='" << Node->getFormatString() << "'";
+  OS << getTypeString(Node) << "\n";
+
+  const auto &Params = Node->getParams();
+  if (!Params.empty()) {
+    IndentLevel++;
+    for (size_t I = 0; I < Params.size(); ++I) {
+      bool IsLast = I == Params.size() - 1;
+      IsLastStack.resize(IndentLevel - 1);
+      IsLastStack.push_back(IsLast);
+      printIndent(IsLast);
+      visit(Params[I]);
+      IsLastStack.pop_back();
+    }
+    IndentLevel--;
+  }
+}
+
 void TypedASTPrinter::visitIntExpr(IntExpr *Node) {
   printNodeHeader(Node, "IntExpr");
   OS << getTypeString(Node);

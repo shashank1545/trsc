@@ -32,10 +32,14 @@ public:
   void visitReturnStmt(ReturnStmt *Node);
   void visitFuncDecl(FuncDecl *Node);
   void visitFunCall(FunCall *Node);
+  void visitMacroCall(MacroCall *Node);
+  void visitProgram(Program *Node);
 
   QualType resolveType(Type *Node);
 
 private:
+  QualType resolveFuncSignature(FuncDecl *Node);
+
   DiagnosticsEngine &Diags;
   ASTContext &Ctx;
   QualType CurrentFunctionReturnType;

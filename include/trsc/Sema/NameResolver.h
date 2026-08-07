@@ -31,6 +31,7 @@ public:
   void visitRefrExpr(RefrExpr *E);
   void visitRangeExpr(RangeExpr *E);
   void visitFunCall(FunCall *E);
+  void visitMacroCall(MacroCall *E);
   void visitReturnStmt(ReturnStmt *S);
   void visitForStmt(ForStmt *S);
   void visitWhileStmt(WhileStmt *S);

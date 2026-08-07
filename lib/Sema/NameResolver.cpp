@@ -165,6 +165,18 @@ void NameResolver::visitFunCall(FunCall *E) {
   }
 }
 
+void NameResolver::visitMacroCall(MacroCall *E) {
+  if (E->getName() != "println") {
+    Diags.Report(DiagKind::Error,
+                 "Unsupported macro '" + std::string(E->getName()) + "!'",
+                 E->getSourceRange().getStart());
+  }
+
+  for (Expr *Param : E->getParams()) {
+    visit(Param);
+  }
+}
+
 void NameResolver::visitReturnStmt(ReturnStmt *S) {
   S->setScope(ST.getCurrentScope());
   ASTVisitor<NameResolver>::visitReturnStmt(S);

@@ -4,7 +4,9 @@
 #include "trsc/AST/ASTAllocator.h"
 #include "trsc/AST/QualType.h"
 #include "trsc/Basic/ArrayRef.h"
+#include <cstring>
 #include <memory>
+#include <string_view>
 #include <unordered_map>
 
 namespace trsc {
@@ -71,6 +73,18 @@ public:
       new (static_cast<void *>(Mem + I)) T(Src[I]);
     }
     return ArrayRef<T>(Mem, Src.size());
+  }
+
+  /// Copies \p Src into the arena and returns a view of the copy. Used for
+  /// strings that are synthesised rather than carved out of the source buffer
+  /// (e.g. escape-decoded string literals).
+  std::string_view allocateString(std::string_view Src) {
+    if (Src.empty()) {
+      return {};
+    }
+    char *Mem = static_cast<char *>(Allocate(Src.size(), alignof(char)));
+    std::memcpy(Mem, Src.data(), Src.size());
+    return std::string_view(Mem, Src.size());
   }
 
   size_t getASTMemory() const { return Allocator.getTotalMemory(); }

@@ -229,6 +229,20 @@ void ASTPrinter::visitFunCall(FunCall *Node) {
   IndentLevel--;
 }
 
+void ASTPrinter::visitMacroCall(MacroCall *Node) {
+  indent();
+  OS << "MacroCall " << Node->getName() << "!";
+  if (Node->hasFormatString())
+    OS << " format='" << Node->getFormatString() << "'";
+  OS << '\n';
+  IndentLevel++;
+  for (Expr *Param : Node->getParams()) {
+    if (Param)
+      visit(Param);
+  }
+  IndentLevel--;
+}
+
 void ASTPrinter::visitRefrExpr(RefrExpr *Node) {
   indent();
   OS << "RefrExpr " << (Node->isMut() ? "mut" : "non-mut") << '\n';

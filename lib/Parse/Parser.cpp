@@ -1,8 +1,10 @@
 #include "trsc/Parse/Parser.h"
 #include "trsc/Basic/Diagnostics.h"
+#include "trsc/Lex/Lexer.h"
 
 #include <charconv>
 #include <cstdint>
+#include <string>
 
 namespace trsc {
 
@@ -170,7 +172,9 @@ Expr *Parser::parsePrimary() {
   }
   case Lex::TokenKind::IDENTIFIER: {
     Lex::Token IdentToken = consume(Lex::TokenKind::IDENTIFIER);
-    if (currentToken().getKind() == Lex::TokenKind::DE_LPAREN) {
+    if (currentToken().getKind() == Lex::TokenKind::OP_BANG) {
+      return parseMacroCall(IdentToken);
+    } else if (currentToken().getKind() == Lex::TokenKind::DE_LPAREN) {
       return parseFunCall(IdentToken);
     } else if (currentToken().getKind() == Lex::TokenKind::DE_LBRACKET) {
       return parseArrayAccessExpr(IdentToken);
@@ -581,6 +585,88 @@ FuncDecl *Parser::parseFunction() {
 
   return new (Ctx)
       FuncDecl(Ctx, LocRange, FuncName, FuncReturnType, ParamVector, Block);
+}
+
+bool Parser::decodeStringLiteral(const Lex::Token &Tok, std::string_view &Out) {
+  std::string_view Text = Tok.getText();
+  if (Text.size() < 2 || Text.front() != '\"' || Text.back() != '\"') {
+    // Unterminated literal; the lexer already diagnosed it.
+    return false;
+  }
+  std::string_view Body = Text.substr(1, Text.size() - 2);
+
+  if (Body.find('\\') == std::string_view::npos) {
+    // Escape-free: the source buffer already holds the runtime bytes.
+    Out = Body;
+    return true;
+  }
+
+  std::string Decoded;
+  Decoded.reserve(Body.size());
+  for (std::size_t I = 0; I < Body.size(); ++I) {
+    if (Body[I] != '\\' || I + 1 == Body.size()) {
+      Decoded.push_back(Body[I]);
+      continue;
+    }
+    std::optional<char> Escaped = Lex::Lexer::decodeEscape(Body[I + 1]);
+    if (!Escaped) {
+      // Unknown escape, already reported by the lexer. Keep the raw characters
+      // so that the rest of the literal still parses.
+      Decoded.push_back(Body[I]);
+      continue;
+    }
+    Decoded.push_back(*Escaped);
+    ++I;
+  }
+
+  Out = Ctx.allocateString(Decoded);
+  return true;
+}
+
+MacroCall *Parser::parseMacroCall(Lex::Token MacroNameToken) {
+  SourceLocation Start = MacroNameToken.getLocation();
+  consume(Lex::TokenKind::OP_BANG);
+  if (!expectToken(Lex::TokenKind::DE_LPAREN))
+    return nullptr;
+
+  std::string_view Format;
+  bool HasFormat = false;
+  std::vector<Expr *> Params;
+
+  if (currentToken().getKind() != Lex::TokenKind::DE_RPAREN) {
+    if (currentToken().getKind() == Lex::TokenKind::LT_STRING) {
+      Lex::Token FormatToken = consume(Lex::TokenKind::LT_STRING);
+      if (!decodeStringLiteral(FormatToken, Format))
+        return nullptr;
+      HasFormat = true;
+
+      if (currentToken().getKind() != Lex::TokenKind::DE_RPAREN &&
+          !expectToken(Lex::TokenKind::DE_COMMA))
+        return nullptr;
+    }
+
+    while (currentToken().getKind() != Lex::TokenKind::DE_RPAREN) {
+      if (isAtEnd()) {
+        reportExpectedError(Lex::TokenKind::DE_RPAREN);
+        return nullptr;
+      }
+      Expr *Param = parseExpr(0);
+      if (!Param)
+        return nullptr;
+      Params.push_back(Param);
+
+      if (currentToken().getKind() == Lex::TokenKind::DE_RPAREN)
+        break;
+      if (!expectToken(Lex::TokenKind::DE_COMMA))
+        return nullptr;
+    }
+  }
+
+  SourceLocation End = currentToken().getLocation();
+  consume(Lex::TokenKind::DE_RPAREN);
+  SourceRange Range = SourceRange(Start, End);
+  return new (Ctx) MacroCall(Ctx, Range, MacroNameToken.getText(), Format,
+                             HasFormat, Params);
 }
 
 FunCall *

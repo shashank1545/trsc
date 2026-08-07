@@ -82,6 +82,9 @@ public:
     case ASTNodeKind::ASTK_FUNCALL:
       getDerived().visitFunCall(static_cast<FunCall *>(Node));
       break;
+    case ASTNodeKind::ASTK_MACROCALL:
+      getDerived().visitMacroCall(static_cast<MacroCall *>(Node));
+      break;
     case ASTNodeKind::ASTK_FUNCDECL:
       getDerived().visitFuncDecl(static_cast<FuncDecl *>(Node));
       break;
@@ -185,6 +188,12 @@ public:
 
   void visitFunCall(FunCall *E) {
     getDerived().visit(E->getFuncName());
+    for (Expr *Param : E->getParams()) {
+      getDerived().visit(Param);
+    }
+  }
+
+  void visitMacroCall(MacroCall *E) {
     for (Expr *Param : E->getParams()) {
       getDerived().visit(Param);
     }

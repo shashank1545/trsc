@@ -5,6 +5,8 @@
 #include "trsc/Basic/SourceManager.h"
 #include "trsc/Lex/Token.h"
 
+#include <optional>
+
 namespace trsc {
 
 class IdentifierTable;
@@ -18,6 +20,10 @@ public:
   Lexer(SourceManager &SM, DiagnosticsEngine &Diag, IdentifierTable &Idents);
 
   Token Lex();
+
+  static std::optional<char> decodeEscape(char C);
+
+  static bool isSupportedEscape(char C) { return decodeEscape(C).has_value(); }
 
 private:
   SourceManager &SM;

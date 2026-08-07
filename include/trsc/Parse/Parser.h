@@ -33,6 +33,8 @@ private:
   bool expectToken(Lex::TokenKind Kind);
   void reportExpectedError(Lex::TokenKind ExpectedKind);
 
+  bool decodeStringLiteral(const Lex::Token &Tok, std::string_view &Out);
+
   trsc::Type *parseType();
   trsc::Stmt *parseStmt();
   trsc::LetStmt *parseLetStmt();
@@ -40,6 +42,7 @@ private:
   trsc::ArrayExpr *parseArray(std::vector<int64_t> Shape);
   trsc::ArrayAccessExpr *parseArrayAccessExpr(Lex::Token Token);
   trsc::Expr *parsePrimary();
+  trsc::MacroCall *parseMacroCall(Lex::Token MacroNameToken);
   trsc::RangeExpr *parseRangeExpr();
   trsc::WhileStmt *parseWhileStmt();
   trsc::ForStmt *parseForStmt();

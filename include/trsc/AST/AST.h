@@ -8,6 +8,7 @@
 #include "trsc/Lex/Token.h"
 
 #include <cstdint>
+#include <string_view>
 #include <vector>
 
 namespace trsc {
@@ -43,6 +44,7 @@ enum class ASTNodeKind {
   ASTK_BLOCKSTMT,
   ASTK_RETURNSTMT,
   ASTK_FUNCALL,
+  ASTK_MACROCALL,
   ASTK_FUNCDECL,
 };
 
@@ -472,6 +474,30 @@ public:
   ArrayRef<Expr *> getParams() const { return Params; }
   static bool classof(const Expr *E) {
     return E->getASTNodeKind() == ASTNodeKind::ASTK_FUNCALL;
+  }
+};
+
+class MacroCall : public Expr {
+private:
+  std::string_view MacroName;
+  std::string_view FormatString;
+  bool HasFormatString;
+  ArrayRef<Expr *> Params;
+
+public:
+  MacroCall(ASTContext &C, SourceRange Range, std::string_view Name,
+            std::string_view Format, bool HasFormat,
+            const std::vector<Expr *> &Params)
+      : Expr(ASTNodeKind::ASTK_MACROCALL, Range), MacroName(Name),
+        FormatString(Format), HasFormatString(HasFormat),
+        Params(C.allocateArray(Params)) {}
+
+  std::string_view getName() const { return MacroName; }
+  bool hasFormatString() const { return HasFormatString; }
+  std::string_view getFormatString() const { return FormatString; }
+  ArrayRef<Expr *> getParams() const { return Params; }
+  static bool classof(const Expr *E) {
+    return E->getASTNodeKind() == ASTNodeKind::ASTK_MACROCALL;
   }
 };
 

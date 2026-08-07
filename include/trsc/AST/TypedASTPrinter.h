@@ -49,6 +49,7 @@ public:
   void visitASExpr(ASExpr *Node);
   void visitRangeExpr(RangeExpr *Node);
   void visitFunCall(FunCall *Node);
+  void visitMacroCall(MacroCall *Node);
 
   // Visitors for concrete type nodes
   void visitTypeName(TypeName *Node);

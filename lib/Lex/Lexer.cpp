@@ -273,15 +273,60 @@ Token Lexer::LexNumber(const char *TokenStart) {
   return FormToken(TokenKind::LT_INTEGER, TokenStart);
 }
 
+std::optional<char> Lexer::decodeEscape(char C) {
+  switch (C) {
+  case 'n':
+    return '\n';
+  case 'r':
+    return '\r';
+  case 't':
+    return '\t';
+  case '0':
+    return '\0';
+  case '\\':
+    return '\\';
+  case '\'':
+    return '\'';
+  case '\"':
+    return '\"';
+  default:
+    return std::nullopt;
+  }
+}
+
 Token Lexer::LexStringLiteral(const char *TokenStart) {
+  // TokenStart points at the opening quote; the token text keeps both quotes
+  // and the raw (still encoded) escape sequences. Decoding happens in the
+  // parser so the lexer stays a pure tokenizer.
   CurPtr++;
-  while (CurPtr < BufferEnd && *CurPtr != '\"') {
+  bool Terminated = false;
+  while (CurPtr < BufferEnd) {
+    if (*CurPtr == '\\') {
+      // Consume the escape as one unit so that \" does not end the literal.
+      const char *EscapeStart = CurPtr;
+      CurPtr++;
+      if (CurPtr == BufferEnd) {
+        break;
+      }
+      if (!isSupportedEscape(*CurPtr)) {
+        Diag.Report(DiagKind::Error,
+                    std::string("Unknown escape sequence '\\") + *CurPtr + "'",
+                    SM.getLocation(EscapeStart));
+      }
+      CurPtr++;
+      continue;
+    }
+    if (*CurPtr == '\"') {
+      CurPtr++;
+      Terminated = true;
+      break;
+    }
     CurPtr++;
   }
-  if (CurPtr < BufferEnd) {
-    CurPtr++;
-  } else {
-    Diag.Report(DiagKind::Error, "Pointer out of buffer.");
+
+  if (!Terminated) {
+    Diag.Report(DiagKind::Error, "Unterminated string literal",
+                SM.getLocation(TokenStart));
   }
 
   return FormToken(TokenKind::LT_STRING, TokenStart);
