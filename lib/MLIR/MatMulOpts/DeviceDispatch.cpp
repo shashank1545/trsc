@@ -65,7 +65,7 @@ Value allocateScratchLike(OpBuilder &builder, Location loc, Value source) {
 }
 
 struct MaterializeDeviceDispatchPass
-    : PassWrapper<MaterializeDeviceDispatchPass, OperationPass<func::FuncOp>> {
+    : PassWrapper<MaterializeDeviceDispatchPass, OperationPass<ModuleOp>> {
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(MaterializeDeviceDispatchPass)
 
   int optLevel;
@@ -83,13 +83,12 @@ struct MaterializeDeviceDispatchPass
     if (optLevel < 2)
       return;
 
-    func::FuncOp function = getOperation();
+    ModuleOp module = getOperation();
     if (target.Device == trsc::DeviceMode::CPU) {
-      function.walk([&](trscd::GemmOp gemm) { tagGemm(gemm, "cpu"); });
+      module.walk([&](trscd::GemmOp gemm) { tagGemm(gemm, "cpu"); });
       return;
     }
 
-    ModuleOp module = function->getParentOfType<ModuleOp>();
     OpBuilder declarationBuilder(module.getBodyRegion());
     Type i32 = declarationBuilder.getI32Type();
     FunctionType noArgsI32 = declarationBuilder.getFunctionType({}, {i32});
@@ -106,7 +105,7 @@ struct MaterializeDeviceDispatchPass
         getOrCreateRuntimeFunction(module, "trsc_cuda_abort", noArgsVoid);
 
     SmallVector<trscd::GemmOp> work;
-    function.walk([&](trscd::GemmOp gemm) { work.push_back(gemm); });
+    module.walk([&](trscd::GemmOp gemm) { work.push_back(gemm); });
 
     for (trscd::GemmOp gemm : work) {
       OpBuilder builder(gemm);

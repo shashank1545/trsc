@@ -398,6 +398,7 @@ int main(int argc, char **argv) {
                                            "-o",
                                            Output,
                                            TRSC_CUDA_RUNTIME_LIB,
+                                           TRSC_PRINT_RUNTIME_LIB,
                                            "-Wl,--as-needed",
                                            "-ldl",
                                            "-lstdc++",

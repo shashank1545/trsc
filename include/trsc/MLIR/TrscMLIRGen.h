@@ -6,6 +6,10 @@
 #include "mlir/IR/OwningOpRef.h"
 #include "trsc/AST/ExprVisitor.h"
 
+#include "llvm/ADT/StringMap.h"
+
+#include <string_view>
+
 namespace mlir {
 class MLIRContext;
 class Type;
@@ -32,6 +36,8 @@ public:
 
   mlir::OwningOpRef<mlir::ModuleOp> genModule(trsc::Program &Prog);
 
+  mlir::Operation *declareFuncDecl(FuncDecl *Node);
+
   void genParams(ArrayRef<FuncDecl::Param> Params);
   void genFuncDecl(FuncDecl *Node);
   void genBlockStmt(BlockStmt *Stmt);
@@ -57,6 +63,7 @@ public:
   mlir::Value visitRefrExpr(RefrExpr *Node);
   mlir::Value visitBoolExpr(BoolExpr *Node);
   mlir::Value visitBinExpr(BinExpr *Node);
+  mlir::Value visitMacroCall(MacroCall *Node);
 
 private:
   mlir::MLIRContext &MLIRCtx;
@@ -66,6 +73,11 @@ private:
   mlir::OpBuilder Builder;
   mlir::ModuleOp Module;
   mlir::Block *CurrentEntryBlock = nullptr;
+
+  llvm::StringMap<std::string> PrintStringGlobals;
+
+  void emitPrintLiteral(std::string_view Text);
+  void emitPrintValue(Expr *Argument);
 
   mlir::Type toMLIRType(QualType T);
   mlir::MemRefType toMemRefType(QualType T);

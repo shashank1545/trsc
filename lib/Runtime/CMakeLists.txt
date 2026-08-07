@@ -1,3 +1,9 @@
+add_library(TrscPrintRuntime STATIC PrintRuntime.cpp)
+
+set_target_properties(TrscPrintRuntime PROPERTIES
+  ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
+)
+
 # Static CUDA runtime wrappers (vendored from mlir/lib/ExecutionEngine) so
 # trsc-produced binaries do not depend on the LLVM build tree's
 # libmlir_cuda_runtime.so. The CUDA driver is loaded lazily so emitted

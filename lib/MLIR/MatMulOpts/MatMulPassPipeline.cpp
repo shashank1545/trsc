@@ -21,8 +21,8 @@ void buildMatMulOptPipeline(mlir::PassManager &pm, int optLevel,
   }
 
   // Phase 3: preserve both implementations before lowering erases trscd.gemm.
-  pm.nest<func::FuncOp>().addPass(
-      createMaterializeDeviceDispatchPass(optLevel, target));
+  // Module-scoped: it declares shared runtime symbols in the module body.
+  pm.addPass(createMaterializeDeviceDispatchPass(optLevel, target));
 
   // Phase 4: lower CPU-tagged clones at level 1 and CUDA clones at the
   // requested GPU level.

@@ -6,6 +6,7 @@
 #include "mlir/IR/Verifier.h"
 
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
+#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/LLVMIR/NVVMDialect.h"
 #include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "mlir/Target/LLVM/NVVM/Target.h"
@@ -45,6 +46,7 @@ MLIRGen::MLIRGen(mlir::MLIRContext &MLIRCtx, trsc::ASTContext &ASTCtx,
   Registry.insert<mlir::scf::SCFDialect>();
   Registry.insert<mlir::linalg::LinalgDialect>();
   Registry.insert<mlir::gpu::GPUDialect>();
+  Registry.insert<mlir::LLVM::LLVMDialect>();
   Registry.insert<mlir::NVVM::NVVMDialect>();
   Registry.insert<mlir::vector::VectorDialect>();
   Registry.insert<mlir::trscd::TrscDialect>();
@@ -332,6 +334,11 @@ void MLIRGen::genStmt(Stmt *S) {
 }
 
 void MLIRGen::genProgram(Program *Node) {
+  for (Stmt *S : Node->getStatements()) {
+    if (S->getASTNodeKind() == ASTNodeKind::ASTK_FUNCDECL)
+      declareFuncDecl(static_cast<FuncDecl *>(S));
+  }
+
   for (Stmt *S : Node->getStatements()) {
     genStmt(S);
   }
@@ -742,7 +749,12 @@ mlir::Value MLIRGen::visitFunCall(FunCall *Node) {
   }
 
   mlir::Operation *RawPtr = static_cast<mlir::Operation *>(FuncSym->Op);
-  mlir::func::FuncOp funcOp = llvm::dyn_cast<mlir::func::FuncOp>(RawPtr);
+  auto funcOp = llvm::dyn_cast_if_present<mlir::func::FuncOp>(RawPtr);
+  if (!funcOp) {
+    llvm::errs() << "Error: Function '" << FuncName
+                 << "' has no generated definition\n";
+    return mlir::Value();
+  }
 
   llvm::ArrayRef<mlir::Type> ResultTypes = funcOp.getResultTypes();
 
@@ -771,6 +783,144 @@ mlir::Value MLIRGen::visitFunCall(FunCall *Node) {
   } else {
     return CallOp.getResult(0);
   }
+}
+
+namespace {
+
+mlir::func::FuncOp getRuntimeFunction(mlir::ModuleOp Module,
+                                      llvm::StringRef Name,
+                                      mlir::FunctionType Type) {
+  if (auto Function = Module.lookupSymbol<mlir::func::FuncOp>(Name))
+    return Function;
+
+  mlir::OpBuilder ModuleBuilder(Module.getBodyRegion());
+  auto Function =
+      mlir::func::FuncOp::create(ModuleBuilder, Module.getLoc(), Name, Type);
+  Function.setPrivate();
+  return Function;
+}
+
+} // namespace
+
+void MLIRGen::emitPrintLiteral(std::string_view Text) {
+  if (Text.empty())
+    return;
+
+  auto Loc = Builder.getUnknownLoc();
+  llvm::StringRef Contents(Text.data(), Text.size());
+
+  auto Entry = PrintStringGlobals.find(Contents);
+  if (Entry == PrintStringGlobals.end()) {
+    std::string Name =
+        "trsc_print_str." + std::to_string(PrintStringGlobals.size());
+    auto ArrayType =
+        mlir::LLVM::LLVMArrayType::get(Builder.getI8Type(), Text.size());
+
+    mlir::OpBuilder ModuleBuilder(Module.getBodyRegion());
+    mlir::LLVM::GlobalOp::create(ModuleBuilder, Module.getLoc(), ArrayType,
+                                 /*isConstant=*/true,
+                                 mlir::LLVM::Linkage::Internal, Name,
+                                 Builder.getStringAttr(Contents));
+    Entry = PrintStringGlobals.insert({Contents, Name}).first;
+  }
+
+  auto PointerType = mlir::LLVM::LLVMPointerType::get(&MLIRCtx);
+  mlir::Value Pointer =
+      mlir::LLVM::AddressOfOp::create(Builder, Loc, PointerType, Entry->second);
+  mlir::Value Length = mlir::LLVM::ConstantOp::create(
+      Builder, Loc, Builder.getI64Type(),
+      Builder.getI64IntegerAttr(static_cast<int64_t>(Text.size())));
+
+  mlir::FunctionType Type =
+      Builder.getFunctionType({Pointer.getType(), Length.getType()}, {});
+  mlir::Value Arguments[] = {Pointer, Length};
+  mlir::func::CallOp::create(Builder, Loc,
+                             getRuntimeFunction(Module, "trsc_print_str", Type),
+                             Arguments);
+}
+
+void MLIRGen::emitPrintValue(Expr *Argument) {
+  auto Loc = Builder.getUnknownLoc();
+  mlir::Value Value = visit(Argument);
+  if (!Value)
+    return;
+
+  auto EmitCall = [&](llvm::StringRef Name, mlir::Value Operand) {
+    mlir::FunctionType Type = Builder.getFunctionType({Operand.getType()}, {});
+    mlir::Value Arguments[] = {Operand};
+    mlir::func::CallOp::create(
+        Builder, Loc, getRuntimeFunction(Module, Name, Type), Arguments);
+  };
+
+  QualType Type = Argument->getType();
+  if (Type.isBooleanType()) {
+    mlir::Value Normalized =
+        mlir::arith::ExtUIOp::create(Builder, Loc, Builder.getI32Type(), Value);
+    EmitCall("trsc_print_bool", Normalized);
+    return;
+  }
+
+  if (Type.isIntegerType()) {
+    unsigned Width = static_cast<unsigned>(Type.getSizeInBytes() * 8);
+    bool IsSigned = Type.isSignedIntegerType();
+    mlir::Type TargetType = Builder.getIntegerType(64);
+    mlir::Value Normalized = Value;
+    if (Width < 64) {
+      if (IsSigned) {
+        Normalized =
+            mlir::arith::ExtSIOp::create(Builder, Loc, TargetType, Value);
+      } else {
+        Normalized =
+            mlir::arith::ExtUIOp::create(Builder, Loc, TargetType, Value);
+      }
+    }
+    EmitCall(IsSigned ? "trsc_print_i64" : "trsc_print_u64", Normalized);
+    return;
+  }
+
+  if (Type.isFloatingType()) {
+    EmitCall(Type.getSizeInBytes() == 4 ? "trsc_print_f32" : "trsc_print_f64",
+             Value);
+  }
+}
+
+mlir::Value MLIRGen::visitMacroCall(MacroCall *Node) {
+  auto Loc = Builder.getUnknownLoc();
+
+  std::string_view Format = Node->getFormatString();
+  std::string Literal;
+  std::size_t ParamIndex = 0;
+
+  for (std::size_t I = 0; I < Format.size(); ++I) {
+    if (Format[I] == '{') {
+      if (I + 1 < Format.size() && Format[I + 1] == '{') {
+        Literal.push_back('{');
+        ++I;
+        continue;
+      }
+      std::size_t Close = Format.find('}', I + 1);
+      if (Close == std::string_view::npos)
+        break;
+      emitPrintLiteral(Literal);
+      Literal.clear();
+      if (ParamIndex < Node->getParams().size())
+        emitPrintValue(Node->getParams()[ParamIndex++]);
+      I = Close;
+      continue;
+    }
+    if (Format[I] == '}' && I + 1 < Format.size() && Format[I + 1] == '}') {
+      Literal.push_back('}');
+      ++I;
+      continue;
+    }
+    Literal.push_back(Format[I]);
+  }
+  emitPrintLiteral(Literal);
+
+  auto Newline = getRuntimeFunction(Module, "trsc_print_newline",
+                                    Builder.getFunctionType({}, {}));
+  mlir::func::CallOp::create(Builder, Loc, Newline, mlir::ValueRange());
+  return mlir::Value();
 }
 
 void MLIRGen::genParams(ArrayRef<FuncDecl::Param> Params) {
@@ -804,15 +954,17 @@ void MLIRGen::genParams(ArrayRef<FuncDecl::Param> Params) {
   }
 }
 
-void MLIRGen::genFuncDecl(FuncDecl *Node) {
-  auto Loc = Builder.getUnknownLoc();
+mlir::Operation *MLIRGen::declareFuncDecl(FuncDecl *Node) {
   Symbol *Sym = Node->getFuncName()->getSymbol();
   if (!Sym)
-    return;
+    return nullptr;
 
   QualType FuncTy = Sym->Ty;
   if (!FuncTy.isFunctionType())
-    return;
+    return nullptr;
+
+  if (Sym->Op)
+    return static_cast<mlir::Operation *>(Sym->Op);
 
   std::vector<mlir::Type> ArgTypes;
   for (const auto &ParamTy : FuncTy.getParamsType()) {
@@ -827,9 +979,19 @@ void MLIRGen::genFuncDecl(FuncDecl *Node) {
 
   auto FuncType = Builder.getFunctionType(ArgTypes, ResultTypes);
 
-  auto funcOp = mlir::func::FuncOp::create(
-      Builder, Loc, Node->getFuncName()->getName(), FuncType);
+  auto funcOp =
+      mlir::func::FuncOp::create(Builder, Builder.getUnknownLoc(),
+                                 Node->getFuncName()->getName(), FuncType);
   Sym->setOp(static_cast<void *>(funcOp.getOperation()));
+  return funcOp.getOperation();
+}
+
+void MLIRGen::genFuncDecl(FuncDecl *Node) {
+  mlir::Operation *RawFuncOp = declareFuncDecl(Node);
+  if (!RawFuncOp)
+    return;
+  auto funcOp = llvm::cast<mlir::func::FuncOp>(RawFuncOp);
+  llvm::ArrayRef<mlir::Type> ResultTypes = funcOp.getResultTypes();
 
   auto *EntryBlock = funcOp.addEntryBlock();
   this->CurrentEntryBlock = EntryBlock;
@@ -1036,8 +1198,7 @@ void MLIRGen::genExprStmt(ExprStmt *Node) {
   if (!E)
     return;
 
-  // Special handling for assignment operators
-  if (auto *BE = static_cast<BinExpr *>(E)) {
+  if (auto *BE = llvm::dyn_cast<BinExpr>(E)) {
     Lex::TokenKind Op = BE->getOp();
 
     if (Op == Lex::TokenKind::OP_EQUAL || Op == Lex::TokenKind::OP_PLUSEQUAL ||

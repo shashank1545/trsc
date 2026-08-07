@@ -8,9 +8,10 @@ add_executable(trsc main.cpp)
 
 target_compile_definitions(trsc PRIVATE
   TRSC_CUDA_RUNTIME_LIB="${CMAKE_BINARY_DIR}/lib/libTrscCudaRuntime.a"
+  TRSC_PRINT_RUNTIME_LIB="${CMAKE_BINARY_DIR}/lib/libTrscPrintRuntime.a"
 )
 
-add_dependencies(trsc TrscCudaRuntime)
+add_dependencies(trsc TrscCudaRuntime TrscPrintRuntime)
 
 target_link_libraries(trsc
   PRIVATE
