@@ -24,6 +24,7 @@ add_executable(trsc_unit_tests
   AST/ASTAllocatorTest.cpp
   CommandLineTest.cpp
   Lex/LexerTest.cpp
+  Parse/MacroCallTest.cpp
   Sema/SymbolTableTest.cpp
 )
 

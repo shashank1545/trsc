@@ -112,6 +112,31 @@ set_tests_properties(integration_driver_link PROPERTIES
   FIXTURES_REQUIRED regression_fixture
 )
 
+# println! is exercised at two optimisation levels. Level 0 keeps the pipeline
+# minimal, while the default level additionally runs the matmul passes; those
+# declare module-level runtime symbols, so only the second variant covers the
+# interaction between println!'s own declarations and that pass scheduling.
+add_test(
+  NAME integration_println
+  COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/run_println_test.sh
+    $<TARGET_FILE:trsc>
+    ${CMAKE_CURRENT_SOURCE_DIR}/println.rs
+    0
+)
+add_test(
+  NAME integration_println_default_opt
+  COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/run_println_test.sh
+    $<TARGET_FILE:trsc>
+    ${CMAKE_CURRENT_SOURCE_DIR}/println.rs
+)
+set_tests_properties(
+  integration_println
+  integration_println_default_opt
+  PROPERTIES
+    LABELS            "Integration;CPUFallback"
+    FIXTURES_REQUIRED regression_fixture
+)
+
 add_test(
   NAME integration_cuda_required_unavailable
   COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/run_cuda_unavailable_test.sh
