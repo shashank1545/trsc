@@ -973,8 +973,15 @@ mlir::Operation *MLIRGen::declareFuncDecl(FuncDecl *Node) {
 
   QualType RetT = FuncTy.getReturnType();
   std::vector<mlir::Type> ResultTypes;
+  const bool IsEntryPoint = Node->getFuncName()->getName() == "main" &&
+                            Node->getParams().empty();
   if (!RetT.isUnitType()) {
     ResultTypes.push_back(toMLIRType(RetT));
+  } else if (IsEntryPoint) {
+    // The native entry point follows the C ABI even when the source-level
+    // function has the language's unit return type.  A void `main` leaves
+    // the process exit status undefined after linking.
+    ResultTypes.push_back(Builder.getI32Type());
   }
 
   auto FuncType = Builder.getFunctionType(ArgTypes, ResultTypes);
@@ -1007,11 +1014,22 @@ void MLIRGen::genFuncDecl(FuncDecl *Node) {
     genStmt(Node->getBody());
   }
 
+  const bool IsUnitEntryPoint =
+      Node->getFuncName()->getName() == "main" &&
+      Node->getParams().empty() && Node->getReturnType() == nullptr;
+
   if (ResultTypes.empty()) {
     if (EntryBlock->empty() ||
         !EntryBlock->back().hasTrait<mlir::OpTrait::IsTerminator>()) {
       mlir::func::ReturnOp::create(Builder, Builder.getUnknownLoc());
     }
+  } else if (IsUnitEntryPoint &&
+             (EntryBlock->empty() ||
+              !EntryBlock->back().hasTrait<mlir::OpTrait::IsTerminator>())) {
+    auto Zero = mlir::arith::ConstantIntOp::create(
+        Builder, Builder.getUnknownLoc(), Builder.getI32Type(), 0);
+    mlir::func::ReturnOp::create(Builder, Builder.getUnknownLoc(),
+                                 Zero.getResult());
   }
 
   this->CurrentEntryBlock = nullptr;
@@ -1022,6 +1040,18 @@ void MLIRGen::genReturnStmt(ReturnStmt *Node) {
 
   // No return value (void return)
   if (!Node->getReturnValue()) {
+    auto *ParentOp = CurrentEntryBlock ? CurrentEntryBlock->getParentOp()
+                                       : nullptr;
+    auto FuncOp = llvm::dyn_cast_or_null<mlir::func::FuncOp>(ParentOp);
+    if (FuncOp && Builder.getInsertionBlock() == CurrentEntryBlock &&
+        FuncOp.getName() == "main" && FuncOp.getResultTypes().size() == 1 &&
+        FuncOp.getResultTypes().front().isInteger(32)) {
+      auto Zero = mlir::arith::ConstantIntOp::create(
+          Builder, Loc, Builder.getI32Type(), 0);
+      mlir::func::ReturnOp::create(Builder, Loc, Zero.getResult());
+      return;
+    }
+
     mlir::func::ReturnOp::create(Builder, Loc);
     return;
   }
