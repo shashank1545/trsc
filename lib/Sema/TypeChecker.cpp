@@ -273,6 +273,49 @@ void TypeChecker::visitExprStmt(ExprStmt *Node) {
   visit(Node->getExpression());
 }
 
+void TypeChecker::visitUnaryExpr(UnaryExpr *Node) {
+  visit(Node->getOperand());
+
+  QualType OperandType = Node->getOperand()->getType();
+  if (OperandType.isNull()) {
+    Node->setType(QualType());
+    return;
+  }
+
+  switch (Node->getOp()) {
+  case Lex::TokenKind::OP_MINUS:
+    if (OperandType.isNumericType()) {
+      Node->setType(OperandType);
+      return;
+    }
+    Diags.Report(
+        DiagKind::Error,
+        "Operator '-' requires a numeric operand ('" +
+            OperandType.getAsString() + "')",
+        Node->getSourceRange().getStart());
+    break;
+  case Lex::TokenKind::OP_BANG:
+    if (OperandType.isBooleanType()) {
+      Node->setType(Ctx.getBoolType());
+      return;
+    }
+    Diags.Report(
+        DiagKind::Error,
+        "Operator '!' requires a boolean operand ('" +
+            OperandType.getAsString() + "')",
+        Node->getSourceRange().getStart());
+    break;
+  default:
+    Diags.Report(DiagKind::Error,
+                 "Unsupported unary operator '" +
+                     std::string(Lex::getTokenString(Node->getOp())) + "'",
+                 Node->getSourceRange().getStart());
+    break;
+  }
+
+  Node->setType(QualType());
+}
+
 void TypeChecker::visitBinExpr(BinExpr *Node) {
   Lex::TokenKind Op = Node->getOp();
 

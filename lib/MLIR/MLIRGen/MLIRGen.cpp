@@ -719,6 +719,38 @@ mlir::Value MLIRGen::visitBinExpr(BinExpr *Node) {
   }
 }
 
+mlir::Value MLIRGen::visitUnaryExpr(UnaryExpr *Node) {
+  auto Loc = Builder.getUnknownLoc();
+  mlir::Value Operand = visit(Node->getOperand());
+  if (!Operand)
+    return mlir::Value();
+
+  switch (Node->getOp()) {
+  case Lex::TokenKind::OP_MINUS:
+    if (Node->getType().isFloatingType())
+      return mlir::arith::NegFOp::create(Builder, Loc, Operand);
+    if (Node->getType().isIntegerType()) {
+      auto Zero = mlir::arith::ConstantIntOp::create(
+          Builder, Loc, Operand.getType(), 0);
+      return mlir::arith::SubIOp::create(Builder, Loc, Zero, Operand);
+    }
+    break;
+  case Lex::TokenKind::OP_BANG:
+    if (Node->getType().isBooleanType()) {
+      auto True = mlir::arith::ConstantIntOp::create(
+          Builder, Loc, Operand.getType(), 1);
+      return mlir::arith::XOrIOp::create(Builder, Loc, Operand, True);
+    }
+    break;
+  default:
+    break;
+  }
+
+  llvm::errs() << "Error: Unhandled unary operator: "
+               << Lex::getTokenName(Node->getOp()) << "\n";
+  return mlir::Value();
+}
+
 mlir::Value MLIRGen::visitBoolExpr(BoolExpr *Node) {
   auto BoolOp = mlir::arith::ConstantIntOp::create(
       Builder, Builder.getUnknownLoc(), toMLIRType(Node->getType()),
@@ -1258,6 +1290,11 @@ void MLIRGen::genForStmt(ForStmt *Node) {
       Builder, loc, Builder.getIndexType(), lbValue);
   mlir::Value ub = mlir::arith::IndexCastOp::create(
       Builder, loc, Builder.getIndexType(), ubValue);
+  if (Node->getRange()->isInclusive()) {
+    mlir::Value One =
+        mlir::arith::ConstantIndexOp::create(Builder, loc, 1);
+    ub = mlir::arith::AddIOp::create(Builder, loc, ub, One).getResult();
+  }
   mlir::Value step = mlir::arith::ConstantIndexOp::create(Builder, loc, 1);
 
   auto forOp = mlir::scf::ForOp::create(Builder, loc, lb, ub, step);

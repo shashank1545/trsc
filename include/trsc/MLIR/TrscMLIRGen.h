@@ -63,6 +63,7 @@ public:
   mlir::Value visitRefrExpr(RefrExpr *Node);
   mlir::Value visitBoolExpr(BoolExpr *Node);
   mlir::Value visitBinExpr(BinExpr *Node);
+  mlir::Value visitUnaryExpr(UnaryExpr *Node);
   mlir::Value visitMacroCall(MacroCall *Node);
 
 private:

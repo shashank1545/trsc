@@ -665,6 +665,25 @@ void TypedASTPrinter::visitBinExpr(BinExpr *Node) {
   IndentLevel--;
 }
 
+void TypedASTPrinter::visitUnaryExpr(UnaryExpr *Node) {
+  printNodeHeader(Node, "UnaryExpr");
+  OS << getTypeString(Node);
+  OS << " '" << Lex::getTokenName(Node->getOp()) << "'\n";
+
+  IndentLevel++;
+  if (Node->getOperand()) {
+    if (IndentLevel > 0) {
+      IsLastStack.resize(IndentLevel - 1);
+      IsLastStack.push_back(true);
+    }
+    printIndent(true);
+    visit(Node->getOperand());
+    if (IndentLevel > 0 && !IsLastStack.empty())
+      IsLastStack.pop_back();
+  }
+  IndentLevel--;
+}
+
 void TypedASTPrinter::visitRangeExpr(RangeExpr *Node) {
   printNodeHeader(Node, "RangeExpr");
   OS << getTypeString(Node);

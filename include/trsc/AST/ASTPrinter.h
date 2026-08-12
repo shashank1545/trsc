@@ -37,6 +37,7 @@ public:
   void visitRefrExpr(RefrExpr *Node);
   void visitBoolExpr(BoolExpr *Node);
   void visitBinExpr(BinExpr *Node);
+  void visitUnaryExpr(UnaryExpr *Node);
   void visitArrayExpr(ArrayExpr *Node);
   void visitArrayAccessExpr(ArrayAccessExpr *Node);
   void visitASExpr(ASExpr *Node);

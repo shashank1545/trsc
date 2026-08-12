@@ -149,6 +149,14 @@ void ASTPrinter::visitBinExpr(BinExpr *Node) {
   IndentLevel--;
 }
 
+void ASTPrinter::visitUnaryExpr(UnaryExpr *Node) {
+  indent();
+  OS << "UnaryExpr: '" << Lex::getTokenName(Node->getOp()) << "'\n";
+  IndentLevel++;
+  visit(Node->getOperand());
+  IndentLevel--;
+}
+
 void ASTPrinter::visitArrayExpr(ArrayExpr *Node) {
   indent();
   OS << "ArrayExpr: " << "\n";

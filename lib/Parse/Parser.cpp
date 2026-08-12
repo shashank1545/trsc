@@ -200,6 +200,17 @@ Expr *Parser::parsePrimary() {
     std::vector<int64_t> Shape;
     return parseArray(Shape);
   }
+  case Lex::TokenKind::OP_MINUS:
+  case Lex::TokenKind::OP_BANG: {
+    Lex::TokenKind Op = currentToken().getKind();
+    consume(Op);
+    Expr *Operand = parsePrimary();
+    if (!Operand)
+      return nullptr;
+    EndLoc = currentToken().getLocation();
+    Range = SourceRange(StartLoc, EndLoc);
+    return new (Ctx) UnaryExpr(Op, Operand, Range);
+  }
   case Lex::TokenKind::OP_AMP: {
     consume(Lex::TokenKind::OP_AMP);
     bool IsMut = false;
@@ -686,7 +697,7 @@ Parser::parseFunCall(std::optional<Lex::Token> FuncNameToken = std::nullopt) {
   std::vector<Expr *> ParamVector;
   if (currentToken().getKind() != Lex::TokenKind::DE_RPAREN) {
     while (true) {
-      ParamVector.push_back(parsePrimary());
+      ParamVector.push_back(parseExpr(0));
       if (currentToken().getKind() == Lex::TokenKind::DE_RPAREN)
         break;
       if (!expectToken(Lex::TokenKind::DE_COMMA))

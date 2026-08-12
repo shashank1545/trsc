@@ -46,6 +46,7 @@ public:
   void visitArrayExpr(ArrayExpr *Node);
   void visitArrayAccessExpr(ArrayAccessExpr *Node);
   void visitBinExpr(BinExpr *Node);
+  void visitUnaryExpr(UnaryExpr *Node);
   void visitASExpr(ASExpr *Node);
   void visitRangeExpr(RangeExpr *Node);
   void visitFunCall(FunCall *Node);

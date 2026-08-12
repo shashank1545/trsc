@@ -46,6 +46,9 @@ public:
     case ASTNodeKind::ASTK_FLOATEXPR:
       getDerived().visitFloatExpr(static_cast<FloatExpr *>(Node));
       break;
+    case ASTNodeKind::ASTK_UNARYEXPR:
+      getDerived().visitUnaryExpr(static_cast<UnaryExpr *>(Node));
+      break;
     case ASTNodeKind::ASTK_BINEXPR:
       getDerived().visitBinExpr(static_cast<BinExpr *>(Node));
       break;
@@ -161,6 +164,8 @@ public:
     getDerived().visit(E->getLHS());
     getDerived().visit(E->getRHS());
   }
+
+  void visitUnaryExpr(UnaryExpr *E) { getDerived().visit(E->getOperand()); }
 
   void visitASExpr(ASExpr *E) {
     getDerived().visit(E->getFromExpr());

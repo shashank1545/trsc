@@ -34,6 +34,7 @@ enum class ASTNodeKind {
   ASTK_ARRAYEXPR,
   ASTK_ARRAYACCESSEXPR,
   ASTK_BINEXPR,
+  ASTK_UNARYEXPR,
   ASTK_RANGEEXPR,
   ASTK_STMT,
   ASTK_LETSTMT,
@@ -267,6 +268,20 @@ public:
   Expr *getRHS() const { return RHS; }
   static bool classof(const Expr *E) {
     return E->getASTNodeKind() == ASTNodeKind::ASTK_BINEXPR;
+  }
+};
+
+class UnaryExpr : public Expr {
+  Lex::TokenKind Op;
+  Expr *Operand;
+
+public:
+  UnaryExpr(Lex::TokenKind Op, Expr *Operand, SourceRange Loc = {})
+      : Expr(ASTNodeKind::ASTK_UNARYEXPR, Loc), Op(Op), Operand(Operand) {}
+  Lex::TokenKind getOp() const { return Op; }
+  Expr *getOperand() const { return Operand; }
+  static bool classof(const Expr *E) {
+    return E->getASTNodeKind() == ASTNodeKind::ASTK_UNARYEXPR;
   }
 };
 

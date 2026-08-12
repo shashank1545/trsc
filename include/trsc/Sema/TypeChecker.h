@@ -24,6 +24,7 @@ public:
   void visitArrayAccessExpr(ArrayAccessExpr *Node);
   void visitRefrExpr(RefrExpr *Node);
   void visitBinExpr(BinExpr *Node);
+  void visitUnaryExpr(UnaryExpr *Node);
   void visitLetStmt(LetStmt *Node);
   void visitIfStmt(IfStmt *Node);
   void visitWhileStmt(WhileStmt *Node);
