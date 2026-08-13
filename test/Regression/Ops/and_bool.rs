@@ -2,7 +2,7 @@
 // RUN: %trsc -dump-ast %s | %FileCheck %s --check-prefix=AST
 // RUN: %trsc -dump-symboltable %s | %FileCheck %s --check-prefix=SYMBOLTABLE
 // RUN: %trsc -dump-typedast %s | %FileCheck %s --check-prefix=TYPEDAST
-// RUN: %trsc -emit-mlir %s | %FileCheck %s --check-prefix=MLIR
+// RUN: %trsc -optim=raw -emit-mlir %s | %FileCheck %s --check-prefix=MLIR
 
 fn and_bool(a: bool, b: bool) -> bool {
     return a && b;
@@ -29,5 +29,7 @@ fn and_bool(a: bool, b: bool) -> bool {
 // TYPEDAST: VarExpr {{.*}} 'bool' 'b'
 
 // MLIR: func.func @{{.*}}and_bool(%arg0: i1, %arg1: i1) -> i1
-// MLIR: {{.*}} = arith.andi {{.*}}, {{.*}} : i1
+// MLIR: scf.if
+// MLIR: scf.yield
+// MLIR: scf.yield
 // MLIR: return {{.*}} : i1

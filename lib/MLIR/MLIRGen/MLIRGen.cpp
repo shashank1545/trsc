@@ -308,10 +308,10 @@ MLIRGen::ReturnState MLIRGen::genStmt(Stmt *S, ReturnState State) {
   // as SSA values so no func.return is ever emitted inside an SCF region.
   if (State.Flag) {
     auto Loc = Builder.getUnknownLoc();
-    auto True = mlir::arith::ConstantIntOp::create(
-        Builder, Loc, Builder.getI1Type(), 1);
-    auto Continue = mlir::arith::XOrIOp::create(Builder, Loc, State.Flag,
-                                                True.getResult());
+    auto True = mlir::arith::ConstantIntOp::create(Builder, Loc,
+                                                   Builder.getI1Type(), 1);
+    auto Continue =
+        mlir::arith::XOrIOp::create(Builder, Loc, State.Flag, True.getResult());
 
     if (!stmtMayReturn(S)) {
       auto IfOp = mlir::scf::IfOp::create(Builder, Loc, Continue,
@@ -337,16 +337,14 @@ MLIRGen::ReturnState MLIRGen::genStmt(Stmt *S, ReturnState State) {
       mlir::OpBuilder::InsertionGuard Guard(Builder);
       Builder.setInsertionPointToStart(&IfOp.getThenRegion().front());
       ReturnState ThenState = genStmt(S, ReturnState{});
-      mlir::Value ThenFlag =
-          ThenState.Flag
-              ? ThenState.Flag
-              : mlir::arith::ConstantIntOp::create(
-                    Builder, Loc, Builder.getI1Type(), 0)
-                    .getResult();
+      mlir::Value ThenFlag = ThenState.Flag
+                                 ? ThenState.Flag
+                                 : mlir::arith::ConstantIntOp::create(
+                                       Builder, Loc, Builder.getI1Type(), 0)
+                                       .getResult();
       if (CurrentFunctionHasResult) {
-        mlir::Value ThenValue = ThenState.Value
-                                    ? ThenState.Value
-                                    : createDefaultReturnValue();
+        mlir::Value ThenValue =
+            ThenState.Value ? ThenState.Value : createDefaultReturnValue();
         mlir::scf::YieldOp::create(Builder, Loc,
                                    mlir::ValueRange{ThenFlag, ThenValue});
       } else {
@@ -359,8 +357,8 @@ MLIRGen::ReturnState MLIRGen::genStmt(Stmt *S, ReturnState State) {
       if (CurrentFunctionHasResult) {
         mlir::Value ElseValue =
             State.Value ? State.Value : createDefaultReturnValue();
-        mlir::scf::YieldOp::create(
-            Builder, Loc, mlir::ValueRange{State.Flag, ElseValue});
+        mlir::scf::YieldOp::create(Builder, Loc,
+                                   mlir::ValueRange{State.Flag, ElseValue});
       } else {
         mlir::scf::YieldOp::create(Builder, Loc, State.Flag);
       }
@@ -411,8 +409,7 @@ void MLIRGen::genProgram(Program *Node) {
   }
 }
 
-MLIRGen::ReturnState MLIRGen::genBlockStmt(BlockStmt *Node,
-                                           ReturnState State) {
+MLIRGen::ReturnState MLIRGen::genBlockStmt(BlockStmt *Node, ReturnState State) {
   for (Stmt *S : Node->getStatements())
     State = genStmt(S, State);
   return State;
@@ -627,18 +624,72 @@ mlir::Value MLIRGen::visitASExpr(ASExpr *Node) {
 }
 
 mlir::Value MLIRGen::visitBinExpr(BinExpr *Node) {
-  // Visit left and right expressions to get their MLIR values
-  mlir::Value LHS = visit(Node->getLHS());
-  mlir::Value RHS = visit(Node->getRHS());
+  auto Loc = Builder.getUnknownLoc();
+  Lex::TokenKind Op = Node->getOp();
 
-  if (!LHS || !RHS) {
+  mlir::Value LHS = visit(Node->getLHS());
+  if (!LHS) {
+    llvm::errs() << "Error: Failed to generate left operand for binary "
+                    "expression\n";
+    return mlir::Value();
+  }
+
+  if (Op == Lex::TokenKind::OP_AMPAMP || Op == Lex::TokenKind::OP_PIPEPIPE) {
+    if (!LHS.getType().isInteger(1)) {
+      llvm::errs() << "Error: Logical operator requires a boolean left "
+                      "operand\n";
+      return mlir::Value();
+    }
+
+    llvm::SmallVector<mlir::Type, 1> ResultTypes;
+    ResultTypes.push_back(Builder.getI1Type());
+    auto IfOp = mlir::scf::IfOp::create(Builder, Loc, ResultTypes, LHS,
+                                        /*withElseRegion=*/true);
+
+    auto VisitRHS = [&]() -> mlir::Value {
+      mlir::Value RHS = visit(Node->getRHS());
+      if (RHS && RHS.getType().isInteger(1))
+        return RHS;
+
+      llvm::errs() << "Error: Failed to generate boolean right operand for "
+                      "logical expression\n";
+      return mlir::arith::ConstantIntOp::create(Builder, Loc,
+                                                Builder.getI1Type(), 0)
+          .getResult();
+    };
+
+    {
+      mlir::OpBuilder::InsertionGuard Guard(Builder);
+      Builder.setInsertionPointToStart(&IfOp.getThenRegion().front());
+      mlir::Value ThenValue = Op == Lex::TokenKind::OP_AMPAMP
+                                  ? VisitRHS()
+                                  : mlir::arith::ConstantIntOp::create(
+                                        Builder, Loc, Builder.getI1Type(), 1)
+                                        .getResult();
+      mlir::scf::YieldOp::create(Builder, Loc, ThenValue);
+    }
+
+    {
+      mlir::OpBuilder::InsertionGuard Guard(Builder);
+      Builder.setInsertionPointToStart(&IfOp.getElseRegion().front());
+      mlir::Value ElseValue = Op == Lex::TokenKind::OP_AMPAMP
+                                  ? mlir::arith::ConstantIntOp::create(
+                                        Builder, Loc, Builder.getI1Type(), 0)
+                                        .getResult()
+                                  : VisitRHS();
+      mlir::scf::YieldOp::create(Builder, Loc, ElseValue);
+    }
+
+    Builder.setInsertionPointAfter(IfOp);
+    return IfOp.getResult(0);
+  }
+
+  mlir::Value RHS = visit(Node->getRHS());
+  if (!RHS) {
     llvm::errs()
         << "Error: Failed to generate operands for binary expression\n";
     return mlir::Value();
   }
-
-  auto Loc = Builder.getUnknownLoc();
-  Lex::TokenKind Op = Node->getOp();
 
   // Get the result type from the typed AST (semantic analysis already
   // determined this)
@@ -772,14 +823,6 @@ mlir::Value MLIRGen::visitBinExpr(BinExpr *Node) {
   // ========================================================================
   // Logical Operators (boolean operations)
   // ========================================================================
-  case Lex::TokenKind::OP_AMPAMP: // &&
-                                  // LHS && RHS
-    return mlir::arith::AndIOp::create(Builder, Loc, LHS, RHS);
-
-  case Lex::TokenKind::OP_PIPEPIPE: // ||
-                                    // LHS || RHS
-    return mlir::arith::OrIOp::create(Builder, Loc, LHS, RHS);
-
   default:
     llvm::errs() << "Error: Unhandled binary operator: "
                  << Lex::getTokenName(Op) << "\n";
@@ -798,15 +841,15 @@ mlir::Value MLIRGen::visitUnaryExpr(UnaryExpr *Node) {
     if (Node->getType().isFloatingType())
       return mlir::arith::NegFOp::create(Builder, Loc, Operand);
     if (Node->getType().isIntegerType()) {
-      auto Zero = mlir::arith::ConstantIntOp::create(
-          Builder, Loc, Operand.getType(), 0);
+      auto Zero = mlir::arith::ConstantIntOp::create(Builder, Loc,
+                                                     Operand.getType(), 0);
       return mlir::arith::SubIOp::create(Builder, Loc, Zero, Operand);
     }
     break;
   case Lex::TokenKind::OP_BANG:
     if (Node->getType().isBooleanType()) {
-      auto True = mlir::arith::ConstantIntOp::create(
-          Builder, Loc, Operand.getType(), 1);
+      auto True = mlir::arith::ConstantIntOp::create(Builder, Loc,
+                                                     Operand.getType(), 1);
       return mlir::arith::XOrIOp::create(Builder, Loc, Operand, True);
     }
     break;
@@ -826,9 +869,7 @@ mlir::Value MLIRGen::visitBoolExpr(BoolExpr *Node) {
   return BoolOp;
 }
 
-mlir::Value MLIRGen::visitStringExpr(StringExpr *Node) {
-  return mlir::Value();
-}
+mlir::Value MLIRGen::visitStringExpr(StringExpr *Node) { return mlir::Value(); }
 
 mlir::Value MLIRGen::visitVarExpr(VarExpr *Node) {
   Symbol *Sym = Node->getSymbol();
@@ -1091,8 +1132,8 @@ mlir::Operation *MLIRGen::declareFuncDecl(FuncDecl *Node) {
 
   QualType RetT = FuncTy.getReturnType();
   std::vector<mlir::Type> ResultTypes;
-  const bool IsEntryPoint = Node->getFuncName()->getName() == "main" &&
-                            Node->getParams().empty();
+  const bool IsEntryPoint =
+      Node->getFuncName()->getName() == "main" && Node->getParams().empty();
   if (!RetT.isUnitType()) {
     ResultTypes.push_back(toMLIRType(RetT));
   } else if (IsEntryPoint) {
@@ -1148,9 +1189,9 @@ void MLIRGen::genFuncDecl(FuncDecl *Node) {
     }
   }
 
-  const bool IsUnitEntryPoint =
-      Node->getFuncName()->getName() == "main" &&
-      Node->getParams().empty() && Node->getReturnType() == nullptr;
+  const bool IsUnitEntryPoint = Node->getFuncName()->getName() == "main" &&
+                                Node->getParams().empty() &&
+                                Node->getReturnType() == nullptr;
 
   if (ResultTypes.empty()) {
     if (EntryBlock->empty() ||
@@ -1175,8 +1216,8 @@ MLIRGen::ReturnState MLIRGen::genReturnStmt(ReturnStmt *Node) {
   auto Loc = Builder.getUnknownLoc();
   ReturnState State;
 
-  auto True = mlir::arith::ConstantIntOp::create(Builder, Loc,
-                                                 Builder.getI1Type(), 1);
+  auto True =
+      mlir::arith::ConstantIntOp::create(Builder, Loc, Builder.getI1Type(), 1);
   State.Flag = True.getResult();
 
   // No return value (void return)
@@ -1235,9 +1276,8 @@ mlir::Value MLIRGen::createDefaultReturnValue() {
     return mlir::arith::ConstantIntOp::create(Builder, Loc, Type, 0)
         .getResult();
   if (auto FloatType = llvm::dyn_cast<mlir::FloatType>(Type)) {
-    llvm::APFloat Zero = FloatType.getWidth() == 32
-                             ? llvm::APFloat(0.0f)
-                             : llvm::APFloat(0.0);
+    llvm::APFloat Zero =
+        FloatType.getWidth() == 32 ? llvm::APFloat(0.0f) : llvm::APFloat(0.0);
     return mlir::arith::ConstantFloatOp::create(Builder, Loc, FloatType, Zero)
         .getResult();
   }
@@ -1308,16 +1348,14 @@ MLIRGen::ReturnState MLIRGen::genIfStmt(IfStmt *Node) {
                                       /*withElseRegion=*/true);
 
   auto YieldState = [&](ReturnState State) {
-    mlir::Value Flag =
-        State.Flag ? State.Flag
-                   : mlir::arith::ConstantIntOp::create(
-                         Builder, Loc, Builder.getI1Type(), 0)
-                         .getResult();
+    mlir::Value Flag = State.Flag ? State.Flag
+                                  : mlir::arith::ConstantIntOp::create(
+                                        Builder, Loc, Builder.getI1Type(), 0)
+                                        .getResult();
     if (CurrentFunctionHasResult) {
       mlir::Value Value =
           State.Value ? State.Value : createDefaultReturnValue();
-      mlir::scf::YieldOp::create(Builder, Loc,
-                                 mlir::ValueRange{Flag, Value});
+      mlir::scf::YieldOp::create(Builder, Loc, mlir::ValueRange{Flag, Value});
     } else {
       mlir::scf::YieldOp::create(Builder, Loc, Flag);
     }
@@ -1355,6 +1393,17 @@ void MLIRGen::genAssignment(BinExpr *Node) {
   // 1. Verify LHS is an lvalue
   if (!isLValue(Node->getLHS())) {
     llvm::errs() << "Error: Cannot assign to non-lvalue\n";
+    return;
+  }
+
+  Symbol *Target = nullptr;
+  if (auto *Var = llvm::dyn_cast<VarExpr>(Node->getLHS())) {
+    Target = Var->getSymbol();
+  } else if (auto *Array = llvm::dyn_cast<ArrayAccessExpr>(Node->getLHS())) {
+    Target = Array->getArrayNameExpr()->getSymbol();
+  }
+  if (!Target || !Target->IsMutable) {
+    llvm::errs() << "Error: Cannot assign to immutable variable\n";
     return;
   }
 
@@ -1487,8 +1536,7 @@ void MLIRGen::genForStmt(ForStmt *Node) {
   mlir::Value ub = mlir::arith::IndexCastOp::create(
       Builder, loc, Builder.getIndexType(), ubValue);
   if (Node->getRange()->isInclusive()) {
-    mlir::Value One =
-        mlir::arith::ConstantIndexOp::create(Builder, loc, 1);
+    mlir::Value One = mlir::arith::ConstantIndexOp::create(Builder, loc, 1);
     ub = mlir::arith::AddIOp::create(Builder, loc, ub, One).getResult();
   }
   mlir::Value step = mlir::arith::ConstantIndexOp::create(Builder, loc, 1);

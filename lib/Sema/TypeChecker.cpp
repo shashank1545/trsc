@@ -295,22 +295,20 @@ void TypeChecker::visitUnaryExpr(UnaryExpr *Node) {
       Node->setType(OperandType);
       return;
     }
-    Diags.Report(
-        DiagKind::Error,
-        "Operator '-' requires a numeric operand ('" +
-            OperandType.getAsString() + "')",
-        Node->getSourceRange().getStart());
+    Diags.Report(DiagKind::Error,
+                 "Operator '-' requires a numeric operand ('" +
+                     OperandType.getAsString() + "')",
+                 Node->getSourceRange().getStart());
     break;
   case Lex::TokenKind::OP_BANG:
     if (OperandType.isBooleanType()) {
       Node->setType(Ctx.getBoolType());
       return;
     }
-    Diags.Report(
-        DiagKind::Error,
-        "Operator '!' requires a boolean operand ('" +
-            OperandType.getAsString() + "')",
-        Node->getSourceRange().getStart());
+    Diags.Report(DiagKind::Error,
+                 "Operator '!' requires a boolean operand ('" +
+                     OperandType.getAsString() + "')",
+                 Node->getSourceRange().getStart());
     break;
   default:
     Diags.Report(DiagKind::Error,
@@ -351,6 +349,36 @@ void TypeChecker::visitBinExpr(BinExpr *Node) {
 
   QualType ResultType;
   bool Error = false;
+
+  if (Op == Lex::TokenKind::OP_EQUAL || Op == Lex::TokenKind::OP_PLUSEQUAL ||
+      Op == Lex::TokenKind::OP_MINUSEQUAL) {
+    Symbol *Target = nullptr;
+    std::string TargetName;
+
+    if (Node->getLHS()->isVar()) {
+      auto *Var = static_cast<VarExpr *>(Node->getLHS());
+      Target = Var->getSymbol();
+      TargetName = Var->getName();
+    } else if (Node->getLHS()->getASTNodeKind() ==
+               ASTNodeKind::ASTK_ARRAYACCESSEXPR) {
+      auto *Array = static_cast<ArrayAccessExpr *>(Node->getLHS());
+      VarExpr *ArrayName = Array->getArrayNameExpr();
+      Target = ArrayName->getSymbol();
+      TargetName = ArrayName->getName();
+    }
+
+    if (!Target) {
+      Diags.Report(DiagKind::Error,
+                   "Left-hand side of assignment is not assignable",
+                   Node->getSourceRange().getStart());
+      Error = true;
+    } else if (!Target->IsMutable) {
+      Diags.Report(DiagKind::Error,
+                   "Cannot assign to immutable variable '" + TargetName + "'",
+                   Node->getSourceRange().getStart());
+      Error = true;
+    }
+  }
 
   switch (Node->getOp()) {
   case Lex::TokenKind::OP_EQUAL:
@@ -718,11 +746,11 @@ void TypeChecker::visitMacroCall(MacroCall *Node) {
       FormatType = FormatType.getBaseType();
     if (!FormatType.isIntegerType() && !FormatType.isFloatingType() &&
         !FormatType.isBooleanType() && !FormatType.isStringType()) {
-      Diags.Report(DiagKind::Error,
-                   "println! cannot format a value of type '" +
-                       ParamType.getAsString() +
-                       "'; only strings, integers, floats and bool are supported",
-                   Param->getSourceRange().getStart());
+      Diags.Report(
+          DiagKind::Error,
+          "println! cannot format a value of type '" + ParamType.getAsString() +
+              "'; only strings, integers, floats and bool are supported",
+          Param->getSourceRange().getStart());
     }
   }
 }
