@@ -29,6 +29,7 @@ enum class ASTNodeKind {
   ASTK_NUMEXPR,
   ASTK_INTEXPR,
   ASTK_FLOATEXPR,
+  ASTK_STRINGEXPR,
   ASTK_VAREXPR,
   ASTK_REFREXPR,
   ASTK_ARRAYEXPR,
@@ -221,6 +222,18 @@ public:
   bool isBool() const override { return true; }
   static bool classof(const Expr *E) {
     return E->getASTNodeKind() == ASTNodeKind::ASTK_BOOLEXPR;
+  }
+};
+
+class StringExpr : public Expr {
+  std::string_view Value;
+
+public:
+  StringExpr(std::string_view Value, SourceRange Loc = {})
+      : Expr(ASTNodeKind::ASTK_STRINGEXPR, Loc), Value(Value) {}
+  std::string_view getValue() const { return Value; }
+  static bool classof(const Expr *E) {
+    return E->getASTNodeKind() == ASTNodeKind::ASTK_STRINGEXPR;
   }
 };
 

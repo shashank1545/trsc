@@ -125,6 +125,11 @@ void ASTPrinter::visitIntExpr(IntExpr *Node) {
   OS << "IntExpr: " << Node->getValue() << "\n";
 }
 
+void ASTPrinter::visitStringExpr(StringExpr *Node) {
+  indent();
+  OS << "StringExpr: \"" << Node->getValue() << "\"\n";
+}
+
 void ASTPrinter::visitFloatExpr(FloatExpr *Node) {
   indent();
   OS << "FloatExpr: " << Node->getValue() << "\n";

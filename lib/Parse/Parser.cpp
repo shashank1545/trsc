@@ -151,6 +151,15 @@ Expr *Parser::parsePrimary() {
     Range = SourceRange(StartLoc, EndLoc);
     return new (Ctx) FloatExpr(Val, Range);
   }
+  case Lex::TokenKind::LT_STRING: {
+    Lex::Token StringToken = consume(Lex::TokenKind::LT_STRING);
+    std::string_view Value;
+    if (!decodeStringLiteral(StringToken, Value))
+      return nullptr;
+    EndLoc = currentToken().getLocation();
+    Range = SourceRange(StartLoc, EndLoc);
+    return new (Ctx) StringExpr(Value, Range);
+  }
   case Lex::TokenKind::LT_INTEGER: {
     Lex::Token NumToken = consume(Lex::TokenKind::LT_INTEGER);
     int64_t Val = parseNumber<int64_t>(NumToken.getText());

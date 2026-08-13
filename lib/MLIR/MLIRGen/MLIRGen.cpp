@@ -826,6 +826,10 @@ mlir::Value MLIRGen::visitBoolExpr(BoolExpr *Node) {
   return BoolOp;
 }
 
+mlir::Value MLIRGen::visitStringExpr(StringExpr *Node) {
+  return mlir::Value();
+}
+
 mlir::Value MLIRGen::visitVarExpr(VarExpr *Node) {
   Symbol *Sym = Node->getSymbol();
   mlir::Operation *RawPtr = static_cast<mlir::Operation *>(Sym->Op);
@@ -941,6 +945,12 @@ void MLIRGen::emitPrintLiteral(std::string_view Text) {
 
 void MLIRGen::emitPrintValue(Expr *Argument) {
   auto Loc = Builder.getUnknownLoc();
+
+  if (auto *String = llvm::dyn_cast<StringExpr>(Argument)) {
+    emitPrintLiteral(String->getValue());
+    return;
+  }
+
   mlir::Value Value = visit(Argument);
   if (!Value)
     return;
@@ -953,6 +963,14 @@ void MLIRGen::emitPrintValue(Expr *Argument) {
   };
 
   QualType Type = Argument->getType();
+  while (Type.isReferenceType()) {
+    auto MemRef = llvm::dyn_cast<mlir::MemRefType>(Value.getType());
+    if (!MemRef || MemRef.getRank() != 0)
+      return;
+    Value = mlir::memref::LoadOp::create(Builder, Loc, Value).getResult();
+    Type = Type.getBaseType();
+  }
+
   if (Type.isBooleanType()) {
     mlir::Value Normalized =
         mlir::arith::ExtUIOp::create(Builder, Loc, Builder.getI32Type(), Value);

@@ -93,6 +93,13 @@ void TypeChecker::visitFloatExpr(FloatExpr *Node) {
     Node->setType(Ctx.getF64Type());
 }
 
+void TypeChecker::visitStringExpr(StringExpr *Node) {
+  if (!ExpectedType.isNull() && ExpectedType.isStringType())
+    Node->setType(ExpectedType);
+  else
+    Node->setType(Ctx.getStringType());
+}
+
 void TypeChecker::visitRefrExpr(RefrExpr *Node) {
   visit(Node->getReferent());
   QualType ReferentType = Node->getReferent()->getType();
@@ -706,12 +713,15 @@ void TypeChecker::visitMacroCall(MacroCall *Node) {
     QualType ParamType = Param->getType();
     if (ParamType.isNull())
       continue; // Already diagnosed while checking the argument itself.
-    if (!ParamType.isIntegerType() && !ParamType.isFloatingType() &&
-        !ParamType.isBooleanType()) {
+    QualType FormatType = ParamType;
+    if (FormatType.isReferenceType())
+      FormatType = FormatType.getBaseType();
+    if (!FormatType.isIntegerType() && !FormatType.isFloatingType() &&
+        !FormatType.isBooleanType() && !FormatType.isStringType()) {
       Diags.Report(DiagKind::Error,
                    "println! cannot format a value of type '" +
                        ParamType.getAsString() +
-                       "'; only integers, floats and bool are supported",
+                       "'; only strings, integers, floats and bool are supported",
                    Param->getSourceRange().getStart());
     }
   }

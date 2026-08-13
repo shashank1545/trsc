@@ -63,6 +63,7 @@ public:
   bool isSignedIntegerType() const;
   bool isUnsignedTypeIntegerType() const;
   bool isBooleanType() const;
+  bool isStringType() const;
   bool isNumericType() const;
   bool isPointerType() const;
   bool isReferenceType() const;
@@ -330,6 +331,9 @@ inline bool QualType::isUnsignedTypeIntegerType() const {
 }
 inline bool QualType::isBooleanType() const {
   return TypePtr && TypePtr->isBoolean();
+}
+inline bool QualType::isStringType() const {
+  return TypePtr && TypePtr->isString();
 }
 inline bool QualType::isNumericType() const {
   return TypePtr && (TypePtr->isInteger() || TypePtr->isFloating());

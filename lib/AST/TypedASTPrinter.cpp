@@ -479,6 +479,12 @@ void TypedASTPrinter::visitIntExpr(IntExpr *Node) {
   OS << "\n";
 }
 
+void TypedASTPrinter::visitStringExpr(StringExpr *Node) {
+  printNodeHeader(Node, "StringExpr");
+  OS << getTypeString(Node);
+  OS << " \"" << Node->getValue() << "\"\n";
+}
+
 void TypedASTPrinter::visitFloatExpr(FloatExpr *Node) {
   printNodeHeader(Node, "FloatExpr");
   OS << getTypeString(Node);

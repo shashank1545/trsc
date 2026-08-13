@@ -17,6 +17,7 @@ public:
 
   void visitIntExpr(IntExpr *Node);
   void visitFloatExpr(FloatExpr *Node);
+  void visitStringExpr(StringExpr *Node);
   void visitVarExpr(VarExpr *Node);
   void visitBoolExpr(BoolExpr *Node);
   void visitASExpr(ASExpr *Node);

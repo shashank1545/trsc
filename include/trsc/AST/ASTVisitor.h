@@ -46,6 +46,9 @@ public:
     case ASTNodeKind::ASTK_FLOATEXPR:
       getDerived().visitFloatExpr(static_cast<FloatExpr *>(Node));
       break;
+    case ASTNodeKind::ASTK_STRINGEXPR:
+      getDerived().visitStringExpr(static_cast<StringExpr *>(Node));
+      break;
     case ASTNodeKind::ASTK_UNARYEXPR:
       getDerived().visitUnaryExpr(static_cast<UnaryExpr *>(Node));
       break;
@@ -222,6 +225,7 @@ public:
   void visitNumExpr(NumExpr *E) {}
   void visitIntExpr(IntExpr *E) {}
   void visitFloatExpr(FloatExpr *E) {}
+  void visitStringExpr(StringExpr *E) {}
   void visitBoolExpr(BoolExpr *E) {}
   void visitTypeName(TypeName *T) {}
 

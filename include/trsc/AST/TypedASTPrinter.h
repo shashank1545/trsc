@@ -40,6 +40,7 @@ public:
   // Visitors for concrete expression nodes
   void visitIntExpr(IntExpr *Node);
   void visitFloatExpr(FloatExpr *Node);
+  void visitStringExpr(StringExpr *Node);
   void visitVarExpr(VarExpr *Node);
   void visitRefrExpr(RefrExpr *Node);
   void visitBoolExpr(BoolExpr *Node);

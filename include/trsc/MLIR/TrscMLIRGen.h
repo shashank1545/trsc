@@ -62,6 +62,7 @@ public:
   mlir::Value visitFunCall(FunCall *Node);
   mlir::Value visitIntExpr(IntExpr *Node);
   mlir::Value visitFloatExpr(FloatExpr *Node);
+  mlir::Value visitStringExpr(StringExpr *Node);
   mlir::Value visitVarExpr(VarExpr *Node);
   mlir::Value visitASExpr(ASExpr *Node);
   mlir::Value visitArrayAccessExpr(ArrayAccessExpr *Node);
