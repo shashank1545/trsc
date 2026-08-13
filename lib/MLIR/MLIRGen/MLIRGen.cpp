@@ -299,35 +299,102 @@ mlir::Value MLIRGen::convertValueToType(mlir::Value From, mlir::Type ToType) {
       From, FromType, ToType, Builder);
 }
 
-void MLIRGen::genStmt(Stmt *S) {
+MLIRGen::ReturnState MLIRGen::genStmt(Stmt *S, ReturnState State) {
   if (!S)
-    return;
+    return State;
+
+  // Once a nested region may have returned, execute the following statement
+  // only on the path where that return did not happen.  The state is carried
+  // as SSA values so no func.return is ever emitted inside an SCF region.
+  if (State.Flag) {
+    auto Loc = Builder.getUnknownLoc();
+    auto True = mlir::arith::ConstantIntOp::create(
+        Builder, Loc, Builder.getI1Type(), 1);
+    auto Continue = mlir::arith::XOrIOp::create(Builder, Loc, State.Flag,
+                                                True.getResult());
+
+    if (!stmtMayReturn(S)) {
+      auto IfOp = mlir::scf::IfOp::create(Builder, Loc, Continue,
+                                          /*withElseRegion=*/false);
+      {
+        mlir::OpBuilder::InsertionGuard Guard(Builder);
+        Builder.setInsertionPointToStart(&IfOp.getThenRegion().front());
+        (void)genStmt(S, ReturnState{});
+        mlir::scf::YieldOp::create(Builder, Loc);
+      }
+      Builder.setInsertionPointAfter(IfOp);
+      return State;
+    }
+
+    llvm::SmallVector<mlir::Type, 2> ResultTypes;
+    ResultTypes.push_back(Builder.getI1Type());
+    if (CurrentFunctionHasResult)
+      ResultTypes.push_back(CurrentFunctionResultType);
+
+    auto IfOp = mlir::scf::IfOp::create(Builder, Loc, ResultTypes, Continue,
+                                        /*withElseRegion=*/true);
+    {
+      mlir::OpBuilder::InsertionGuard Guard(Builder);
+      Builder.setInsertionPointToStart(&IfOp.getThenRegion().front());
+      ReturnState ThenState = genStmt(S, ReturnState{});
+      mlir::Value ThenFlag =
+          ThenState.Flag
+              ? ThenState.Flag
+              : mlir::arith::ConstantIntOp::create(
+                    Builder, Loc, Builder.getI1Type(), 0)
+                    .getResult();
+      if (CurrentFunctionHasResult) {
+        mlir::Value ThenValue = ThenState.Value
+                                    ? ThenState.Value
+                                    : createDefaultReturnValue();
+        mlir::scf::YieldOp::create(Builder, Loc,
+                                   mlir::ValueRange{ThenFlag, ThenValue});
+      } else {
+        mlir::scf::YieldOp::create(Builder, Loc, ThenFlag);
+      }
+    }
+    {
+      mlir::OpBuilder::InsertionGuard Guard(Builder);
+      Builder.setInsertionPointToStart(&IfOp.getElseRegion().front());
+      if (CurrentFunctionHasResult) {
+        mlir::Value ElseValue =
+            State.Value ? State.Value : createDefaultReturnValue();
+        mlir::scf::YieldOp::create(
+            Builder, Loc, mlir::ValueRange{State.Flag, ElseValue});
+      } else {
+        mlir::scf::YieldOp::create(Builder, Loc, State.Flag);
+      }
+    }
+    Builder.setInsertionPointAfter(IfOp);
+    ReturnState Result;
+    Result.Flag = IfOp.getResult(0);
+    if (CurrentFunctionHasResult)
+      Result.Value = IfOp.getResult(1);
+    return Result;
+  }
 
   switch (S->getASTNodeKind()) {
   case ASTNodeKind::ASTK_FUNCDECL:
     genFuncDecl(static_cast<FuncDecl *>(S));
-    break;
+    return State;
   case ASTNodeKind::ASTK_LETSTMT:
     genLetStmt(static_cast<LetStmt *>(S));
-    break;
+    return State;
   case ASTNodeKind::ASTK_IFSTMT:
-    genIfStmt(static_cast<IfStmt *>(S));
-    break;
+    return genIfStmt(static_cast<IfStmt *>(S));
   case ASTNodeKind::ASTK_RETURNSTMT:
-    genReturnStmt(static_cast<ReturnStmt *>(S));
-    break;
+    return genReturnStmt(static_cast<ReturnStmt *>(S));
   case ASTNodeKind::ASTK_BLOCKSTMT:
-    genBlockStmt(static_cast<BlockStmt *>(S));
-    break;
+    return genBlockStmt(static_cast<BlockStmt *>(S), State);
   case ASTNodeKind::ASTK_EXPRSTMT:
     genExprStmt(static_cast<ExprStmt *>(S));
-    break;
+    return State;
   case ASTNodeKind::ASTK_FORSTMT:
     genForStmt(static_cast<ForStmt *>(S));
-    break;
+    return State;
   case ASTNodeKind::ASTK_WHILESTMT:
     genWhileStmt(static_cast<WhileStmt *>(S));
-    break;
+    return State;
   default:
     llvm_unreachable("Unhandled statement type");
   }
@@ -344,10 +411,11 @@ void MLIRGen::genProgram(Program *Node) {
   }
 }
 
-void MLIRGen::genBlockStmt(BlockStmt *Node) {
-  for (Stmt *S : Node->getStatements()) {
-    genStmt(S);
-  }
+MLIRGen::ReturnState MLIRGen::genBlockStmt(BlockStmt *Node,
+                                           ReturnState State) {
+  for (Stmt *S : Node->getStatements())
+    State = genStmt(S, State);
+  return State;
 }
 
 void MLIRGen::genLetStmt(LetStmt *Node) {
@@ -1032,6 +1100,10 @@ void MLIRGen::genFuncDecl(FuncDecl *Node) {
   auto funcOp = llvm::cast<mlir::func::FuncOp>(RawFuncOp);
   llvm::ArrayRef<mlir::Type> ResultTypes = funcOp.getResultTypes();
 
+  CurrentFunctionHasResult = !ResultTypes.empty();
+  CurrentFunctionResultType =
+      CurrentFunctionHasResult ? ResultTypes.front() : mlir::Type();
+
   auto *EntryBlock = funcOp.addEntryBlock();
   this->CurrentEntryBlock = EntryBlock;
 
@@ -1043,7 +1115,19 @@ void MLIRGen::genFuncDecl(FuncDecl *Node) {
   }
 
   if (Node->getBody()) {
-    genStmt(Node->getBody());
+    ReturnState State = genStmt(Node->getBody(), ReturnState{});
+    Builder.setInsertionPointToEnd(EntryBlock);
+
+    if (State.Flag) {
+      if (CurrentFunctionHasResult) {
+        mlir::Value ReturnValue =
+            State.Value ? State.Value : createDefaultReturnValue();
+        mlir::func::ReturnOp::create(Builder, Builder.getUnknownLoc(),
+                                     ReturnValue);
+      } else {
+        mlir::func::ReturnOp::create(Builder, Builder.getUnknownLoc());
+      }
+    }
   }
 
   const bool IsUnitEntryPoint =
@@ -1065,27 +1149,23 @@ void MLIRGen::genFuncDecl(FuncDecl *Node) {
   }
 
   this->CurrentEntryBlock = nullptr;
+  CurrentFunctionResultType = mlir::Type();
+  CurrentFunctionHasResult = false;
 }
 
-void MLIRGen::genReturnStmt(ReturnStmt *Node) {
+MLIRGen::ReturnState MLIRGen::genReturnStmt(ReturnStmt *Node) {
   auto Loc = Builder.getUnknownLoc();
+  ReturnState State;
+
+  auto True = mlir::arith::ConstantIntOp::create(Builder, Loc,
+                                                 Builder.getI1Type(), 1);
+  State.Flag = True.getResult();
 
   // No return value (void return)
   if (!Node->getReturnValue()) {
-    auto *ParentOp = CurrentEntryBlock ? CurrentEntryBlock->getParentOp()
-                                       : nullptr;
-    auto FuncOp = llvm::dyn_cast_or_null<mlir::func::FuncOp>(ParentOp);
-    if (FuncOp && Builder.getInsertionBlock() == CurrentEntryBlock &&
-        FuncOp.getName() == "main" && FuncOp.getResultTypes().size() == 1 &&
-        FuncOp.getResultTypes().front().isInteger(32)) {
-      auto Zero = mlir::arith::ConstantIntOp::create(
-          Builder, Loc, Builder.getI32Type(), 0);
-      mlir::func::ReturnOp::create(Builder, Loc, Zero.getResult());
-      return;
-    }
-
-    mlir::func::ReturnOp::create(Builder, Loc);
-    return;
+    if (CurrentFunctionHasResult)
+      State.Value = createDefaultReturnValue();
+    return State;
   }
 
   // Has return value
@@ -1093,13 +1173,63 @@ void MLIRGen::genReturnStmt(ReturnStmt *Node) {
 
   if (!RetValue) {
     llvm::errs() << "Error: Failed to generate return value expression\n";
-    return;
+    if (CurrentFunctionHasResult)
+      State.Value = createDefaultReturnValue();
+    return State;
   }
 
-  mlir::func::ReturnOp::create(Builder, Loc, RetValue);
+  State.Value = RetValue;
+  return State;
 }
 
-void MLIRGen::genIfStmt(IfStmt *Node) {
+bool MLIRGen::stmtMayReturn(Stmt *S) const {
+  if (!S)
+    return false;
+
+  switch (S->getASTNodeKind()) {
+  case ASTNodeKind::ASTK_RETURNSTMT:
+    return true;
+  case ASTNodeKind::ASTK_BLOCKSTMT:
+    for (Stmt *Child : static_cast<BlockStmt *>(S)->getStatements()) {
+      if (stmtMayReturn(Child))
+        return true;
+    }
+    return false;
+  case ASTNodeKind::ASTK_IFSTMT: {
+    auto *If = static_cast<IfStmt *>(S);
+    return stmtMayReturn(If->getThenBranch()) ||
+           stmtMayReturn(If->getElseBranch());
+  }
+  default:
+    return false;
+  }
+}
+
+mlir::Value MLIRGen::createDefaultReturnValue() {
+  if (!CurrentFunctionHasResult)
+    return mlir::Value();
+
+  auto Loc = Builder.getUnknownLoc();
+  mlir::Type Type = CurrentFunctionResultType;
+  if (Type.isIndex())
+    return mlir::arith::ConstantIndexOp::create(Builder, Loc, 0).getResult();
+  if (Type.isInteger())
+    return mlir::arith::ConstantIntOp::create(Builder, Loc, Type, 0)
+        .getResult();
+  if (auto FloatType = llvm::dyn_cast<mlir::FloatType>(Type)) {
+    llvm::APFloat Zero = FloatType.getWidth() == 32
+                             ? llvm::APFloat(0.0f)
+                             : llvm::APFloat(0.0);
+    return mlir::arith::ConstantFloatOp::create(Builder, Loc, FloatType, Zero)
+        .getResult();
+  }
+
+  llvm::errs() << "Error: Cannot create default return value for type " << Type
+               << "\n";
+  return mlir::Value();
+}
+
+MLIRGen::ReturnState MLIRGen::genIfStmt(IfStmt *Node) {
   auto Loc = Builder.getUnknownLoc();
 
   // Generate condition (must be i1 type)
@@ -1107,50 +1237,98 @@ void MLIRGen::genIfStmt(IfStmt *Node) {
 
   if (!Condition) {
     llvm::errs() << "Error: Failed to generate condition for if statement\n";
-    return;
+    return ReturnState{};
   }
 
   // Verify condition is i1 type
   if (!Condition.getType().isInteger(1)) {
     llvm::errs() << "Error: If condition must be of type i1 (bool), got: "
                  << Condition.getType() << "\n";
-    return;
+    return ReturnState{};
   }
 
-  // Create scf.if operation
-  auto IfOp = mlir::scf::IfOp::create(
-      Builder, Loc, Condition,
-      /*withElseRegion=*/Node->getElseBranch() != nullptr);
+  const bool HasReturn = stmtMayReturn(Node->getThenBranch()) ||
+                         stmtMayReturn(Node->getElseBranch());
+
+  if (!HasReturn) {
+    auto IfOp = mlir::scf::IfOp::create(
+        Builder, Loc, Condition,
+        /*withElseRegion=*/Node->getElseBranch() != nullptr);
+
+    {
+      mlir::OpBuilder::InsertionGuard Guard(Builder);
+      Builder.setInsertionPointToStart(&IfOp.getThenRegion().front());
+      (void)genStmt(Node->getThenBranch(), ReturnState{});
+      mlir::Block *ThenBlock = &IfOp.getThenRegion().front();
+      if (ThenBlock->empty() ||
+          !ThenBlock->back().hasTrait<mlir::OpTrait::IsTerminator>())
+        mlir::scf::YieldOp::create(Builder, Loc);
+    }
+
+    if (Node->getElseBranch()) {
+      mlir::OpBuilder::InsertionGuard Guard(Builder);
+      Builder.setInsertionPointToStart(&IfOp.getElseRegion().front());
+      (void)genStmt(Node->getElseBranch(), ReturnState{});
+      mlir::Block *ElseBlock = &IfOp.getElseRegion().front();
+      if (ElseBlock->empty() ||
+          !ElseBlock->back().hasTrait<mlir::OpTrait::IsTerminator>())
+        mlir::scf::YieldOp::create(Builder, Loc);
+    }
+    Builder.setInsertionPointAfter(IfOp);
+    return ReturnState{};
+  }
+
+  llvm::SmallVector<mlir::Type, 2> ResultTypes;
+  ResultTypes.push_back(Builder.getI1Type());
+  if (CurrentFunctionHasResult)
+    ResultTypes.push_back(CurrentFunctionResultType);
+
+  // A result-bearing scf.if carries both the fact that a branch returned and
+  // the value to return.  Both regions yield, so the enclosing function can
+  // emit the only func.return after all structured control flow is complete.
+  auto IfOp = mlir::scf::IfOp::create(Builder, Loc, ResultTypes, Condition,
+                                      /*withElseRegion=*/true);
+
+  auto YieldState = [&](ReturnState State) {
+    mlir::Value Flag =
+        State.Flag ? State.Flag
+                   : mlir::arith::ConstantIntOp::create(
+                         Builder, Loc, Builder.getI1Type(), 0)
+                         .getResult();
+    if (CurrentFunctionHasResult) {
+      mlir::Value Value =
+          State.Value ? State.Value : createDefaultReturnValue();
+      mlir::scf::YieldOp::create(Builder, Loc,
+                                 mlir::ValueRange{Flag, Value});
+    } else {
+      mlir::scf::YieldOp::create(Builder, Loc, Flag);
+    }
+  };
 
   // Generate "then" region
   {
     mlir::OpBuilder::InsertionGuard Guard(Builder);
     Builder.setInsertionPointToStart(&IfOp.getThenRegion().front());
-
-    genStmt(Node->getThenBranch());
-
-    // Add scf.yield if no terminator exists
-    mlir::Block *ThenBlock = &IfOp.getThenRegion().front();
-    if (ThenBlock->empty() ||
-        !ThenBlock->back().hasTrait<mlir::OpTrait::IsTerminator>()) {
-      mlir::scf::YieldOp::create(Builder, Loc);
-    }
+    YieldState(genStmt(Node->getThenBranch(), ReturnState{}));
   }
 
-  // Generate "else" region (if it exists)
+  // Generate "else" region.  A missing else is the non-returning path.
   if (Node->getElseBranch()) {
     mlir::OpBuilder::InsertionGuard Guard(Builder);
     Builder.setInsertionPointToStart(&IfOp.getElseRegion().front());
-
-    genStmt(Node->getElseBranch());
-
-    // Add scf.yield if no terminator exists
-    mlir::Block *ElseBlock = &IfOp.getElseRegion().front();
-    if (ElseBlock->empty() ||
-        !ElseBlock->back().hasTrait<mlir::OpTrait::IsTerminator>()) {
-      mlir::scf::YieldOp::create(Builder, Loc);
-    }
+    YieldState(genStmt(Node->getElseBranch(), ReturnState{}));
+  } else {
+    mlir::OpBuilder::InsertionGuard Guard(Builder);
+    Builder.setInsertionPointToStart(&IfOp.getElseRegion().front());
+    YieldState(ReturnState{});
   }
+
+  Builder.setInsertionPointAfter(IfOp);
+  ReturnState State;
+  State.Flag = IfOp.getResult(0);
+  if (CurrentFunctionHasResult)
+    State.Value = IfOp.getResult(1);
+  return State;
 }
 
 void MLIRGen::genAssignment(BinExpr *Node) {

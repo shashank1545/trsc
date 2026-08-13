@@ -34,22 +34,27 @@ public:
   MLIRGen(mlir::MLIRContext &MLIRCtx, trsc::ASTContext &ASTCtx,
           trsc::SymbolTable &ST);
 
+  struct ReturnState {
+    mlir::Value Flag;
+    mlir::Value Value;
+  };
+
   mlir::OwningOpRef<mlir::ModuleOp> genModule(trsc::Program &Prog);
 
   mlir::Operation *declareFuncDecl(FuncDecl *Node);
 
   void genParams(ArrayRef<FuncDecl::Param> Params);
   void genFuncDecl(FuncDecl *Node);
-  void genBlockStmt(BlockStmt *Stmt);
+  ReturnState genBlockStmt(BlockStmt *Stmt, ReturnState State = {});
   void genLetStmt(LetStmt *Node);
-  void genIfStmt(IfStmt *Node);
+  ReturnState genIfStmt(IfStmt *Node);
   void genWhileStmt(WhileStmt *Node);
   void genForStmt(ForStmt *Node);
   void genAssignment(BinExpr *Node);
   void genExprStmt(ExprStmt *Node);
-  void genReturnStmt(ReturnStmt *Node);
+  ReturnState genReturnStmt(ReturnStmt *Node);
   void genProgram(Program *Node);
-  void genStmt(Stmt *Node);
+  ReturnState genStmt(Stmt *Node, ReturnState State = {});
   void genArrayInit(ArrayExpr *Node, mlir::Value DestMemRef, QualType ArrayTy);
   void genArrayInitImpl(ArrayExpr *Node, mlir::Value DestMemRef,
                         llvm::SmallVectorImpl<mlir::Value> &Indices);
@@ -74,6 +79,8 @@ private:
   mlir::OpBuilder Builder;
   mlir::ModuleOp Module;
   mlir::Block *CurrentEntryBlock = nullptr;
+  mlir::Type CurrentFunctionResultType;
+  bool CurrentFunctionHasResult = false;
 
   llvm::StringMap<std::string> PrintStringGlobals;
 
@@ -87,6 +94,9 @@ private:
   mlir::Value convertValueToType(mlir::Value V, mlir::Type T);
   mlir::Value getOpMemRef(mlir::Operation *E);
   bool isLValue(Expr *E);
+
+  bool stmtMayReturn(Stmt *S) const;
+  mlir::Value createDefaultReturnValue();
 };
 
 } // namespace trsc
