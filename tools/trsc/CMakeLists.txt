@@ -22,3 +22,9 @@ target_link_libraries(trsc
   MLIRToLLVMIRTranslationRegistration
   ${trsc_codegen_libs}
 )
+
+if(TRSC_GLIBC_COMPAT)
+  target_link_libraries(trsc PRIVATE TrscGlibcSymbolVersions)
+endif()
+
+install(TARGETS trsc RUNTIME DESTINATION bin)

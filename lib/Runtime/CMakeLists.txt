@@ -22,3 +22,5 @@ target_include_directories(TrscCudaRuntime PRIVATE
 set_target_properties(TrscCudaRuntime PROPERTIES
   ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
 )
+
+install(TARGETS TrscPrintRuntime TrscCudaRuntime ARCHIVE DESTINATION lib)

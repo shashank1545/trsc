@@ -27,7 +27,12 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-rpath,/usr/lib")
+set(TRSC_RPATH "" CACHE STRING "Runtime library search path baked into 
+binaries")
+if(TRSC_RPATH)
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-rpath,
+  ${TRSC_RPATH}")
+endif()
 
 find_program(TRSC_LLD_LINKER NAMES ld.lld lld)
 if(TRSC_LLD_LINKER)
@@ -44,6 +49,20 @@ else()
 endif()
 
 option(ENABLE_TESTING "Build the testing suite" OFF)
+
+# Building on a host with a very new glibc stamps the newest available symbol
+# version onto every libc/libm reference, which makes the binary unloadable on
+# older distros.  lib/Support/GlibcSymbolVersions.c re-points those references
+# at the old ABI; see that file for the exact list and the resulting floor.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND
+   CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
+  set(TRSC_GLIBC_COMPAT_DEFAULT ON)
+else()
+  set(TRSC_GLIBC_COMPAT_DEFAULT OFF)
+endif()
+option(TRSC_GLIBC_COMPAT
+       "Pin glibc symbol versions so the binary runs on older distros"
+       ${TRSC_GLIBC_COMPAT_DEFAULT})
 
 set(TRSC_REQUESTED_MLIR_DIR "${MLIR_DIR}")
 set(TRSC_REQUESTED_LLVM_DIR "${LLVM_DIR}")
@@ -79,4 +98,5 @@ include_directories(${LLVM_INCLUDE_DIRS})
 add_subdirectory(lib)
 add_subdirectory(lib/MLIR)
 add_subdirectory(lib/Runtime)
+add_subdirectory(lib/Support)
 add_subdirectory(tools)

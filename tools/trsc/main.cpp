@@ -32,6 +32,49 @@
 
 #include "llvm/Support/FileSystem.h"
 
+namespace {
+
+/// Directory holding this executable, or an empty string if it cannot be
+/// determined. MainAddr only has to be the address of something inside this
+/// binary for the /proc/self/exe fallback path.
+std::string getExecutableDir(const char *Argv0) {
+  void *MainAddr = reinterpret_cast<void *>(&getExecutableDir);
+  std::string ExePath = llvm::sys::fs::getMainExecutable(Argv0, MainAddr);
+  return std::string(llvm::sys::path::parent_path(ExePath));
+}
+
+std::string findRuntimeLib(llvm::StringRef BuildTimePath,
+                           llvm::StringRef ExeDir) {
+  llvm::StringRef Name = llvm::sys::path::filename(BuildTimePath);
+  llvm::SmallVector<llvm::SmallString<128>, 4> Dirs;
+
+  if (const char *Override = std::getenv("TRSC_RUNTIME_DIR")) {
+    Dirs.emplace_back(Override);
+  }
+  if (!ExeDir.empty()) {
+    // Installed layout: <prefix>/bin/trsc alongside <prefix>/lib.
+    Dirs.emplace_back(ExeDir);
+    llvm::sys::path::append(Dirs.back(), "..", "lib");
+    // Build tree: build/tools/trsc/trsc alongside build/lib.
+    Dirs.emplace_back(ExeDir);
+    llvm::sys::path::append(Dirs.back(), "..", "..", "lib");
+    // Binary and archives dropped into a single directory.
+    Dirs.emplace_back(ExeDir);
+  }
+
+  for (const auto &Dir : Dirs) {
+    llvm::SmallString<128> Candidate(Dir);
+    llvm::sys::path::append(Candidate, Name);
+    if (llvm::sys::fs::exists(Candidate)) {
+      return std::string(Candidate);
+    }
+  }
+
+  return std::string(BuildTimePath);
+}
+
+} // namespace
+
 int main(int argc, char **argv) {
   trsc::CompilerOptions options;
   if (!trsc::parseCommandLine(argc, argv, options)) {
@@ -389,6 +432,24 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  std::string ExeDir = getExecutableDir(argv[0]);
+  std::string CudaRuntimeLib = findRuntimeLib(TRSC_CUDA_RUNTIME_LIB, ExeDir);
+  std::string PrintRuntimeLib = findRuntimeLib(TRSC_PRINT_RUNTIME_LIB, ExeDir);
+
+  for (const std::string *Lib : {&CudaRuntimeLib, &PrintRuntimeLib}) {
+    if (llvm::sys::fs::exists(*Lib)) {
+      continue;
+    }
+    std::cerr << "Error: Runtime archive '" << *Lib << "' not found. Set "
+              << "TRSC_RUNTIME_DIR to the directory holding "
+              << "libTrscCudaRuntime.a and libTrscPrintRuntime.a.\n";
+    if (std::error_code ec = llvm::sys::fs::remove(ObjPath)) {
+      std::cerr << "Warning: Failed to remove temporary file '"
+                << ObjPath.c_str() << "': " << ec.message() << "\n";
+    }
+    return 1;
+  }
+
   // GPU-lowered code uses a lazily loaded CUDA driver table. Auto-dispatch
   // binaries therefore start and run their CPU path without libcuda.
   std::string Output =
@@ -397,8 +458,8 @@ int main(int argc, char **argv) {
                                            ObjPath,
                                            "-o",
                                            Output,
-                                           TRSC_CUDA_RUNTIME_LIB,
-                                           TRSC_PRINT_RUNTIME_LIB,
+                                           CudaRuntimeLib,
+                                           PrintRuntimeLib,
                                            "-Wl,--as-needed",
                                            "-ldl",
                                            "-lstdc++",
