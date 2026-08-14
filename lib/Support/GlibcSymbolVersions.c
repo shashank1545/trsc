@@ -37,21 +37,21 @@
 
 #if defined(__linux__) && defined(__GLIBC__) && defined(__x86_64__)
 
-#define TRSC_PIN(alias, name, version) \
+#define TRSC_PIN(alias, name, version)                                         \
   __asm__(".symver " #alias "," #name "@GLIBC_" version)
 
 /* --- libm: versions bumped in 2.43 (float) and 2.44 (double) ------------- */
 
-#define TRSC_PIN_MATH1(name, type, version)  \
-  extern type trsc_old_##name(type);         \
-  TRSC_PIN(trsc_old_##name, name, version);  \
-  type name(type x);                         \
+#define TRSC_PIN_MATH1(name, type, version)                                    \
+  extern type trsc_old_##name(type);                                           \
+  TRSC_PIN(trsc_old_##name, name, version);                                    \
+  type name(type x);                                                           \
   type name(type x) { return trsc_old_##name(x); }
 
-#define TRSC_PIN_MATH2(name, type, version)         \
-  extern type trsc_old_##name(type, type);          \
-  TRSC_PIN(trsc_old_##name, name, version);         \
-  type name(type x, type y);                        \
+#define TRSC_PIN_MATH2(name, type, version)                                    \
+  extern type trsc_old_##name(type, type);                                     \
+  TRSC_PIN(trsc_old_##name, name, version);                                    \
+  type name(type x, type y);                                                   \
   type name(type x, type y) { return trsc_old_##name(x, y); }
 
 TRSC_PIN_MATH1(acosf, float, "2.2.5");
@@ -73,12 +73,12 @@ TRSC_PIN_MATH1(sinh, double, "2.2.5");
  * prefix when base is 0 or 2.  Nothing in trsc or in LLVM's option parsing
  * relies on that, so forwarding to the pre-C23 parser is the whole job. */
 
-#define TRSC_PIN_STRTO(name, type)                                     \
-  extern type trsc_old_##name(const char *, char **, int);             \
-  TRSC_PIN(trsc_old_##name, name, "2.2.5");                            \
-  type __isoc23_##name(const char *nptr, char **endptr, int base);     \
-  type __isoc23_##name(const char *nptr, char **endptr, int base) {    \
-    return trsc_old_##name(nptr, endptr, base);                        \
+#define TRSC_PIN_STRTO(name, type)                                             \
+  extern type trsc_old_##name(const char *, char **, int);                     \
+  TRSC_PIN(trsc_old_##name, name, "2.2.5");                                    \
+  type __isoc23_##name(const char *nptr, char **endptr, int base);             \
+  type __isoc23_##name(const char *nptr, char **endptr, int base) {            \
+    return trsc_old_##name(nptr, endptr, base);                                \
   }
 
 TRSC_PIN_STRTO(strtol, long)

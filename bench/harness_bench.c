@@ -26,7 +26,8 @@ static double now_ms(void) {
 
 int main(int argc, char **argv) {
   if (argc != 5) {
-    fprintf(stderr, "usage: %s <size> <level-label> <warmup> <reps>\n", argv[0]);
+    fprintf(stderr, "usage: %s <size> <level-label> <warmup> <reps>\n",
+            argv[0]);
     return 2;
   }
   int n = atoi(argv[1]);
@@ -48,8 +49,8 @@ int main(int argc, char **argv) {
     printf("%d,%s,%d,%.3f,%d\n", n, level, r, t1 - t0, ok);
     fflush(stdout);
     if (!ok) {
-      fprintf(stderr, "VERIFY FAIL n=%d level=%s got %.3f want %.1f\n",
-              n, level, (double)c00, (double)expected);
+      fprintf(stderr, "VERIFY FAIL n=%d level=%s got %.3f want %.1f\n", n,
+              level, (double)c00, (double)expected);
       return 1;
     }
   }

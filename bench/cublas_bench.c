@@ -28,24 +28,24 @@
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
 
-#define CHECK_CUDA(call)                                                     \
-  do {                                                                       \
-    cudaError_t err_ = (call);                                               \
-    if (err_ != cudaSuccess) {                                               \
-      fprintf(stderr, "%s:%d CUDA error: %s\n", __FILE__, __LINE__,          \
-              cudaGetErrorString(err_));                                     \
-      exit(2);                                                               \
-    }                                                                        \
+#define CHECK_CUDA(call)                                                       \
+  do {                                                                         \
+    cudaError_t err_ = (call);                                                 \
+    if (err_ != cudaSuccess) {                                                 \
+      fprintf(stderr, "%s:%d CUDA error: %s\n", __FILE__, __LINE__,            \
+              cudaGetErrorString(err_));                                       \
+      exit(2);                                                                 \
+    }                                                                          \
   } while (0)
 
-#define CHECK_CUBLAS(call)                                                   \
-  do {                                                                       \
-    cublasStatus_t st_ = (call);                                             \
-    if (st_ != CUBLAS_STATUS_SUCCESS) {                                      \
-      fprintf(stderr, "%s:%d cuBLAS error: %d\n", __FILE__, __LINE__,        \
-              (int)st_);                                                     \
-      exit(2);                                                               \
-    }                                                                        \
+#define CHECK_CUBLAS(call)                                                     \
+  do {                                                                         \
+    cublasStatus_t st_ = (call);                                               \
+    if (st_ != CUBLAS_STATUS_SUCCESS) {                                        \
+      fprintf(stderr, "%s:%d cuBLAS error: %d\n", __FILE__, __LINE__,          \
+              (int)st_);                                                       \
+      exit(2);                                                                 \
+    }                                                                          \
   } while (0)
 
 static double now_ms(void) {
@@ -58,8 +58,8 @@ static double now_ms(void) {
 static void sgemm_rowmajor(cublasHandle_t h, int n, const float *dA,
                            const float *dB, float *dC) {
   const float alpha = 1.0f, beta = 0.0f;
-  CHECK_CUBLAS(cublasSgemm(h, CUBLAS_OP_N, CUBLAS_OP_N, n, n, n, &alpha,
-                           dB, n, dA, n, &beta, dC, n));
+  CHECK_CUBLAS(cublasSgemm(h, CUBLAS_OP_N, CUBLAS_OP_N, n, n, n, &alpha, dB, n,
+                           dA, n, &beta, dC, n));
 }
 
 static int selftest(void) {
@@ -80,11 +80,13 @@ static int selftest(void) {
   sgemm_rowmajor(h, n, dA, dB, dC);
   CHECK_CUDA(cudaMemcpy(C, dC, sizeof C, cudaMemcpyDeviceToHost));
   cublasDestroy(h);
-  cudaFree(dA); cudaFree(dB); cudaFree(dC);
+  cudaFree(dA);
+  cudaFree(dB);
+  cudaFree(dC);
   for (int i = 0; i < 4; i++) {
     if (fabsf(C[i] - want[i]) > 1e-4f) {
-      fprintf(stderr, "selftest FAIL: C[%d]=%f want %f\n", i,
-              (double)C[i], (double)want[i]);
+      fprintf(stderr, "selftest FAIL: C[%d]=%f want %f\n", i, (double)C[i],
+              (double)want[i]);
       return 1;
     }
   }
@@ -117,7 +119,9 @@ static void run_e2e(int n, int warmup, int reps) {
   for (int r = -warmup; r < reps; r++) {
     double t0 = now_ms();
     for (size_t i = 0; i < (size_t)n * n; i++) {
-      A[i] = 1.0f; B[i] = 2.0f; C[i] = 0.0f;
+      A[i] = 1.0f;
+      B[i] = 2.0f;
+      C[i] = 0.0f;
     }
     CHECK_CUDA(cudaMemcpy(dA, A, bytes, cudaMemcpyHostToDevice));
     CHECK_CUDA(cudaMemcpy(dB, B, bytes, cudaMemcpyHostToDevice));
@@ -130,20 +134,32 @@ static void run_e2e(int n, int warmup, int reps) {
       printf("%d,cublas_e2e,%d,%.3f,%d\n", n, r, t1 - t0, ok);
       fflush(stdout);
     }
-    if (!ok) { fprintf(stderr, "VERIFY FAIL cublas_e2e n=%d\n", n); exit(1); }
+    if (!ok) {
+      fprintf(stderr, "VERIFY FAIL cublas_e2e n=%d\n", n);
+      exit(1);
+    }
   }
 
   cublasDestroy(h);
-  cudaFree(dA); cudaFree(dB); cudaFree(dC);
-  cudaFreeHost(A); cudaFreeHost(B); cudaFreeHost(C);
+  cudaFree(dA);
+  cudaFree(dB);
+  cudaFree(dC);
+  cudaFreeHost(A);
+  cudaFreeHost(B);
+  cudaFreeHost(C);
 }
 
 static void run_kernel(int n, int warmup, int reps) {
   size_t bytes = (size_t)n * n * sizeof(float);
   float *A = malloc(bytes), *B = malloc(bytes), *C = malloc(bytes);
-  if (!A || !B || !C) { fprintf(stderr, "host alloc failed\n"); exit(2); }
+  if (!A || !B || !C) {
+    fprintf(stderr, "host alloc failed\n");
+    exit(2);
+  }
   for (size_t i = 0; i < (size_t)n * n; i++) {
-    A[i] = 1.0f; B[i] = 2.0f; C[i] = 0.0f;
+    A[i] = 1.0f;
+    B[i] = 2.0f;
+    C[i] = 0.0f;
   }
   float *dA, *dB, *dC;
   CHECK_CUDA(cudaMalloc((void **)&dA, bytes));
@@ -172,13 +188,21 @@ static void run_kernel(int n, int warmup, int reps) {
     int ok = verify_c00(C, n);
     printf("%d,cublas_kernel,%d,%.3f,%d\n", n, r, (double)ms, ok);
     fflush(stdout);
-    if (!ok) { fprintf(stderr, "VERIFY FAIL cublas_kernel n=%d\n", n); exit(1); }
+    if (!ok) {
+      fprintf(stderr, "VERIFY FAIL cublas_kernel n=%d\n", n);
+      exit(1);
+    }
   }
 
-  cudaEventDestroy(start); cudaEventDestroy(stop);
+  cudaEventDestroy(start);
+  cudaEventDestroy(stop);
   cublasDestroy(h);
-  cudaFree(dA); cudaFree(dB); cudaFree(dC);
-  free(A); free(B); free(C);
+  cudaFree(dA);
+  cudaFree(dB);
+  cudaFree(dC);
+  free(A);
+  free(B);
+  free(C);
 }
 
 int main(int argc, char **argv) {

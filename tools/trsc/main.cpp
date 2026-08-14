@@ -454,16 +454,9 @@ int main(int argc, char **argv) {
   // binaries therefore start and run their CPU path without libcuda.
   std::string Output =
       options.OutputFile.empty() ? "a.out" : options.OutputFile;
-  std::vector<llvm::StringRef> LinkArgs = {Linker,
-                                           ObjPath,
-                                           "-o",
-                                           Output,
-                                           CudaRuntimeLib,
-                                           PrintRuntimeLib,
-                                           "-Wl,--as-needed",
-                                           "-ldl",
-                                           "-lstdc++",
-                                           "-lm"};
+  std::vector<llvm::StringRef> LinkArgs = {
+      Linker,          ObjPath,           "-o",   Output,     CudaRuntimeLib,
+      PrintRuntimeLib, "-Wl,--as-needed", "-ldl", "-lstdc++", "-lm"};
 
   std::string LinkError;
   int LinkResult = llvm::sys::ExecuteAndWait(Linker, LinkArgs, std::nullopt, {},
