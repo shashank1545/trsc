@@ -21,6 +21,8 @@ struct CompilerOptions {
   bool DumpLexerTokens = false;
   bool DumpAST = false;
   bool Verbose = false;
+  bool ShowHelp = false;
+  bool ShowVersion = false;
   bool DumpSymbol = false;
   bool DumpSymbolTable = false;
   bool DumpTypedAST = false;
@@ -33,6 +35,9 @@ struct CompilerOptions {
 };
 
 bool parseCommandLine(int Argc, char **Argv, CompilerOptions &Options);
+
+void printHelp(const char *ProgramName);
+void printVersion();
 
 } // namespace trsc
 

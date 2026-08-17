@@ -23,6 +23,9 @@ set(TRSC_LIB
 add_library(trsc_lib STATIC ${TRSC_LIB})
 
 target_include_directories(trsc_lib PUBLIC ${CMAKE_SOURCE_DIR}/include)
+target_compile_definitions(trsc_lib PRIVATE
+  TRSC_VERSION="${TRSC_VERSION}"
+)
 
 target_precompile_headers(trsc_lib PRIVATE
   <memory>

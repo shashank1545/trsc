@@ -1,0 +1,148 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build and publish"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  linux-x86_64:
+    name: linux-x86_64 archive
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Resolve tag
+        id: meta
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          TAG="${INPUT_TAG:-$REF_NAME}"
+          if [[ ! "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Invalid release tag: $TAG" >&2
+            exit 1
+          fi
+          {
+            echo "tag=$TAG"
+            echo "version=${TAG#v}"
+            echo "name=trsc-$TAG-linux-x86_64"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ steps.meta.outputs.tag }}
+
+      - name: Install LLVM 23 toolchain
+        run: |
+          sudo env \
+            TRSC_STATIC_LLVM=1 \
+            TRSC_STATIC_LLVM_PREFIX=/opt/llvm-23-static \
+            bash ci/install-llvm23.sh
+
+      - name: Configure
+        env:
+          TRSC_VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DTRSC_VERSION="$TRSC_VERSION" \
+            -DTRSC_BUILD_OPT=OFF \
+            -DMLIR_DIR=/usr/lib/llvm-23/lib/cmake/mlir \
+            -DLLVM_DIR=/usr/lib/llvm-23/lib/cmake/llvm \
+            -DTRSC_LLVM_STATIC_ARCHIVE=/opt/llvm-23-static/lib/libLLVM23-all.a \
+            -DTRSC_MLIR_STATIC_ARCHIVE=/opt/llvm-23-static/lib/libMLIR23-all.a \
+            -DCMAKE_C_COMPILER=clang-23 \
+            -DCMAKE_CXX_COMPILER=clang++-23 \
+            -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++ -static-libgcc"
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Stage install tree
+        run: |
+          cmake --install build --strip --prefix "dist/${{ steps.meta.outputs.name }}"
+          llvm-strip-23 --strip-all "dist/${{ steps.meta.outputs.name }}/bin/trsc"
+          find "dist/${{ steps.meta.outputs.name }}/lib" -maxdepth 1 \
+            -type f -name 'libTrsc*.a' \
+            ! -name 'libTrscPrintRuntime.a' \
+            ! -name 'libTrscCudaRuntime.a' -delete
+
+      - name: Verify release binary
+        env:
+          EXPECTED_VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          BIN="dist/${{ steps.meta.outputs.name }}/bin/trsc"
+          test -x "$BIN"
+          test -f "dist/${{ steps.meta.outputs.name }}/lib/libTrscPrintRuntime.a"
+          test -f "dist/${{ steps.meta.outputs.name }}/lib/libTrscCudaRuntime.a"
+          echo "--- file ---"; file "$BIN"
+          echo "--- size ---"; size "$BIN"
+          BYTES=$(stat -c %s "$BIN")
+          [ "$BYTES" -lt 160000000 ] || {
+            echo "ERROR: stripped binary is unexpectedly large: $BYTES bytes" >&2
+            exit 1
+          }
+          if readelf -S --wide "$BIN" | grep -Eq '\.debug_|\.symtab'; then
+            echo "ERROR: stripped binary still contains debug/symbol sections" >&2
+            exit 1
+          fi
+          [ "$("$BIN" --version)" = "trsc $EXPECTED_VERSION" ]
+          "$BIN" --help >/tmp/trsc-help.txt
+          echo "--- ldd ---"; ldd "$BIN"
+          if ldd "$BIN" | grep -q 'not found'; then
+            echo "ERROR: binary has unresolved dynamic dependencies" >&2
+            exit 1
+          fi
+          if ldd "$BIN" | grep -Eq 'libLLVM|libMLIR|libz3|libstdc\+\+|libgcc_s'; then
+            echo "ERROR: binary has an unexpected dynamic toolchain dependency" >&2
+            exit 1
+          fi
+          echo "--- glibc floor ---"
+          FLOOR=$(objdump -T "$BIN" | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1)
+          echo "$FLOOR"
+          [ "$(printf '%s\n' "$FLOOR" GLIBC_2.35 | sort -V | tail -1)" = "GLIBC_2.35" ] || {
+            echo "ERROR: glibc requirement moved above GLIBC_2.35: $FLOOR" >&2
+            exit 1
+          }
+          echo "--- smoke test from staged tree ---"
+          "$BIN" -emit-mlir test/Integration/matmul.rs -o /tmp/smoke.mlir
+          head -1 /tmp/smoke.mlir
+          "$BIN" --device=cpu test/Integration/println.rs -o /tmp/trsc-smoke
+          /tmp/trsc-smoke | tee /tmp/trsc-smoke.out
+          grep -Fxq 'doubled 42' /tmp/trsc-smoke.out
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          NAME="${{ steps.meta.outputs.name }}"
+          cp README.md LICENSE "dist/$NAME/"
+          cmake -E chdir dist cmake -E tar cfv "../$NAME.zip" \
+            --format=zip "$NAME"
+          sha256sum "$NAME.zip" > "$NAME.zip.sha256"
+          sha256sum -c "$NAME.zip.sha256"
+
+      - name: Attest release archive
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: "${{ steps.meta.outputs.name }}.zip"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.meta.outputs.tag }}"
+          NAME="${{ steps.meta.outputs.name }}"
+          gh release view "$TAG" >/dev/null 2>&1 \
+            || gh release create "$TAG" --title "$TAG" --generate-notes
+          gh release upload "$TAG" "$NAME.zip" "$NAME.zip.sha256" --clobber

@@ -11,11 +11,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # Pinned to match the local toolchain (clang-format 22.x).
       - name: Install clang-format
         run: pipx install clang-format==22.1.5
       - name: Check formatting
-        run: git ls-files '*.cpp' '*.h' | xargs clang-format --dry-run --Werror
+        run: git ls-files '*.cpp' '*.h' '*.c' | xargs clang-format --dry-run --Werror
 
   build:
     name: build and test (LLVM 23)
@@ -24,7 +23,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install LLVM 23 toolchain
-        run: sudo bash ci/install-llvm23.sh
+        run: |
+          sudo env \
+            TRSC_STATIC_LLVM=1 \
+            TRSC_STATIC_LLVM_PREFIX=/opt/llvm-23-static \
+            TRSC_INSTALL_TEST_DEPS=1 \
+            bash ci/install-llvm23.sh
       - name: Cache ccache
         uses: actions/cache@v4
         with:
@@ -39,10 +43,27 @@ jobs:
             -DENABLE_TESTING=ON \
             -DMLIR_DIR=/usr/lib/llvm-23/lib/cmake/mlir \
             -DLLVM_DIR=/usr/lib/llvm-23/lib/cmake/llvm \
+            -DTRSC_LLVM_STATIC_ARCHIVE=/opt/llvm-23-static/lib/libLLVM23-all.a \
+            -DTRSC_MLIR_STATIC_ARCHIVE=/opt/llvm-23-static/lib/libMLIR23-all.a \
             -DCMAKE_C_COMPILER=clang-23 \
-            -DCMAKE_CXX_COMPILER=clang++-23
+            -DCMAKE_CXX_COMPILER=clang++-23 \
+            -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++ -static-libgcc"
       - name: Build
         run: cmake --build build
+      - name: Verify static LLVM linkage
+        run: |
+          set -euo pipefail
+          BIN=build/tools/trsc/trsc
+          deps=$(ldd "$BIN")
+          printf '%s\n' "$deps"
+          if grep -q 'not found' <<<"$deps"; then
+            echo "ERROR: trsc has unresolved dynamic dependencies" >&2
+            exit 1
+          fi
+          if grep -Eq 'libLLVM|libMLIR|libz3|libstdc\+\+|libgcc_s' <<<"$deps"; then
+            echo "ERROR: trsc has a shared LLVM/MLIR or C++ runtime dependency" >&2
+            exit 1
+          fi
       - name: Test non-GPU suite
         run: ctest --test-dir build --output-on-failure -j4 -LE GPU
       - name: Upload test log on failure
@@ -53,19 +74,14 @@ jobs:
           path: build/Testing/Temporary/LastTest.log
 
   tidy:
-    name: clang-tidy (frontend)
+    name: clang-tidy 
     needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Install clang-tidy
         run: pipx install clang-tidy==22.1.7
-      # Scope: the LLVM-free frontend (Lex/Parse/Sema/AST/Basic) only.
-      # The MLIR mid-end compiles against a local LLVM 23 (git) tree that
-      # CI cannot install from packages; it is checked in local builds.
-      # Check selection and WarningsAsErrors come from .clang-tidy.
       - name: Run clang-tidy
         run: |
-          git ls-files 'lib/Lex/*.cpp' 'lib/Parse/*.cpp' 'lib/Sema/*.cpp' \
-                       'lib/AST/*.cpp' 'lib/Basic/*.cpp' \
+          git ls-files '*.cpp' '*.c' \
             | xargs -n1 -P2 -I{} clang-tidy --quiet {} -- -std=c++17 -Iinclude

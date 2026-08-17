@@ -4,7 +4,38 @@
 
 #include "trsc/Basic/CommandLine.h"
 
+#ifndef TRSC_VERSION
+#define TRSC_VERSION "0.0.0-dev"
+#endif
+
 namespace trsc {
+
+void printHelp(const char *programName) {
+  std::cout
+      << "Usage: " << programName << " [options] <input.rs>\n\n"
+      << "General options:\n"
+      << "  -h, --help                    Show this help text.\n"
+      << "      --version                 Show the compiler version.\n"
+      << "  -v, --verbose                 Print phase progress.\n"
+      << "  -o <file>                     Write output to <file>.\n\n"
+      << "Inspection and output options:\n"
+      << "  -dump-token                   Dump lexer tokens.\n"
+      << "  -dump-ast                     Dump the parsed AST.\n"
+      << "  -dump-typedast                Dump the typed AST.\n"
+      << "  -dump-symbol                  Dump the symbol table.\n"
+      << "  -dump-symboltable             Dump the symbol-table tree.\n"
+      << "  -emit-mlir                    Emit MLIR and stop.\n"
+      << "  -emit-llvm                    Emit LLVM IR and stop.\n"
+      << "  -emit-obj                     Emit an object file and stop.\n"
+      << "  -optim=<stage>                Select the MLIR inspection stage.\n\n"
+      << "Target options:\n"
+      << "  --device=<auto|cpu|cuda>      Select CPU/GPU dispatch.\n"
+      << "  --cuda-arch=sm_NN             Select the CUDA architecture.\n"
+      << "  --matmul-opt-level=N          Select the matmul optimization "
+         "level.\n";
+}
+
+void printVersion() { std::cout << "trsc " << TRSC_VERSION << '\n'; }
 
 static bool parseCudaArch(const std::string &value, TargetOptions &target) {
   if (value.size() != 5 || value.rfind("sm_", 0) != 0 ||
@@ -30,7 +61,11 @@ static bool parseCudaArch(const std::string &value, TargetOptions &target) {
 bool parseCommandLine(int argc, char **argv, CompilerOptions &options) {
   for (int i = 1; i < argc; ++i) {
     std::string arg = argv[i];
-    if (arg == "-dump-token") {
+    if (arg == "-h" || arg == "--help") {
+      options.ShowHelp = true;
+    } else if (arg == "--version") {
+      options.ShowVersion = true;
+    } else if (arg == "-dump-token") {
       options.DumpLexerTokens = true;
     } else if (arg == "-dump-ast") {
       options.DumpAST = true;
@@ -95,6 +130,10 @@ bool parseCommandLine(int argc, char **argv, CompilerOptions &options) {
         std::cerr << "Error: -o requires a filename." << '\n';
         return false;
       }
+    } else if (!arg.empty() && arg.front() == '-') {
+      std::cerr << "Error: Unknown option '" << arg
+                << "'. Use --help for usage.\n";
+      return false;
     } else {
       if (!options.InputFile.empty()) {
         std::cerr << "Error: Only one input file can be specified." << '\n';
@@ -104,7 +143,7 @@ bool parseCommandLine(int argc, char **argv, CompilerOptions &options) {
     }
   }
 
-  if (options.InputFile.empty()) {
+  if (!options.ShowHelp && !options.ShowVersion && options.InputFile.empty()) {
     std::cerr << "Error: No input file specified." << '\n';
     return false;
   }

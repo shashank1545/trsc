@@ -80,6 +80,14 @@ int main(int argc, char **argv) {
   if (!trsc::parseCommandLine(argc, argv, options)) {
     return 1;
   }
+  if (options.ShowHelp) {
+    trsc::printHelp(argv[0]);
+    return 0;
+  }
+  if (options.ShowVersion) {
+    trsc::printVersion();
+    return 0;
+  }
 
   trsc::DiagnosticsEngine Diag;
   trsc::SourceManager SM(Diag);

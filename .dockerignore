@@ -4,3 +4,5 @@ build
 .env
 .env.*
 !.env.example
+.release-*
+dist

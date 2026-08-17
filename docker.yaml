@@ -3,6 +3,7 @@ FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV CC=clang-23
 ENV CXX=clang++-23
+ENV LD_LIBRARY_PATH=/usr/lib/llvm-23/lib
 
 WORKDIR /src
 

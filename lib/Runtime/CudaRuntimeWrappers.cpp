@@ -18,12 +18,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <dlfcn.h>
-#include <string>
 #include <vector>
 
 #include "cuda.h"
-#include "cuda_bf16.h"
-#include "cuda_fp16.h"
 
 #ifdef MLIR_ENABLE_CUDA_CUSPARSE
 #include "cusparse.h"
@@ -83,7 +80,7 @@ namespace {
 struct CudaDriverApi {
   void *Library = nullptr;
 #define TRSC_DECLARE_CUDA_SYMBOL(field, symbol)                                \
-  decltype(&symbol) field = nullptr;
+  decltype (&(symbol))(field) = nullptr;
   TRSC_CUDA_DRIVER_SYMBOLS(TRSC_DECLARE_CUDA_SYMBOL)
 #undef TRSC_DECLARE_CUDA_SYMBOL
 };
@@ -370,8 +367,11 @@ CUmodule loadLazyModule(LazyCudaModule *module) {
                                  CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES,
                                  CU_JIT_OPTIMIZATION_LEVEL};
     void *jitOptionsVals[] = {
-        jitErrorBuffer, reinterpret_cast<void *>(sizeof(jitErrorBuffer)),
-        reinterpret_cast<void *>(static_cast<intptr_t>(module->OptLevel))};
+        jitErrorBuffer,
+        reinterpret_cast<void *>(
+            sizeof(jitErrorBuffer)), // NOLINT(performance-no-int-to-ptr)
+        reinterpret_cast<void *>(static_cast<intptr_t>(
+            module->OptLevel))}; // NOLINT(performance-no-int-to-ptr)
     CUresult result = cuModuleLoadDataEx(&module->Loaded, module->Data.data(),
                                          3, jitOptions, jitOptionsVals);
     if (result != CUDA_SUCCESS) {
@@ -524,15 +524,15 @@ mgpuMemAlloc(uint64_t sizeBytes, CUstream stream, bool isHostShared) {
   ScopedContext scopedContext;
   CUdeviceptr ptr = 0;
   if (sizeBytes == 0)
-    return reinterpret_cast<void *>(ptr);
+    return reinterpret_cast<void *>(ptr); // NOLINT(performance-no-int-to-ptr)
 
   if (isHostShared) {
     CUDA_REPORT_IF_ERROR(
         cuMemAllocManaged(&ptr, sizeBytes, CU_MEM_ATTACH_GLOBAL));
-    return reinterpret_cast<void *>(ptr);
+    return reinterpret_cast<void *>(ptr); // NOLINT(performance-no-int-to-ptr)
   }
   CUDA_REPORT_IF_ERROR(cuMemAlloc(&ptr, sizeBytes));
-  return reinterpret_cast<void *>(ptr);
+  return reinterpret_cast<void *>(ptr); // NOLINT(performance-no-int-to-ptr)
 }
 
 extern "C" MLIR_CUDA_WRAPPERS_EXPORT void mgpuMemFree(void *ptr,
@@ -863,7 +863,8 @@ extern "C" MLIR_CUDA_WRAPPERS_EXPORT void *mgpuTensorMapEncodeTiledMemref(
   CUDA_REPORT_IF_ERROR(cuMemcpy(dTensorMap,
                                 reinterpret_cast<CUdeviceptr>(&tensorMap),
                                 sizeof(CUtensorMap)));
-  return reinterpret_cast<void *>(dTensorMap);
+  return reinterpret_cast<void *>(
+      dTensorMap); // NOLINT(performance-no-int-to-ptr)
 }
 #endif
 

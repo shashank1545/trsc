@@ -19,7 +19,10 @@
  *      are real symbol names baked into the objects, not a versioning artifact,
  *      so they have to be defined rather than re-pointed.
  *
- * After this the floor is GLIBC_2.36, set by arc4random.
+ * These wrappers remove the known 2.36+ requirements. The final floor still
+ * depends on every object and shared library selected by the link, so the
+ * release workflow checks that the executable requires no newer than
+ * GLIBC_2.35.
  *
  * Nothing in here includes a libc header on purpose: on a C23-defaulting
  * compiler <stdlib.h> would rewrite our own strtol calls back into
@@ -85,5 +88,26 @@ TRSC_PIN_STRTO(strtol, long)
 TRSC_PIN_STRTO(strtoll, long long)
 TRSC_PIN_STRTO(strtoul, unsigned long)
 TRSC_PIN_STRTO(strtoull, unsigned long long)
+
+/* arc4random was added to glibc in 2.36. The kernel getrandom syscall has
+ * exposed a glibc 2.25 symbol for much longer and provides the same source of
+ * entropy needed by LLVM's randomization helpers. */
+extern long trsc_old_getrandom(void *, unsigned long, unsigned int);
+TRSC_PIN(trsc_old_getrandom, getrandom, "2.25");
+
+unsigned int arc4random(void) {
+  unsigned int value = 0;
+  if (trsc_old_getrandom(&value, sizeof(value), 0) == (long)sizeof(value))
+    return value;
+
+  /* getrandom is available on supported Linux kernels. Keep a deterministic
+   * fallback for unusual syscall failures rather than reintroducing the newer
+   * glibc dependency. */
+  static unsigned int state = 0x9e3779b9u;
+  state ^= state << 13;
+  state ^= state >> 17;
+  state ^= state << 5;
+  return state;
+}
 
 #endif /* linux && glibc && x86_64 */
