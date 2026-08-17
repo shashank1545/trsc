@@ -40,7 +40,6 @@ base_packages=(
 
 if [[ "${TRSC_STATIC_LLVM:-0}" != 1 ]]; then
   base_packages+=(
-    mlir-23-tools
     libpolly-23-dev
     ccache
     libgtest-dev
@@ -55,10 +54,17 @@ if [[ "${TRSC_STATIC_LLVM:-0}" == 1 &&
     python3-pip
   )
 fi
+if [[ "${TRSC_INSTALL_TIDY_DEPS:-0}" == 1 ]]; then
+  base_packages+=(
+    clang-tidy-23
+    clang-tools-23
+  )
+fi
 base_packages+=(
   llvm-23-dev
   libmlir-23-dev
   llvm-23-tools
+  mlir-23-tools
 )
 
 apt-get install -y --no-install-recommends "${base_packages[@]}"

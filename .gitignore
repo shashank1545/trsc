@@ -37,6 +37,8 @@ perf.data.old
 
 # Other
 *.json
+test/Example/*
+dist/*
 
 # Benchmarks
 bench/generated/

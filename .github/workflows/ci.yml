@@ -28,6 +28,7 @@ jobs:
             TRSC_STATIC_LLVM=1 \
             TRSC_STATIC_LLVM_PREFIX=/opt/llvm-23-static \
             TRSC_INSTALL_TEST_DEPS=1 \
+            TRSC_INSTALL_TIDY_DEPS=1 \
             bash ci/install-llvm23.sh
       - name: Cache ccache
         uses: actions/cache@v4
@@ -50,6 +51,8 @@ jobs:
             -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++ -static-libgcc"
       - name: Build
         run: cmake --build build
+      - name: Run clang-tidy on the full repository
+        run: run-clang-tidy-23 -quiet -p build
       - name: Verify static LLVM linkage
         run: |
           set -euo pipefail
@@ -72,16 +75,3 @@ jobs:
         with:
           name: llvm23-last-test-log
           path: build/Testing/Temporary/LastTest.log
-
-  tidy:
-    name: clang-tidy 
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install clang-tidy
-        run: pipx install clang-tidy==22.1.7
-      - name: Run clang-tidy
-        run: |
-          git ls-files '*.cpp' '*.c' \
-            | xargs -n1 -P2 -I{} clang-tidy --quiet {} -- -std=c++17 -Iinclude

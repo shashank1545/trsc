@@ -368,10 +368,10 @@ CUmodule loadLazyModule(LazyCudaModule *module) {
                                  CU_JIT_OPTIMIZATION_LEVEL};
     void *jitOptionsVals[] = {
         jitErrorBuffer,
-        reinterpret_cast<void *>(
-            sizeof(jitErrorBuffer)), // NOLINT(performance-no-int-to-ptr)
-        reinterpret_cast<void *>(static_cast<intptr_t>(
-            module->OptLevel))}; // NOLINT(performance-no-int-to-ptr)
+        reinterpret_cast<void *>( // NOLINT(performance-no-int-to-ptr)
+            sizeof(jitErrorBuffer)),
+        reinterpret_cast<void *>( // NOLINT(performance-no-int-to-ptr)
+            static_cast<intptr_t>(module->OptLevel))};
     CUresult result = cuModuleLoadDataEx(&module->Loaded, module->Data.data(),
                                          3, jitOptions, jitOptionsVals);
     if (result != CUDA_SUCCESS) {
@@ -863,8 +863,8 @@ extern "C" MLIR_CUDA_WRAPPERS_EXPORT void *mgpuTensorMapEncodeTiledMemref(
   CUDA_REPORT_IF_ERROR(cuMemcpy(dTensorMap,
                                 reinterpret_cast<CUdeviceptr>(&tensorMap),
                                 sizeof(CUtensorMap)));
-  return reinterpret_cast<void *>(
-      dTensorMap); // NOLINT(performance-no-int-to-ptr)
+  return reinterpret_cast<void *>( // NOLINT(performance-no-int-to-ptr)
+      dTensorMap);
 }
 #endif
 

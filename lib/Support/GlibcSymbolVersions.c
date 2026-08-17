@@ -104,9 +104,9 @@ unsigned int arc4random(void) {
    * fallback for unusual syscall failures rather than reintroducing the newer
    * glibc dependency. */
   static unsigned int state = 0x9e3779b9u;
-  state ^= state << 13;
-  state ^= state >> 17;
-  state ^= state << 5;
+  state ^= state << 13U;
+  state ^= state >> 17U;
+  state ^= state << 5U;
   return state;
 }
 

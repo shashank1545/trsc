@@ -367,6 +367,11 @@ struct QualTypeHasher {
   }
 };
 
+inline std::size_t CombineHash(std::size_t H, std::size_t Value) {
+  constexpr std::size_t Magic = static_cast<std::size_t>(0x9e3779b9U);
+  return H ^ (Value + Magic + (H << 6U) + (H >> 2U));
+}
+
 struct FunctionTypeKey {
   QualType ReturnType;
   std::vector<QualType> ParamTypes;
@@ -389,7 +394,7 @@ struct FunctionTypeKeyHasher {
   std::size_t operator()(const FunctionTypeKey &Key) const {
     std::size_t H = QualTypeHasher{}(Key.ReturnType);
     for (const auto &ParamType : Key.ParamTypes) {
-      H ^= QualTypeHasher{}(ParamType) + 0x9e3779b9 + (H << 6) + (H >> 2);
+      H = CombineHash(H, QualTypeHasher{}(ParamType));
     }
     return H;
   }
@@ -407,7 +412,7 @@ struct PointerTypeKey {
 struct PointerTypeKeyHasher {
   std::size_t operator()(const PointerTypeKey &Key) const {
     std::size_t H = QualTypeHasher{}(Key.PointeeType);
-    H ^= std::hash<bool>{}(Key.IsMutable) + 0x9e3779b9 + (H << 6) + (H >> 2);
+    H = CombineHash(H, std::hash<bool>{}(Key.IsMutable));
     return H;
   }
 };
@@ -424,7 +429,7 @@ struct ReferenceTypeKey {
 struct ReferenceTypeKeyHasher {
   std::size_t operator()(const ReferenceTypeKey &Key) const {
     std::size_t H = QualTypeHasher{}(Key.ReferentType);
-    H ^= std::hash<bool>{}(Key.IsMutable) + 0x9e3779b9 + (H << 6) + (H >> 2);
+    H = CombineHash(H, std::hash<bool>{}(Key.IsMutable));
     return H;
   }
 };
@@ -441,7 +446,7 @@ struct ArrayTypeKey {
 struct ArrayTypeKeyHasher {
   std::size_t operator()(const ArrayTypeKey &Key) const {
     std::size_t H = QualTypeHasher{}(Key.ElementType);
-    H ^= std::hash<size_t>{}(Key.Size) + 0x9e3779b9 + (H << 6) + (H >> 2);
+    H = CombineHash(H, std::hash<size_t>{}(Key.Size));
     return H;
   }
 };
